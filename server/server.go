@@ -201,6 +201,12 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 		}
 	}
 
+	ipBytes := (net.ParseIP(ipAddr)).To4()
+	if nil == ipBytes {
+		failure("Assertion failed (net.ParseIP(ipAddr)).To4() == nil)! please report this issue to staff", buf, 1 * time.Hour)
+		return
+	}
+ 
 	switch action {
 	case "announce":
 		announce(params, user, ipAddr, handler.db, buf)
