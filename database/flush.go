@@ -89,9 +89,9 @@ func (db *Database) flushTorrents() {
 		}
 
 		if count > 0 {
-			query.WriteString("\nON DUPLICATE KEY UPDATE Snatched = Snatched + VALUE(Snatched), " +
-				"Seeders = VALUE(Seeders), Leechers = VALUE(Leechers), " +
-				"last_action = IF(last_action < VALUE(last_action), VALUE(last_action), last_action);")
+			query.WriteString("\nON DUPLICATE KEY UPDATE Snatched = Snatched + VALUES(Snatched), " +
+				"Seeders = VALUES(Seeders), Leechers = VALUES(Leechers), " +
+				"last_action = IF(last_action < VALUES(last_action), VALUES(last_action), last_action);")
 
 			conn.execBuffer(&query)
 
@@ -139,8 +139,8 @@ func (db *Database) flushUsers() {
 		}
 
 		if count > 0 {
-			query.WriteString("\nON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUE(Uploaded), " +
-				"Downloaded = Downloaded + VALUE(Downloaded), rawdl = rawdl + VALUE(rawdl), rawup = rawup + VALUE(rawup);")
+			query.WriteString("\nON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUES(Uploaded), " +
+				"Downloaded = Downloaded + VALUES(Downloaded), rawdl = rawdl + VALUES(rawdl), rawup = rawup + VALUES(rawup);")
 
 			conn.execBuffer(&query)
 
@@ -199,11 +199,11 @@ func (db *Database) flushTransferHistory() {
 		}
 
 		if count > 0 {
-			query.WriteString("\nON DUPLICATE KEY UPDATE uploaded = uploaded + VALUE(uploaded), " +
-				"downloaded = downloaded + VALUE(downloaded), connectable = VALUE(connectable), " +
-				"seeding = VALUE(seeding), activetime = activetime + VALUE(activetime), " +
-				"seedtime = seedtime + VALUE(seedtime), last_announce = VALUE(last_announce), " +
-				"active = VALUE(active), snatched = snatched + VALUE(snatched), remaining = VALUE(remaining);")
+			query.WriteString("\nON DUPLICATE KEY UPDATE uploaded = uploaded + VALUES(uploaded), " +
+				"downloaded = downloaded + VALUES(downloaded), connectable = VALUES(connectable), " +
+				"seeding = VALUES(seeding), activetime = activetime + VALUES(activetime), " +
+				"seedtime = seedtime + VALUES(seedtime), last_announce = VALUES(last_announce), " +
+				"active = VALUES(active), snatched = snatched + VALUES(snatched), remaining = VALUES(remaining);")
 
 			conn.execBuffer(&query)
 			db.transferHistoryWaitGroup.Done()
@@ -254,7 +254,7 @@ func (db *Database) flushTransferIps() {
 		}
 
 		if count > 0 {
-			query.WriteString("\nON DUPLICATE KEY UPDATE downloaded = downloaded + VALUE(downloaded), uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce);")
+			query.WriteString("\nON DUPLICATE KEY UPDATE downloaded = downloaded + VALUES(downloaded), uploaded = uploaded + VALUES(uploaded), last_announce = VALUES(last_announce);")
 			conn.execBuffer(&query)
 
 			if length < (config.TransferIpsFlushBufferSize >> 1) {
@@ -301,7 +301,7 @@ func (db *Database) flushSnatches() {
 		}
 
 		if count > 0 {
-			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time);")
+			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUES(snatched_time);")
 
 			conn.execBuffer(&query)
 
