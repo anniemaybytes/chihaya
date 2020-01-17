@@ -184,6 +184,7 @@ func (db *Database) flushTransferHistory() {
 		for count = 0; count < length; count++ {
 			b := <-db.transferHistoryChannel
 			if b == nil {
+				db.transferHistoryWaitGroup.Done()
 				break
 			}
 			query.Write(b.Bytes())
