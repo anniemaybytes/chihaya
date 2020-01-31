@@ -1,0 +1,19 @@
+kind: pipeline
+name: default
+type: docker
+
+platform:
+    os: linux
+    arch: amd64
+
+steps:
+    -   name: build v1.11
+        image: golang:1.11
+        commands:
+            - go get
+            - go build
+    -   name: build v1.13
+        image: golang:1.13
+        commands:
+            - go get
+            - go build

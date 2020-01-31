@@ -1,6 +1,16 @@
 chihaya (kuroneko)
 =======
 
+Installation
+-------------
+
+chihaya requires Golang. Version 1.11+ is recommended.
+
+```
+go get
+go build
+```
+
 Configuration
 -------------
 
