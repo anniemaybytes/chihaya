@@ -8,7 +8,7 @@ platform:
 
 steps:
     -   name: build
-        image: golang:1.11
+        image: golang:1.13
         commands:
             - go get
             - go build
