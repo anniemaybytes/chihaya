@@ -1,5 +1,5 @@
 kind: pipeline
-name: default
+name: golang-v1.11
 type: docker
 
 platform:
@@ -7,15 +7,24 @@ platform:
     arch: amd64
 
 steps:
-    -   name: build v1.11
+    -   name: build
         image: golang:1.11
         commands:
             - go get
             - go build
-        depends_on: [ clone ]
-    -   name: build v1.13
+
+---
+kind: pipeline
+name: golang-v1.13
+type: docker
+
+platform:
+    os: linux
+    arch: amd64
+
+steps:
+    -   name: build
         image: golang:1.13
         commands:
             - go get
             - go build
-        depends_on: [ clone ]
