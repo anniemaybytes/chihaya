@@ -12,8 +12,10 @@ steps:
         commands:
             - go get
             - go build
+        depends_on: [ clone ]
     -   name: build v1.13
         image: golang:1.13
         commands:
             - go get
             - go build
+        depends_on: [ clone ]
