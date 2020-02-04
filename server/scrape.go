@@ -1,3 +1,5 @@
+// +build scrape
+
 /*
  * This file is part of Chihaya.
  *

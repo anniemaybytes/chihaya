@@ -239,8 +239,6 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buf := handler.bufferPool.Take()
 	defer handler.bufferPool.Give(buf)
 
-	//log.Println(r.URL)
-
 	if r.URL.Path == "/stats" {
 		db := handler.db
 		peers := 0
@@ -253,7 +251,7 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		buf.WriteString(fmt.Sprintf("Uptime: %f\nUsers: %d\nTorrents: %d\nPeers: %d\nThroughput: %d rpm\n",
-			time.Now().Sub(handler.startTime).Seconds(),
+			time.Since(handler.startTime).Seconds(),
 			len(db.Users),
 			len(db.Torrents),
 			peers,
@@ -279,7 +277,7 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// It would probably be good to use real response codes, but no common client actually cares
 
-	w.Write(buf.Bytes())
+	_, _ = w.Write(buf.Bytes())
 
 	atomic.AddInt64(&handler.deltaRequests, 1)
 
@@ -313,7 +311,7 @@ func Start() {
 	 * Behind the scenes, this works by spawning a new goroutine for each client.
 	 * This is pretty fast and scalable since goroutines are nice and efficient.
 	 */
-	server.Serve(listener)
+	_ = server.Serve(listener)
 
 	// Wait for active connections to finish processing
 	handler.waitGroup.Wait()
@@ -333,7 +331,7 @@ func collectStatistics() {
 	lastTime := time.Now()
 	for {
 		time.Sleep(time.Minute)
-		duration := time.Now().Sub(lastTime)
+		duration := time.Since(lastTime)
 		handler.throughput = int64(float64(handler.deltaRequests)/duration.Seconds()*60 + 0.5)
 		atomic.StoreInt64(&handler.deltaRequests, 0)
 

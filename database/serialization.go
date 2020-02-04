@@ -55,14 +55,24 @@ func (db *Database) serialize() {
 	log.Printf("Serializing database to cache file")
 
 	db.TorrentsMutex.RLock()
-	gob.NewEncoder(torrentFile).Encode(db.Torrents)
+	err = gob.NewEncoder(torrentFile).Encode(db.Torrents)
+	if err != nil {
+		log.Println("!!! CRITICAL !!! Failed to encode torrents for serialization! ", err)
+		db.TorrentsMutex.RUnlock()
+		return
+	}
 	db.TorrentsMutex.RUnlock()
 
 	db.UsersMutex.RLock()
-	gob.NewEncoder(userFile).Encode(db.Users)
+	err = gob.NewEncoder(userFile).Encode(db.Users)
+	if err != nil {
+		log.Println("!!! CRITICAL !!! Failed to encode users for serialization! ", err)
+		db.UsersMutex.RUnlock()
+		return
+	}
 	db.UsersMutex.RUnlock()
 
-	log.Printf("Done serializing (%dms)\n", time.Now().Sub(start).Nanoseconds()/1000000)
+	log.Printf("Done serializing (%dms)\n", time.Since(start).Nanoseconds()/1000000)
 }
 
 func (db *Database) deserialize() {
@@ -118,5 +128,5 @@ func (db *Database) deserialize() {
 	users := len(db.Users)
 	db.UsersMutex.RUnlock()
 
-	log.Printf("Loaded %d users, %d torrents, %d peers (%dms)\n", users, torrents, peers, time.Now().Sub(start).Nanoseconds()/1000000)
+	log.Printf("Loaded %d users, %d torrents, %d peers (%dms)\n", users, torrents, peers, time.Since(start).Nanoseconds()/1000000)
 }

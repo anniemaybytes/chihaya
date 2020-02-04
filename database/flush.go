@@ -353,7 +353,7 @@ func (db *Database) purgeInactivePeers() {
 		}
 		db.TorrentsMutex.Unlock()
 
-		log.Printf("Purged %d inactive peers from memory (%dms)\n", count, time.Now().Sub(start).Nanoseconds()/1000000)
+		log.Printf("Purged %d inactive peers from memory (%dms)\n", count, time.Since(start).Nanoseconds()/1000000)
 
 		// Wait on flushing to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
 		db.goTransferHistoryWait()
@@ -365,7 +365,7 @@ func (db *Database) purgeInactivePeers() {
 		rows := result.AffectedRows()
 		db.mainConn.mutex.Unlock()
 
-		log.Printf("Updated %d inactive peers in database (%dms)\n", rows, time.Now().Sub(start).Nanoseconds()/1000000)
+		log.Printf("Updated %d inactive peers in database (%dms)\n", rows, time.Since(start).Nanoseconds()/1000000)
 
 		db.waitGroup.Done()
 		time.Sleep(config.PurgeInactiveInterval)

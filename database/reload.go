@@ -107,7 +107,7 @@ func (db *Database) loadUsers() {
 	db.Users = newUsers
 	db.UsersMutex.Unlock()
 
-	log.Printf("User load complete (%d rows, %dms)", count, time.Now().Sub(start).Nanoseconds()/1000000)
+	log.Printf("User load complete (%d rows, %dms)", count, time.Since(start).Nanoseconds()/1000000)
 }
 
 func (db *Database) loadHitAndRuns() {
@@ -145,7 +145,7 @@ func (db *Database) loadHitAndRuns() {
 
 	db.HitAndRuns = newHnr
 
-	log.Printf("Hit and run load complete (%d rows, %dms)", count, time.Now().Sub(start).Nanoseconds()/1000000)
+	log.Printf("Hit and run load complete (%d rows, %dms)", count, time.Since(start).Nanoseconds()/1000000)
 }
 
 func (db *Database) loadTorrents() {
@@ -205,7 +205,7 @@ func (db *Database) loadTorrents() {
 	db.Torrents = newTorrents
 	db.TorrentsMutex.Unlock()
 
-	log.Printf("Torrent load complete (%d rows, %dms)", count, time.Now().Sub(start).Nanoseconds()/1000000)
+	log.Printf("Torrent load complete (%d rows, %dms)", count, time.Since(start).Nanoseconds()/1000000)
 }
 
 func (db *Database) loadConfig() {
@@ -247,5 +247,5 @@ func (db *Database) loadWhitelist() {
 	db.mainConn.mutex.Unlock()
 	db.WhitelistMutex.Unlock()
 
-	log.Printf("Whitelist load complete (%d rows, %dms)", len(db.Whitelist), time.Now().Sub(start).Nanoseconds()/1000000)
+	log.Printf("Whitelist load complete (%d rows, %dms)", len(db.Whitelist), time.Since(start).Nanoseconds()/1000000)
 }

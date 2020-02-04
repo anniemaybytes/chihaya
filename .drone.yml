@@ -1,5 +1,5 @@
 kind: pipeline
-name: golang-v1.11
+name: default
 type: docker
 
 platform:
@@ -7,32 +7,47 @@ platform:
     arch: amd64
 
 steps:
-    -   name: build
+    -   name: get
         image: golang:1.11
+        volumes:
+            - name: gopath
+              path: /go
+        environment:
+            GOPATH: /go
         commands:
             - go get
-            - go build
-
+    -   name: base build
+        image: golang:1.11
+        volumes:
+            - name: gopath
+              path: /go
+        environment:
+            GOPATH: /go
+        commands:
+            - go build -tags ""
+    -   name: full build
+        image: golang:1.11
+        volumes:
+            - name: gopath
+              path: /go
+        environment:
+            GOPATH: /go
+        commands:
+            - go build -tags "scrape record"
+    -   name: linter
+        image: golangci/golangci-lint:v1.23.3
+        volumes:
+            - name: gopath
+              path: /go
+        environment:
+            GOPATH: /go
+        commands:
+            - golangci-lint run --color always --build-tags "scrape record"
 trigger:
     branch:
         - master
+        - drone
 
----
-kind: pipeline
-name: golang-v1.13
-type: docker
-
-platform:
-    os: linux
-    arch: amd64
-
-steps:
-    -   name: build
-        image: golang:1.13
-        commands:
-            - go get
-            - go build
-
-trigger:
-    branch:
-        - master
+volumes:
+    - name: gopath
+      temp: {}

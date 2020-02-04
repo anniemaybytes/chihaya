@@ -43,8 +43,12 @@ func main() {
 		f, err := os.Create("chihaya.cpu")
 		if err != nil {
 			log.Fatalf("Failed to create profile file: %s\n", err)
+		} else {
+			err = pprof.StartCPUProfile(f)
+			if err != nil {
+				log.Fatalf("Can not start profiling session: %s\n", err)
+			}	
 		}
-		pprof.StartCPUProfile(f)
 	}
 
 	go func() {
