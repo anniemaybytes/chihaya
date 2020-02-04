@@ -11,6 +11,15 @@ go get
 go build
 ```
 
+Additionally, you may pass tags during build to control which functions you want to enable. Supported tags are:
+- scrape: Enables optional support for /scrape endpoint
+- record: Enables simple experimental JSON recorded of announce events to flat file
+
+Example:
+```
+go build -tags "scrape record"
+```
+
 Configuration
 -------------
 
