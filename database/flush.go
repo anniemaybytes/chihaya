@@ -39,7 +39,6 @@ import (
 /*
  * If a buffer channel is less than half full on a flush, the routine will wait some time before flushing again.
  * If the channel is more than half full, it doesn't wait at all.
- * TODO: investigate good wait timings
  */
 
 func (db *Database) startFlushing() {
@@ -51,7 +50,7 @@ func (db *Database) startFlushing() {
 
 	go db.flushTorrents()
 	go db.flushUsers()
-	go db.flushTransferHistory()
+	go db.flushTransferHistory() // this can not be blocking because it will lock purgeInactivePeers from executing when channel is empty
 	go db.flushTransferIps()
 	go db.flushSnatches()
 
@@ -164,6 +163,7 @@ func (db *Database) flushTransferHistory() {
 	var count int
 	conn := OpenDatabaseConnection()
 
+  main:
 	for {
 		db.transferHistoryWaitGroupMu.Lock()
 		if db.transferHistoryWaitGroupSe == 1 {
@@ -181,17 +181,24 @@ func (db *Database) flushTransferHistory() {
 		query.WriteString("INSERT INTO transfer_history (uid, fid, uploaded, downloaded, " +
 			"seeding, starttime, last_announce, activetime, seedtime, active, snatched, remaining) VALUES\n")
 
+    counter:
 		for count = 0; count < length; count++ {
-			b := <-db.transferHistoryChannel
-			if b == nil {
-				db.transferHistoryWaitGroup.Done()
-				break
-			}
-			query.Write(b.Bytes())
-			db.bufferPool.Give(b)
+			select {
+			case b, ok := <-db.transferHistoryChannel:
+				if ok {
+					query.Write(b.Bytes())
+					db.bufferPool.Give(b)
 
-			if count != length-1 {
-				query.WriteRune(',')
+					if count != length-1 {
+						query.WriteRune(',')
+					}
+				} else {
+					break counter
+				}
+				default:
+					db.transferHistoryWaitGroup.Done()
+					time.Sleep(time.Second)
+					continue main
 			}
 		}
 
@@ -201,10 +208,10 @@ func (db *Database) flushTransferHistory() {
 
 		if count > 0 {
 			query.WriteString("\nON DUPLICATE KEY UPDATE uploaded = uploaded + VALUE(uploaded), " +
-				"downloaded = downloaded + VALUE(downloaded), connectable = VALUE(connectable), " +
+				"downloaded = downloaded + VALUE(downloaded), remaining = VALUE(remaining), " +
 				"seeding = VALUE(seeding), activetime = activetime + VALUE(activetime), " +
 				"seedtime = seedtime + VALUE(seedtime), last_announce = VALUE(last_announce), " +
-				"active = VALUE(active), snatched = snatched + VALUE(snatched), remaining = VALUE(remaining);")
+				"active = VALUE(active), snatched = snatched + VALUE(snatched);")
 
 			conn.execBuffer(&query)
 			db.transferHistoryWaitGroup.Done()
@@ -214,7 +221,7 @@ func (db *Database) flushTransferHistory() {
 			}
 		} else if db.terminate {
 			db.transferHistoryWaitGroup.Done()
-			break
+			break main
 		} else {
 			db.transferHistoryWaitGroup.Done()
 			time.Sleep(time.Second)

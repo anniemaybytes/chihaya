@@ -23,5 +23,6 @@ chihaya
 chihaya.cpu
 config.json
 *.gob
+events
 
 .idea

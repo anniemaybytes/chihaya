@@ -7,7 +7,7 @@ platform:
     arch: amd64
 
 steps:
-    -   name: get
+    -   name: build
         image: golang:1.11
         volumes:
             - name: gopath
@@ -16,26 +16,10 @@ steps:
             GOPATH: /go
         commands:
             - go get
-    -   name: base build
-        image: golang:1.11
-        volumes:
-            - name: gopath
-              path: /go
-        environment:
-            GOPATH: /go
-        commands:
             - go build -tags ""
-    -   name: full build
-        image: golang:1.11
-        volumes:
-            - name: gopath
-              path: /go
-        environment:
-            GOPATH: /go
-        commands:
             - go build -tags "scrape record"
     -   name: linter
-        image: golangci/golangci-lint:v1.23.3
+        image: golangci/golangci-lint:latest
         volumes:
             - name: gopath
               path: /go
@@ -43,6 +27,7 @@ steps:
             GOPATH: /go
         commands:
             - golangci-lint run --color always --build-tags "scrape record"
+
 trigger:
     branch:
         - master
