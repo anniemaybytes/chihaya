@@ -7,8 +7,8 @@ Installation
 chihaya requires Golang (versions >= 1.11 recommended) and MariaDB >= 10.3.3.
 
 ```
-go get
-go build
+$ go get
+$ go build
 ```
 
 Additionally, you may pass tags during build to control which functions you want to enable. Supported tags are:
@@ -17,7 +17,7 @@ Additionally, you may pass tags during build to control which functions you want
 
 Example:
 ```
-go build -tags "scrape record"
+$ go build -tags "scrape record"
 ```
 
 Configuration
