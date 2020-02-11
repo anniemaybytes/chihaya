@@ -1,3 +1,4 @@
+---
 kind: pipeline
 name: default
 type: docker
@@ -7,7 +8,23 @@ platform:
     arch: amd64
 
 steps:
-    -   name: build
+    -   name: restore-cache
+        image: meltwater/drone-cache
+        failure: ignore
+        settings:
+            backend: "filesystem"
+            restore: true
+            cache_key: '{{ checksum "go.mod" }}_{{ checksum "go.sum" }}_default'
+            archive_format: "gzip"
+            mount:
+                - '/go'
+        volumes:
+            -   name: drone-cache
+                path: /tmp/cache
+            -   name: gopath
+                path: /go
+        depends_on: [ clone ]
+    -   name: get
         image: golang:1.11
         volumes:
             - name: gopath
@@ -16,17 +33,46 @@ steps:
             GOPATH: /go
         commands:
             - go get
-            - go build -tags ""
-            - go build -tags "scrape record"
-    -   name: linter
-        image: golangci/golangci-lint:latest
+        depends_on: [ restore-cache ]
+    -   name: build
+        image: golang:1.11
         volumes:
-            - name: gopath
-              path: /go
+            -   name: gopath
+                path: /go
         environment:
             GOPATH: /go
         commands:
+            - go version
+            - go build -tags ""
+            - go build -tags "scrape record"
+        depends_on: [ get ]
+    -   name: linter
+        image: golangci/golangci-lint:latest
+        volumes:
+            -   name: gopath
+                path: /go
+        environment:
+            GOPATH: /go
+        commands:
+            - golangci-lint run --color always --build-tags ""
             - golangci-lint run --color always --build-tags "scrape record"
+        depends_on: [ build ]
+    -   name: rebuild-cache
+        image: meltwater/drone-cache
+        failure: ignore
+        settings:
+            backend: "filesystem"
+            rebuild: true
+            cache_key: '{{ checksum "go.mod" }}_{{ checksum "go.sum" }}_default'
+            archive_format: "gzip"
+            mount:
+                - '/go'
+        volumes:
+            -   name: drone-cache
+                path: /tmp/cache
+            -   name: gopath
+                path: /go
+        depends_on: [ get ]
 
 trigger:
     branch:
@@ -34,5 +80,13 @@ trigger:
         - drone
 
 volumes:
-    - name: gopath
-      temp: {}
+    -   name: gopath
+        temp: {}
+    -   name: drone-cache
+        host:
+           path: /var/lib/cache
+---
+kind: signature
+hmac: caaac730f19633933177c65a80fbf3d1e1b992f193325bdd7173cb429accb22f
+
+...
