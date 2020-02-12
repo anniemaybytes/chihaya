@@ -11,36 +11,44 @@ steps:
     -   name: restore-cache
         image: meltwater/drone-cache
         failure: ignore
+        environment:
+            AWS_ACCESS_KEY_ID:
+                from_secret: aws_access_key_id
+            AWS_SECRET_ACCESS_KEY:
+                from_secret: aws_secret_access_key
+            PLUGIN_PATH_STYLE: true
         settings:
-            backend: "filesystem"
+            endpoint:
+                from_secret: aws_endpoint
+            region: ab-1
+            bucket: drone-cache
             restore: true
             cache_key: '{{ checksum "go.mod" }}_{{ checksum "go.sum" }}_default'
-            archive_format: "gzip"
+            archive_format: gzip
             mount:
-                - '/go'
-        volumes:
-            -   name: drone-cache
-                path: /tmp/cache
-            -   name: gopath
-                path: /go
+                - ./.go
         depends_on: [ clone ]
     -   name: get
         image: golang:1.11
-        volumes:
-            - name: gopath
-              path: /go
         environment:
-            GOPATH: /go
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
         commands:
             - go get
         depends_on: [ restore-cache ]
+    -   name: vet
+        image: golang:1.11
+        environment:
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
+        commands:
+            - go vet
+        depends_on: [ get ]
     -   name: build
         image: golang:1.11
-        volumes:
-            -   name: gopath
-                path: /go
         environment:
-            GOPATH: /go
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
         commands:
             - go version
             - go build -tags ""
@@ -48,11 +56,9 @@ steps:
         depends_on: [ get ]
     -   name: linter
         image: golangci/golangci-lint:latest
-        volumes:
-            -   name: gopath
-                path: /go
         environment:
-            GOPATH: /go
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
         commands:
             - golangci-lint run --color always --build-tags ""
             - golangci-lint run --color always --build-tags "scrape record"
@@ -60,18 +66,22 @@ steps:
     -   name: rebuild-cache
         image: meltwater/drone-cache
         failure: ignore
+        environment:
+            AWS_ACCESS_KEY_ID:
+                from_secret: aws_access_key_id
+            AWS_SECRET_ACCESS_KEY:
+                from_secret: aws_secret_access_key
+            PLUGIN_PATH_STYLE: true
         settings:
-            backend: "filesystem"
+            endpoint:
+                from_secret: aws_endpoint
+            region: ab-1
+            bucket: drone-cache
             rebuild: true
             cache_key: '{{ checksum "go.mod" }}_{{ checksum "go.sum" }}_default'
-            archive_format: "gzip"
+            archive_format: gzip
             mount:
-                - '/go'
-        volumes:
-            -   name: drone-cache
-                path: /tmp/cache
-            -   name: gopath
-                path: /go
+                - ./.go
         depends_on: [ get ]
 
 trigger:
@@ -79,14 +89,8 @@ trigger:
         - master
         - drone
 
-volumes:
-    -   name: gopath
-        temp: {}
-    -   name: drone-cache
-        host:
-           path: /var/lib/cache
 ---
 kind: signature
-hmac: caaac730f19633933177c65a80fbf3d1e1b992f193325bdd7173cb429accb22f
+hmac: 41acbf30856919dee7443bc6457698f6d767dc55aae1288c7462b85642d4580f
 
 ...

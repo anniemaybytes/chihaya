@@ -10,45 +10,45 @@ platform:
 steps:
     -   name: get
         image: golang:1.11
-        volumes:
-            -   name: gopath
-                path: /go
         environment:
-            GOPATH: /go
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
         commands:
             - go get
+    -   name: vet
+        image: golang:1.11
+        environment:
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
+        commands:
+            - go vet
+        depends_on: [ get ]
     -   name: build
         image: golang:1.11
-        volumes:
-            -   name: gopath
-                path: /go
         environment:
-            GOPATH: /go
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
         commands:
             - go version
             - go build -tags ""
             - go build -tags "scrape record"
+        depends_on: [ get ]
     -   name: linter
         image: golangci/golangci-lint:latest
-        volumes:
-            -   name: gopath
-                path: /go
         environment:
-            GOPATH: /go
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
         commands:
             - golangci-lint run --color always --build-tags ""
             - golangci-lint run --color always --build-tags "scrape record"
+        depends_on: [ build ]
 
 trigger:
     branch:
         - master
-        - drone
 
-volumes:
-    -   name: gopath
-        temp: {}
 ---
 kind: signature
-hmac: 0f7eb5b8f002908d04e9f18eb1c71263553e52597ca2a7009692f7f0846e9a04
+hmac: b89e9100c6e596dc3075f1980b0cc0b0b12783c8d0a689398722b2285dc99ad7
 
 ...
