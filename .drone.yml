@@ -1,11 +1,6 @@
----
 kind: pipeline
 name: default
 type: docker
-
-platform:
-    os: linux
-    arch: amd64
 
 steps:
     -   name: restore-cache
@@ -23,7 +18,7 @@ steps:
             region: ab-1
             bucket: drone-cache
             restore: true
-            cache_key: '{{ checksum "go.mod" }}_{{ checksum "go.sum" }}_default'
+            cache_key: '{{ .Commit.Branch }}'
             archive_format: gzip
             mount:
                 - ./.go
@@ -78,19 +73,8 @@ steps:
             region: ab-1
             bucket: drone-cache
             rebuild: true
-            cache_key: '{{ checksum "go.mod" }}_{{ checksum "go.sum" }}_default'
+            cache_key: '{{ .Commit.Branch }}'
             archive_format: gzip
             mount:
                 - ./.go
         depends_on: [ get ]
-
-trigger:
-    branch:
-        - master
-        - drone
-
----
-kind: signature
-hmac: 41acbf30856919dee7443bc6457698f6d767dc55aae1288c7462b85642d4580f
-
-...

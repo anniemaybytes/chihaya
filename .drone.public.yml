@@ -1,11 +1,6 @@
----
 kind: pipeline
 name: default
 type: docker
-
-platform:
-    os: linux
-    arch: amd64
 
 steps:
     -   name: get
@@ -42,13 +37,3 @@ steps:
             - golangci-lint run --color always --build-tags ""
             - golangci-lint run --color always --build-tags "scrape record"
         depends_on: [ build ]
-
-trigger:
-    branch:
-        - master
-
----
-kind: signature
-hmac: b89e9100c6e596dc3075f1980b0cc0b0b12783c8d0a689398722b2285dc99ad7
-
-...
