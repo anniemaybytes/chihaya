@@ -18,6 +18,15 @@ steps:
         commands:
             - go vet
         depends_on: [ get ]
+    -   name: tests
+        image: golang:1.11
+        environment:
+            GO111MODULE: on
+            GOPATH: /drone/src/.go
+        commands:
+            - go test ./... -tags ""
+            - go test ./... -tags "scrape record"
+        depends_on: [ get ]
     -   name: build
         image: golang:1.11
         environment:
