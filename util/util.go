@@ -17,6 +17,17 @@
 
 package util
 
+import (
+	"math/rand"
+	"time"
+)
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 func Min(a int, b int) int {
 	if a < b {
 		return a
@@ -36,4 +47,12 @@ func Btoa(a bool) string {
 		return "1"
 	}
 	return "0"
+}
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }

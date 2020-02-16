@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"chihaya/config"
 	cdb "chihaya/database"
+	"chihaya/record"
 	"chihaya/util"
 	"fmt"
 	"github.com/zeebo/bencode"
@@ -266,19 +267,10 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handler.respond(r, buf)
 	}
 
-	/*
-	 * Could do gzip here, but I'm not sure if it's worth it for compact responses.
-	 * Also, according to the Ocelot source code:
-	 *   "gzip compression actually makes announce returns larger from our testing."
-	 *
-	 * TODO: investigate this
-	 */
-
 	w.Header().Add("Content-Type", "text/plain")
 	w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
 
-	// It would probably be good to use real response codes, but no common client actually cares
-
+	// The response should always be 200, even on failure
 	_, _ = w.Write(buf.Bytes())
 
 	atomic.AddInt64(&handler.deltaRequests, 1)
@@ -302,6 +294,7 @@ func Start() {
 	go collectStatistics()
 
 	handler.db.Init()
+	record.Init()
 
 	listener, err = net.Listen("tcp", config.Get("addr"))
 

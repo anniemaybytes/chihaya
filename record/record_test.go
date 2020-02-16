@@ -17,33 +17,50 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package server
+package record
 
 import (
 	"bufio"
+	"chihaya/util"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 )
 
-type Record struct {
+type record struct {
 	tid, uid  uint64
 	up, down  int64
 	absup     uint64
 	event, ip string
 }
 
-func init() {
+func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
+
+	tempPath := filepath.Join(os.TempDir(), "chihaya_record-"+util.RandStringBytes(6))
+	err := os.Mkdir(tempPath, 0755)
+	if err != nil {
+		panic(err)
+	}
+	err = os.Chdir(tempPath)
+	if err != nil {
+		panic(err)
+	}
+
+	Init()
+
+	os.Exit(m.Run())
 }
 
 func TestRecord(t *testing.T) {
-	var recordValues []Record
+	var recordValues []record
 	var expectedOutputs []string
+
 	for i := 0; i < 10; i++ {
-		tmp := Record{rand.Uint64(), rand.Uint64(),
+		tmp := record{rand.Uint64(), rand.Uint64(),
 			int64(rand.Uint64()), int64(rand.Uint64()),
 			rand.Uint64(), "completed", "127.0.0.1"}
 		recordValues = append(recordValues, tmp)
@@ -61,15 +78,18 @@ func TestRecord(t *testing.T) {
 		)
 	}
 	for _, item := range recordValues {
-		record(item.tid, item.uid, item.up, item.down, item.absup, item.event, item.ip)
+		Record(item.tid, item.uid, item.up, item.down, item.absup, item.event, item.ip)
 	}
+
 	time.Sleep(200 * time.Millisecond)
+
 	// In theory, below line can fail if this line was called in a different hour than when the file was made
 	// In practice, this would never occur since the file should be made fast enough for it to be in same error.
 	recordFile, err := openEventFile(time.Now())
 	if err != nil {
 		t.Fatalf("Faced error in opening file: %s", err)
 	}
+
 	recordScanner := bufio.NewScanner(recordFile)
 	recordScanner.Split(bufio.ScanLines)
 	var recordLines []string
@@ -79,16 +99,14 @@ func TestRecord(t *testing.T) {
 	if err := recordScanner.Err(); err != nil {
 		t.Fatalf("Faced error in reading: %s", err)
 	}
+
 	if len(expectedOutputs) != len(recordLines) {
 		t.Fatalf("The number of records do not match with what is expected! (expected %d, got %d)", len(expectedOutputs), len(recordLines))
 	}
-	for index, recordLine := range recordLines {
+
+	for index, recordLine := range recordLines { // noinspection GoNilness
 		if expectedOutputs[index] != recordLine {
 			t.Fatalf("Expected %s but got %s in record!", expectedOutputs[index], recordLine)
 		}
-	}
-	errRemove := os.RemoveAll("events") // Cleanup
-	if errRemove != nil && !os.IsNotExist(errRemove) {
-		t.Log("Cannot remove existing events directory: #{errRemove}")
 	}
 }

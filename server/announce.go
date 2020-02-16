@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"chihaya/config"
 	cdb "chihaya/database"
+	"chihaya/record"
 	"chihaya/util"
 	"encoding/binary"
 	"fmt"
@@ -268,7 +269,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	db.RecordTorrent(torrent, deltaSnatch)
 	db.RecordTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
 	db.RecordUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	record(peer.TorrentId, user.Id, rawDeltaUpload, rawDeltaDownload, uploaded, event, ipAddr)
+	record.Record(peer.TorrentId, user.Id, rawDeltaUpload, rawDeltaDownload, uploaded, event, ipAddr)
 	db.RecordTransferIp(peer, rawDeltaUpload, rawDeltaDownload)
 
 	// Generate response

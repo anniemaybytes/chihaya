@@ -17,7 +17,7 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package server
+package record
 
 import (
 	"bytes"
@@ -32,7 +32,7 @@ func openEventFile(t time.Time) (*os.File, error) {
 	return os.OpenFile("events/events_"+t.Format("2006-01-02T15")+".json", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 }
 
-func init() {
+func Init() {
 	err := os.Mkdir("events", 0755)
 	if err != nil && !os.IsExist(err) {
 		panic(err)
@@ -50,7 +50,10 @@ func init() {
 			now := time.Now()
 			if now.Hour() != start.Hour() {
 				start = now
-				recordFile.Close()
+				err := recordFile.Close()
+				if err != nil {
+					panic(err)
+				}
 				recordFile, err = openEventFile(start)
 				if err != nil {
 					panic(err)
@@ -64,7 +67,7 @@ func init() {
 	}()
 }
 
-func record(tid, uid uint64, up, down int64, absup uint64, event, ip string) {
+func Record(tid, uid uint64, up, down int64, absup uint64, event, ip string) {
 	if up == 0 && down == 0 {
 		return
 	}

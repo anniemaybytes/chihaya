@@ -73,3 +73,13 @@ func TestBtoa(t *testing.T) {
 		}
 	}
 }
+
+func TestRandStringBytes(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		n := rand.Intn(100000)
+		randomString := RandStringBytes(n)
+		if len(randomString) != n {
+			t.Fatalf("String (length %d) not of required length (%d)!", len(randomString), n)
+		}
+	}
+}

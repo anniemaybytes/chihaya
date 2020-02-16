@@ -17,6 +17,7 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package server
+package record
 
-func record(tid, uid uint64, up, down int64, absup uint64, event, ip string) {}
+func Record(tid, uid uint64, up, down int64, absup uint64, event, ip string) {}
+func Init()                                                                  {}

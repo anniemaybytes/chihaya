@@ -47,8 +47,16 @@ func (db *Database) serialize() {
 		return
 	}
 
-	defer torrentFile.Close()
-	defer userFile.Close()
+	defer func() {
+		err := torrentFile.Close()
+		if err != nil {
+			panic(err)
+		}
+		err = userFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	start := time.Now()
 
@@ -87,8 +95,16 @@ func (db *Database) deserialize() {
 		return
 	}
 
-	defer torrentFile.Close()
-	defer userFile.Close()
+	defer func() {
+		err := torrentFile.Close()
+		if err != nil {
+			panic(err)
+		}
+		err = userFile.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	start := time.Now()
 
