@@ -63,6 +63,7 @@ func TestRecord(t *testing.T) {
 	for _, item := range recordValues {
 		record(item.tid, item.uid, item.up, item.down, item.absup, item.event, item.ip)
 	}
+	time.Sleep(200 * time.Millisecond)
 	// In theory, below line can fail if this line was called in a different hour than when the file was made
 	// In practice, this would never occur since the file should be made fast enough for it to be in same error.
 	recordFile, err := os.Open("events/events_" + time.Now().Format("2006-01-02T15") + ".json")

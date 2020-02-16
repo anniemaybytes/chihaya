@@ -23,6 +23,7 @@ import (
 	cdb "chihaya/database"
 	"chihaya/util"
 	"fmt"
+	"github.com/zeebo/bencode"
 	"log"
 	"net"
 	"net/http"
@@ -70,14 +71,15 @@ func (p *queryParams) getUint64(which string) (ret uint64, exists bool) {
 }
 
 func failure(err string, buf *bytes.Buffer, interval time.Duration) {
-	buf.WriteRune('d')
-	util.Bencode("failure reason", buf)
-	util.Bencode(err, buf)
-	util.Bencode("interval", buf)
-	util.Bencode(interval, buf)
-	util.Bencode("min interval", buf)
-	util.Bencode(interval, buf)
-	buf.WriteRune('e')
+	failureData := make(map[string]interface{})
+	failureData["failure reason"] = err
+	failureData["interval"] = interval / time.Second     // Assuming in seconds
+	failureData["min interval"] = interval / time.Second // Assuming in seconds
+	data, errz := bencode.EncodeBytes(failureData)
+	if errz != nil {
+		panic(err)
+	}
+	buf.Write(data)
 }
 
 /*
@@ -155,7 +157,7 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 	dir, action := path.Split(r.URL.Path)
 	if len(dir) != 34 {
-		failure("Malformed request - missing passkey", buf, 1 * time.Hour)
+		failure("Malformed request - missing passkey", buf, 1*time.Hour)
 		return
 	}
 
@@ -164,7 +166,7 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 	params, err := handler.parseQuery(r.URL.RawQuery)
 
 	if err != nil {
-		failure("Error parsing query", buf, 1 * time.Hour)
+		failure("Error parsing query", buf, 1*time.Hour)
 		return
 	}
 
@@ -172,17 +174,17 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 	user, exists := handler.db.Users[passkey]
 	handler.db.UsersMutex.RUnlock()
 	if !exists {
-		failure("Your passkey is invalid", buf, 1 * time.Hour)
+		failure("Your passkey is invalid", buf, 1*time.Hour)
 		return
 	}
 
 	ipAddr, exists := params.get("ipv4") // first try to get ipv4 address if client sent it
 	if !exists {
-		ipAddr, exists = params.get("ip") // then try to get public ip if sent by client
+		ipAddr, exists = params.get("ip")      // then try to get public ip if sent by client
 		ipBytes := (net.ParseIP(ipAddr)).To4() // and make sure it is ipv4 one
-		if !exists || nil == ipBytes { // finally, if there is no ip sent by client in http request or ip sent is ipv6 only ...
+		if !exists || nil == ipBytes {         // finally, if there is no ip sent by client in http request or ip sent is ipv6 only ...
 			ips, exists := r.Header["X-Real-Ip"] // ... check if there is X-Real-Ip header sent by proxy?
-			if exists && len(ips) > 0 { // if yes, assume it
+			if exists && len(ips) > 0 {          // if yes, assume it
 				ipAddr = ips[0]
 			} else { // if not, assume ip to be in socket
 				portIndex := len(r.RemoteAddr) - 1
@@ -194,7 +196,7 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 				if portIndex != -1 { // read ip from socket
 					ipAddr = r.RemoteAddr[0:portIndex]
 				} else { // if everything failed, abort request
-					failure("Failed to parse IP address", buf, 1 * time.Hour)
+					failure("Failed to parse IP address", buf, 1*time.Hour)
 					return
 				}
 			}
@@ -203,10 +205,10 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 
 	ipBytes := (net.ParseIP(ipAddr)).To4()
 	if nil == ipBytes {
-		failure("Assertion failed (net.ParseIP(ipAddr)).To4() == nil)! please report this issue to staff", buf, 1 * time.Hour)
+		failure("Assertion failed (net.ParseIP(ipAddr)).To4() == nil)! please report this issue to staff", buf, 1*time.Hour)
 		return
 	}
- 
+
 	switch action {
 	case "announce":
 		announce(params, user, ipAddr, handler.db, buf)
@@ -216,7 +218,7 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 		return
 	}
 
-	failure("Unknown action", buf, 1 * time.Hour)
+	failure("Unknown action", buf, 1*time.Hour)
 }
 
 var handler *httpHandler

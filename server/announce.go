@@ -24,11 +24,12 @@ import (
 	"chihaya/util"
 	"encoding/binary"
 	"fmt"
+	"github.com/zeebo/bencode"
 	"log"
+	"math"
 	"net"
 	"strconv"
 	"time"
-	"math"
 )
 
 func whitelisted(peerId string, db *cdb.Database) uint32 {
@@ -78,13 +79,13 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	left, leftExists := params.getUint64("left")
 
 	if !(infoHash != "" && peerId != "" && portExists && uploadedExists && downloadedExists && leftExists) {
-		failure("Malformed request - missing mandatory param", buf, 1 * time.Hour)
+		failure("Malformed request - missing mandatory param", buf, 1*time.Hour)
 		return
 	}
 
 	client_id := whitelisted(peerId, db)
 	if 0 == client_id {
-		failure("Your client is not approved", buf, 1 * time.Hour)
+		failure("Your client is not approved", buf, 1*time.Hour)
 		return
 	}
 
@@ -94,7 +95,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 
 	torrent, exists := db.Torrents[infoHash]
 	if !exists {
-		failure("This torrent does not exist", buf, 30 * time.Second)
+		failure("This torrent does not exist", buf, 30*time.Second)
 		return
 	}
 
@@ -103,7 +104,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		db.UnPrune(torrent)
 		torrent.Status = 0
 	} else if torrent.Status != 0 {
-		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrent.Status, left), buf, 5 * time.Minute)
+		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrent.Status, left), buf, 5*time.Minute)
 		return
 	}
 
@@ -122,7 +123,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		numWant = int(numWant64)
 		if numWant > 50 {
 			numWant = 50
-		} else if(numWant < 0) {
+		} else if numWant < 0 {
 			numWant = 25
 		}
 	}
@@ -139,7 +140,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		if user.DisableDownload {
 			// only disable download if the torrent doesn't have a HnR against it
 			if !hasHitAndRun(db, user.Id, torrent.Id) {
-				failure("Your download privileges are disabled.", buf, 1 * time.Hour)
+				failure("Your download privileges are disabled.", buf, 1*time.Hour)
 				return
 			}
 		}
@@ -256,13 +257,13 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	 */
 	ipBytes := net.ParseIP(ipAddr)
 	if nil == ipBytes {
-		failure("Malformed IP address", buf, 1 * time.Hour)
+		failure("Malformed IP address", buf, 1*time.Hour)
 		return
 	}
 
 	ipBytes = ipBytes.To4()
 	if nil == ipBytes {
-		failure("IPv4 address required (sorry!)", buf, 1 * time.Hour)
+		failure("IPv4 address required (sorry!)", buf, 1*time.Hour)
 		return
 	}
 
@@ -291,20 +292,14 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	leechCount := len(torrent.Leechers)
 	snatchCount := torrent.Snatched
 
-	buf.WriteRune('d')
-	util.Bencode("complete", buf)
-	util.Bencode(seedCount, buf)
-	util.Bencode("incomplete", buf)
-	util.Bencode(leechCount, buf)
-	util.Bencode("downloaded", buf)
-	util.Bencode(snatchCount, buf)
-	util.Bencode("min interval", buf)
-	util.Bencode(config.MinAnnounceInterval, buf)
-	util.Bencode("interval", buf)
-	util.Bencode(config.AnnounceInterval + time.Duration(util.Min(600, seedCount)) * time.Second, buf)
+	respData := make(map[string]interface{})
+	respData["complete"] = seedCount
+	respData["incomplete"] = leechCount
+	respData["downloaded"] = snatchCount
+	respData["min interval"] = config.MinAnnounceInterval / time.Second                                                  // Assuming seconds
+	respData["interval"] = (config.AnnounceInterval + time.Duration(util.Min(600, seedCount))*time.Second) / time.Second // Assuming seconds
 
 	if numWant > 0 && active {
-		util.Bencode("peers", buf)
 
 		compactString, exists := params.get("compact")
 		compact := !exists || compactString != "0" // Default to being compact
@@ -321,6 +316,12 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 
 		peersToSend := make([]*cdb.Peer, 0, peerCount)
 
+		/*
+		* The iteration is already "random", so we don't need to randomize ourselves:
+		* Each time an element is inserted into the map, it gets a some arbitrary position for iteration
+		* Each time you range over the map, it starts at a random offset into the map's elements
+		*/
+
 		if seeding {
 			for _, leech := range torrent.Leechers {
 				if len(peersToSend) >= numWant {
@@ -332,17 +333,6 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 				peersToSend = append(peersToSend, leech)
 			}
 		} else {
-			/*
-			 * The iteration is already "random" as of Go 1 (so we don't need to randomize ourselves):
-			 * Each time an element is inserted into the map, it gets a some arbitrary position for iteration
-			 * Each time you range over the map, it starts at a random offset into the map's elements
-			 * See http://code.google.com/p/go/source/browse/src/pkg/runtime/hashmap.c?name=release-branch.go1#614
-			 *
-			 * Their fastrand1 function (for the random offset) is somewhat shitty though,
-			 * so I'm not 100% sure if this randomness is sufficient for rotating seeds
-			 * TODO: May want to look into / test this more though
-			 */
-
 			for _, seed := range torrent.Seeders {
 				if len(peersToSend) >= numWant {
 					break
@@ -365,28 +355,28 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		}
 
 		if compact {
-			buf.WriteString(strconv.Itoa(len(peersToSend) * 6))
-			buf.WriteRune(':')
+			var peerBuff bytes.Buffer
 			for _, other := range peersToSend {
-				buf.Write(other.Addr)
+				peerBuff.Write(other.Addr)
 			}
+			respData["peers"] = peerBuff.String()
 		} else {
-			buf.WriteRune('l')
-			for _, other := range peersToSend {
-				buf.WriteRune('d')
-				util.Bencode("ip", buf)
-				util.Bencode(other.IpAddr, buf)
+			peerList := make([]map[string]interface{}, len(peersToSend))
+			for i, other := range peersToSend {
+				peerMap := make(map[string]interface{})
+				peerMap["ip"] = other.IpAddr
+				peerMap["port"] = other.Port
 				if !noPeerId {
-					util.Bencode("peer id", buf)
-					util.Bencode(other.Id, buf)
+					peerMap["peer id"] = other.Id
 				}
-				util.Bencode("port", buf)
-				util.Bencode(other.Port, buf)
-				buf.WriteRune('e')
+				peerList[i] = peerMap
 			}
-			buf.WriteRune('e')
+			respData["peers"] = peerList
 		}
 	}
-
-	buf.WriteRune('e')
+	bufdata, err := bencode.EncodeBytes(respData)
+	if err != nil {
+		panic(err)
+	}
+	buf.Write(bufdata)
 }

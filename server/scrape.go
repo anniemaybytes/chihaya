@@ -22,41 +22,39 @@ package server
 import (
 	"bytes"
 	cdb "chihaya/database"
-	"chihaya/util"
+	"github.com/zeebo/bencode"
 )
 
-func writeScrapeInfo(torrent *cdb.Torrent, buf *bytes.Buffer) {
-	buf.WriteRune('d')
-	util.Bencode("complete", buf)
-	util.Bencode(len(torrent.Seeders), buf)
-	util.Bencode("downloaded", buf)
-	util.Bencode(torrent.Snatched, buf)
-	util.Bencode("incomplete", buf)
-	util.Bencode(len(torrent.Leechers), buf)
-	buf.WriteRune('e')
+func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
+	ret := make(map[string]interface{})
+	ret["complete"] = len(torrent.Seeders)
+	ret["downloaded"] = torrent.Snatched
+	ret["incomplete"] = len(torrent.Leechers)
+	return ret
 }
 
 func scrape(params *queryParams, db *cdb.Database, buf *bytes.Buffer) {
-	buf.WriteRune('d')
-	util.Bencode("files", buf)
-	buf.WriteRune('d')
+	scrapeData := make(map[string]interface{})
+	fileData := make(map[string]interface{})
 	db.TorrentsMutex.RLock()
 	if params.infoHashes != nil {
 		for _, infoHash := range params.infoHashes {
 			torrent, exists := db.Torrents[infoHash]
 			if exists {
-				util.Bencode(infoHash, buf)
-				writeScrapeInfo(torrent, buf)
+				fileData[infoHash] = writeScrapeInfo(torrent)
 			}
 		}
 	} else if infoHash, exists := params.get("info_hash"); exists {
 		torrent, exists := db.Torrents[infoHash]
 		if exists {
-			util.Bencode(infoHash, buf)
-			writeScrapeInfo(torrent, buf)
+			fileData[infoHash] = writeScrapeInfo(torrent)
 		}
 	}
 	db.TorrentsMutex.RUnlock()
-	buf.WriteRune('e')
-	buf.WriteRune('e')
+	scrapeData["files"] = fileData
+	bufdata, err := bencode.EncodeBytes(scrapeData)
+	if err != nil {
+		panic(err)
+	}
+	buf.Write(bufdata)
 }
