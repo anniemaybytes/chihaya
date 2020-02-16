@@ -79,13 +79,13 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	left, leftExists := params.getUint64("left")
 
 	if !(infoHash != "" && peerId != "" && portExists && uploadedExists && downloadedExists && leftExists) {
-		failure("Malformed request - missing mandatory param", buf, 1*time.Hour)
+		failure("Malformed request - missing mandatory parameter", buf, 1*time.Hour)
 		return
 	}
 
-	client_id := whitelisted(peerId, db)
-	if 0 == client_id {
-		failure("Your client is not approved", buf, 1*time.Hour)
+	clientId := whitelisted(peerId, db)
+	if 0 == clientId {
+		failure(fmt.Sprintf("Your client is not approved (id: %s)", peerId), buf, 1*time.Hour)
 		return
 	}
 
@@ -140,7 +140,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		if user.DisableDownload {
 			// only disable download if the torrent doesn't have a HnR against it
 			if !hasHitAndRun(db, user.Id, torrent.Id) {
-				failure("Your download privileges are disabled.", buf, 1*time.Hour)
+				failure("Your download privileges are disabled", buf, 1*time.Hour)
 				return
 			}
 		}
@@ -170,11 +170,10 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 				newPeer = true
 				peer = &cdb.Peer{}
 				torrent.Seeders[peerKey] = peer
-			} else {
-				// They're a seeder now.. Broken client? Unreported snatch?
+			} else { // They're a seeder now.. Broken client? Unreported snatch? Cross-seeding?
 				torrent.Seeders[peerKey] = peer
 				delete(torrent.Leechers, peerKey)
-				// completed = true // TODO: not sure if this will result in over-reported snatches
+				// Let's not report it as snatch to avoid over-reporting for cross-seeding
 			}
 		}
 		seeding = true
@@ -227,8 +226,8 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	}
 
 	peer.LastAnnounce = now
-	// update torrent last_action only if announced action is seeding - allows dead torrents without seeder but with leecher
-	// to be proeprly pruned
+	/* Update torrent last_action only if announced action is seeding
+	allows dead torrents without seeder but with leecher to be proeprly pruned */
 	if seeding {
 		torrent.LastAction = now
 	}
@@ -236,38 +235,23 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	// Handle events
 	var deltaSnatch uint64
 	if event == "stopped" {
-		/*  We can remove the peer from the list and still have their stats be recorded,
+		/* We can remove the peer from the list and still have their stats be recorded,
 		since we still have a reference to their object. After flushing, all references
-		should be gone, allowing the peer to be GC'd.  */
+		should be gone, allowing the peer to be GC'd. */
 		if seeding {
 			delete(torrent.Seeders, peerKey)
 		} else {
 			delete(torrent.Leechers, peerKey)
 		}
-
 		active = false
 	} else if completed {
 		db.RecordSnatch(peer, now)
 		deltaSnatch = 1
 	}
 
-	/*
-	 * Generate compact ip/port
-	 * Future TODO: possible IPv6 support
-	 */
-	ipBytes := net.ParseIP(ipAddr)
-	if nil == ipBytes {
-		failure("Malformed IP address", buf, 1*time.Hour)
-		return
-	}
+	ipBytes := net.ParseIP(ipAddr).To4()
 
-	ipBytes = ipBytes.To4()
-	if nil == ipBytes {
-		failure("IPv4 address required (sorry!)", buf, 1*time.Hour)
-		return
-	}
-
-	// convers in a way equivalent to PHP's ip2long
+	// Converts in a way equivalent to PHP's ip2long
 	ipLong := binary.BigEndian.Uint32(ipBytes)
 
 	peer.Addr = []byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
@@ -278,7 +262,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	} else {
 		peer.Ip = ipLong
 	}
-	peer.ClientId = client_id
+	peer.ClientId = clientId
 
 	// If the channels are already full, record* blocks until a flush occurs
 	db.RecordTorrent(torrent, deltaSnatch)
@@ -302,7 +286,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	if numWant > 0 && active {
 
 		compactString, exists := params.get("compact")
-		compact := !exists || compactString != "0" // Default to being compact
+		compact := !exists || compactString != "0" // Defaults to being compact
 
 		noPeerIdString, exists := params.get("no_peer_id")
 		noPeerId := exists && noPeerIdString == "1"
@@ -317,11 +301,10 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		peersToSend := make([]*cdb.Peer, 0, peerCount)
 
 		/*
-		* The iteration is already "random", so we don't need to randomize ourselves:
-		* Each time an element is inserted into the map, it gets a some arbitrary position for iteration
-		* Each time you range over the map, it starts at a random offset into the map's elements
-		*/
-
+		 * The iteration is already "random", so we don't need to randomize ourselves:
+		 * Each time an element is inserted into the map, it gets a some arbitrary position for iteration
+		 * Each time you range over the map, it starts at a random offset into the map's elements
+		 */
 		if seeding {
 			for _, leech := range torrent.Leechers {
 				if len(peersToSend) >= numWant {

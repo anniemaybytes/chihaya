@@ -121,7 +121,7 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 				return
 			}
 			valStr, err1 := url.QueryUnescape(query[valStart : valEnd+1])
-			if err != nil {
+			if err1 != nil {
 				err = err1
 				return
 			}
@@ -325,7 +325,7 @@ func Start() {
 
 func Stop() {
 	// Closing the listener stops accepting connections and causes Serve to return
-	listener.Close()
+	_ = listener.Close()
 	handler.terminate = true
 }
 

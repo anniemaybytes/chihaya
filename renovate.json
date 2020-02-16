@@ -3,6 +3,7 @@
     "config:base"
   ],
   "ignorePaths": [
-    ".drone.yml"
+    ".drone.yml",
+    ".drone.public.yml"
   ]
 }

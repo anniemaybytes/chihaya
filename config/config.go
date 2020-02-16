@@ -61,28 +61,28 @@ const LogFlushes = true
 // Config file stuff
 var once sync.Once
 
-type configMap map[string]interface{}
+type ConfigMap map[string]interface{}
 
-var config configMap
+var config ConfigMap
 
 func Get(s string) string {
 	once.Do(readConfig)
 	return config.Get(s)
 }
 
-func Section(s string) configMap {
+func Section(s string) ConfigMap {
 	once.Do(readConfig)
 	return config.Section(s)
 }
 
-func (m configMap) Get(s string) string {
+func (m ConfigMap) Get(s string) string {
 	result, _ := m[s].(string)
 	return result
 }
 
-func (m configMap) Section(s string) configMap {
+func (m ConfigMap) Section(s string) ConfigMap {
 	result, _ := m[s].(map[string]interface{})
-	return configMap(result)
+	return result
 }
 
 func readConfig() {

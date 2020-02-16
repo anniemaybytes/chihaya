@@ -66,7 +66,7 @@ type User struct {
 	UpMultiplier    float64
 	DownMultiplier  float64
 	DisableDownload bool
-	TrackerHide bool
+	TrackerHide     bool
 }
 
 type UserTorrentPair struct {
@@ -164,7 +164,7 @@ func (db *Database) Terminate() {
 
 	db.waitGroup.Wait()
 	db.mainConn.mutex.Lock()
-	db.mainConn.Close()
+	_ = db.mainConn.Close()
 	db.mainConn.mutex.Unlock()
 	db.serialize()
 }

@@ -66,7 +66,7 @@ func TestRecord(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	// In theory, below line can fail if this line was called in a different hour than when the file was made
 	// In practice, this would never occur since the file should be made fast enough for it to be in same error.
-	recordFile, err := os.Open("events/events_" + time.Now().Format("2006-01-02T15") + ".json")
+	recordFile, err := openEventFile(time.Now())
 	if err != nil {
 		t.Fatalf("Faced error in opening file: %s", err)
 	}
@@ -80,7 +80,7 @@ func TestRecord(t *testing.T) {
 		t.Fatalf("Faced error in reading: %s", err)
 	}
 	if len(expectedOutputs) != len(recordLines) {
-		t.Fatalf("The number of records do not match with what is expected!")
+		t.Fatalf("The number of records do not match with what is expected! (expected %d, got %d)", len(expectedOutputs), len(recordLines))
 	}
 	for index, recordLine := range recordLines {
 		if expectedOutputs[index] != recordLine {
@@ -89,6 +89,6 @@ func TestRecord(t *testing.T) {
 	}
 	errRemove := os.RemoveAll("events") // Cleanup
 	if errRemove != nil && !os.IsNotExist(errRemove) {
-		t.Fatalf("Cannot remove existing events directory!")
+		t.Log("Cannot remove existing events directory: #{errRemove}")
 	}
 }

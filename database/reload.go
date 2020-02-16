@@ -231,7 +231,7 @@ func (db *Database) loadWhitelist() {
 	row := result.MakeRow()
 
 	id := result.Map("id")
-	peer_id := result.Map("peer_id")
+	peerId := result.Map("peer_id")
 
 	db.Whitelist = make(map[uint32]string)
 
@@ -242,7 +242,7 @@ func (db *Database) loadWhitelist() {
 		} else if err != nil {
 			log.Panicf("Error scanning whitelist rows: %v", err)
 		}
-		db.Whitelist[uint32(row.Uint64(id))] = row.Str(peer_id)
+		db.Whitelist[uint32(row.Uint64(id))] = row.Str(peerId)
 	}
 	db.mainConn.mutex.Unlock()
 	db.WhitelistMutex.Unlock()

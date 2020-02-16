@@ -104,7 +104,7 @@ func (db *Database) flushTorrents() {
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func (db *Database) flushUsers() {
@@ -153,7 +153,7 @@ func (db *Database) flushUsers() {
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func (db *Database) flushTransferHistory() {
@@ -163,7 +163,7 @@ func (db *Database) flushTransferHistory() {
 	var count int
 	conn := OpenDatabaseConnection()
 
-  main:
+main:
 	for {
 		db.transferHistoryWaitGroupMu.Lock()
 		if db.transferHistoryWaitGroupSe == 1 {
@@ -181,7 +181,7 @@ func (db *Database) flushTransferHistory() {
 		query.WriteString("INSERT INTO transfer_history (uid, fid, uploaded, downloaded, " +
 			"seeding, starttime, last_announce, activetime, seedtime, active, snatched, remaining) VALUES\n")
 
-    counter:
+	counter:
 		for count = 0; count < length; count++ {
 			select {
 			case b, ok := <-db.transferHistoryChannel:
@@ -195,10 +195,10 @@ func (db *Database) flushTransferHistory() {
 				} else {
 					break counter
 				}
-				default:
-					db.transferHistoryWaitGroup.Done()
-					time.Sleep(time.Second)
-					continue main
+			default:
+				db.transferHistoryWaitGroup.Done()
+				time.Sleep(time.Second)
+				continue main
 			}
 		}
 
@@ -228,7 +228,7 @@ func (db *Database) flushTransferHistory() {
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func (db *Database) flushTransferIps() {
@@ -275,7 +275,7 @@ func (db *Database) flushTransferIps() {
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func (db *Database) flushSnatches() {
@@ -323,7 +323,7 @@ func (db *Database) flushSnatches() {
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func (db *Database) purgeInactivePeers() {
