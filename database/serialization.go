@@ -108,7 +108,7 @@ func (db *Database) deserialize() {
 
 	start := time.Now()
 
-	log.Printf("Deserializing database from cache file")
+	log.Printf("Deserializing database from cache file...")
 
 	decoder := gob.NewDecoder(torrentFile)
 

@@ -34,6 +34,7 @@ import (
  */
 func (db *Database) startReloading() {
 	go func() {
+		time.Sleep(config.DatabaseReloadInterval)
 		count := 0
 		for !db.terminate {
 			db.waitGroup.Add(1)

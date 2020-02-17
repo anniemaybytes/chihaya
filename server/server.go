@@ -306,6 +306,7 @@ func Start() {
 	 * Behind the scenes, this works by spawning a new goroutine for each client.
 	 * This is pretty fast and scalable since goroutines are nice and efficient.
 	 */
+	log.Printf("Ready and accepting new connections on %s", config.Get("addr"))
 	_ = server.Serve(listener)
 
 	// Wait for active connections to finish processing

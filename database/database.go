@@ -120,6 +120,7 @@ type Database struct {
 func (db *Database) Init() {
 	db.terminate = false
 
+	log.Printf("Opening database connection...")
 	db.mainConn = OpenDatabaseConnection()
 
 	maxBuffers := config.TorrentFlushBufferSize + config.UserFlushBufferSize + config.TransferHistoryFlushBufferSize +
@@ -143,6 +144,15 @@ func (db *Database) Init() {
 
 	db.deserialize()
 
+	// Run initial load to populate data in memory before we start accepting connections
+	log.Printf("Populating initial data into memory, please wait...")
+	db.loadUsers()
+	db.loadHitAndRuns()
+	db.loadTorrents()
+	db.loadConfig()
+	db.loadWhitelist()
+
+	log.Printf("Starting goroutines...")
 	db.startReloading()
 	db.startSerializing()
 	db.startFlushing()
