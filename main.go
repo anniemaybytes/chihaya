@@ -47,7 +47,7 @@ func main() {
 			err = pprof.StartCPUProfile(f)
 			if err != nil {
 				log.Fatalf("Can not start profiling session: %s\n", err)
-			}	
+			}
 		}
 	}
 
@@ -60,7 +60,7 @@ func main() {
 			pprof.StopCPUProfile()
 		}
 
-		log.Println("Caught interrupt, shutting down..")
+		log.Println("Caught interrupt, shutting down...")
 		server.Stop()
 		<-c
 		os.Exit(0)

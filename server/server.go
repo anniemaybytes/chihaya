@@ -312,6 +312,8 @@ func Start() {
 	// Wait for active connections to finish processing
 	handler.waitGroup.Wait()
 
+	_ = server.Close() // close server so that it does not Accept(), https://github.com/golang/go/issues/10527
+	log.Println("Now closed and not accepting any new connections")
 	handler.db.Terminate()
 
 	log.Println("Shutdown complete")
