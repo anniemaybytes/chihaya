@@ -40,9 +40,6 @@ steps:
             GO111MODULE: on
         commands:
             - go build -tags "scrape"
-        when:
-            instance:
-                - '*.animebytes.tv'
     -   name: upload
         image: plugins/s3
         settings:
@@ -57,15 +54,15 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
-        when:
-            instance:
-                - '*.animebytes.tv'
 
 trigger:
     branch:
         - master
     event:
         - push
+    repo:
+        include:
+            - animebytes/*
 
 depends_on:
     - compliance
@@ -83,9 +80,6 @@ steps:
             GO111MODULE: on
         commands:
             - go mod vendor
-        when:
-            instance:
-                - '*.animebytes.tv'
     -   name: upload
         image: plugins/s3-cache
         settings:
@@ -99,9 +93,6 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
-        when:
-            instance:
-                - '*.animebytes.tv'
     -   name: flush
         image: plugins/s3-cache
         settings:
@@ -114,15 +105,18 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
-        when:
-            instance:
-                - '*.animebytes.tv'
+
+trigger:
+
 
 trigger:
     branch:
         - master
     event:
         - push
+    repo:
+        include:
+            - animebytes/*
 
 depends_on:
     - compliance
