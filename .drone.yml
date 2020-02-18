@@ -40,6 +40,9 @@ steps:
             GO111MODULE: on
         commands:
             - go build -tags "scrape"
+        when:
+            instance:
+                - '*.animebytes.tv'
     -   name: upload
         image: plugins/s3
         settings:
@@ -80,6 +83,9 @@ steps:
             GO111MODULE: on
         commands:
             - go mod vendor
+        when:
+            instance:
+                - '*.animebytes.tv'
     -   name: upload
         image: plugins/s3-cache
         settings:
