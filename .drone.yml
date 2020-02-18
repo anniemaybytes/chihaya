@@ -54,16 +54,15 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
+        when:
+            instance:
+                - '*.animebytes.tv'
 
 trigger:
     branch:
         - master
     event:
         - push
-    status:
-        - success
-    instance:
-        - '*.animebytes.tv'
 
 depends_on:
     - compliance
@@ -94,6 +93,9 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
+        when:
+            instance:
+                - '*.animebytes.tv'
     -   name: flush
         image: plugins/s3-cache
         settings:
@@ -106,16 +108,15 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
+        when:
+            instance:
+                - '*.animebytes.tv'
 
 trigger:
     branch:
         - master
     event:
         - push
-    status:
-        - success
-    instance:
-        - '*.animebytes.tv'
 
 depends_on:
     - compliance
