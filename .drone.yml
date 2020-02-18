@@ -63,8 +63,7 @@ trigger:
     status:
         - success
     instance:
-        include:
-            - '*.animebytes.tv'
+        - '*.animebytes.tv'
 
 depends_on:
     - compliance
@@ -116,8 +115,7 @@ trigger:
     status:
         - success
     instance:
-        include:
-            - '*.animebytes.tv'
+        - '*.animebytes.tv'
 
 depends_on:
     - compliance
