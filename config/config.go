@@ -59,6 +59,8 @@ var (
 const LogFlushes = true
 
 // Config file stuff
+var configFile string = "config.json"
+
 var once sync.Once
 
 type ConfigMap map[string]interface{}
@@ -86,7 +88,6 @@ func (m ConfigMap) Section(s string) ConfigMap {
 }
 
 func readConfig() {
-	configFile := "config.json"
 	f, err := os.Open(configFile)
 
 	if err != nil {

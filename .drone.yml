@@ -1,4 +1,3 @@
----
 kind: pipeline
 name: compliance
 type: docker
@@ -15,6 +14,11 @@ steps:
         commands:
             - golangci-lint run --color always --build-tags "scrape record"
 
+trigger:
+    event:
+        exclude:
+            - promote
+
 ---
 kind: pipeline
 name: tests
@@ -27,6 +31,11 @@ steps:
             GO111MODULE: on
         commands:
             - go test ./... -tags "scrape record"
+
+trigger:
+    event:
+        exclude:
+            - promote
 
 ---
 kind: pipeline
@@ -54,19 +63,35 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
+    -   name: archive
+        image: plugins/s3-cache
+        settings:
+            rebuild: true
+            path: deploy/${DRONE_REPO_NAME}/archive/${DRONE_COMMIT}/
+            mount:
+                - chihaya
+            access_key:
+                from_secret: aws_access_key_id
+            secret_key:
+                from_secret: aws_secret_access_key
+            endpoint:
+                from_secret: aws_endpoint
+    -   name: flush
+        image: plugins/s3-cache
+        settings:
+            flush: true
+            flush_age: 14
+            flush_path: deploy/${DRONE_REPO_NAME}/archive/
+            access_key:
+                from_secret: aws_access_key_id
+            secret_key:
+                from_secret: aws_secret_access_key
+            endpoint:
+                from_secret: aws_endpoint
 
 trigger:
-    branch:
-        - master
     event:
-        - push
-    repo:
-        include:
-            - animebytes/*
-
-depends_on:
-    - compliance
-    - tests
+        - promote
 
 ---
 kind: pipeline
@@ -107,17 +132,5 @@ steps:
                 from_secret: aws_endpoint
 
 trigger:
-
-
-trigger:
-    branch:
-        - master
     event:
-        - push
-    repo:
-        include:
-            - animebytes/*
-
-depends_on:
-    - compliance
-    - tests
+        - promote
