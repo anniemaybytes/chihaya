@@ -1,89 +1,124 @@
+---
 kind: pipeline
-name: default
+name: compliance
 type: docker
 
 steps:
-    -   name: restore-cache
-        image: meltwater/drone-cache
-        failure: ignore
-        environment:
-            AWS_ACCESS_KEY_ID:
-                from_secret: aws_access_key_id
-            AWS_SECRET_ACCESS_KEY:
-                from_secret: aws_secret_access_key
-            PLUGIN_PATH_STYLE: true
-        settings:
-            endpoint:
-                from_secret: aws_endpoint
-            region: ab-1
-            bucket: drone-cache
-            restore: true
-            cache_key: '{{ .Commit.Branch }}'
-            archive_format: gzip
-            mount:
-                - ./.go
-        depends_on: [ clone ]
-    -   name: get
-        image: golang:1.11
-        environment:
-            GO111MODULE: on
-            GOPATH: /drone/src/.go
-        commands:
-            - go get
-        depends_on: [ restore-cache ]
     -   name: vet
-        image: golang:1.11
+        image: golang:1.13
         environment:
             GO111MODULE: on
-            GOPATH: /drone/src/.go
         commands:
-            - go vet
-        depends_on: [ get ]
-    -   name: tests
-        image: golang:1.11
-        environment:
-            GO111MODULE: on
-            GOPATH: /drone/src/.go
-        commands:
-            - go test ./... -tags ""
-            - go test ./... -tags "scrape record"
-        depends_on: [ get ]
-    -   name: build
-        image: golang:1.11
-        environment:
-            GO111MODULE: on
-            GOPATH: /drone/src/.go
-        commands:
-            - go version
-            - go build -tags ""
-            - go build -tags "scrape record"
-        depends_on: [ get ]
+            - go vet -tags "scrape record"
     -   name: linter
         image: golangci/golangci-lint:latest
+        commands:
+            - golangci-lint run --color always --build-tags "scrape record"
+
+---
+kind: pipeline
+name: tests
+type: docker
+
+steps:
+    -   name: test
+        image: golang:1.13
         environment:
             GO111MODULE: on
-            GOPATH: /drone/src/.go
         commands:
-            - golangci-lint run --color always --build-tags ""
-            - golangci-lint run --color always --build-tags "scrape record"
-        depends_on: [ build ]
-    -   name: rebuild-cache
-        image: meltwater/drone-cache
-        failure: ignore
+            - go test ./... -tags "scrape record"
+
+---
+kind: pipeline
+name: deploy
+type: docker
+
+steps:
+    -   name: build
+        image: golang:1.13
         environment:
-            AWS_ACCESS_KEY_ID:
-                from_secret: aws_access_key_id
-            AWS_SECRET_ACCESS_KEY:
-                from_secret: aws_secret_access_key
-            PLUGIN_PATH_STYLE: true
+            GO111MODULE: on
+        commands:
+            - go build -tags "scrape"
+    -   name: upload
+        image: plugins/s3
         settings:
+            region: ab-1
+            path_style: true
+            bucket: deploy
+            source: chihaya
+            target: ${DRONE_REPO_NAME}
+            access_key:
+                from_secret: aws_access_key_id
+            secret_key:
+                from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
-            region: ab-1
-            bucket: drone-cache
+
+trigger:
+    branch:
+        - master
+    event:
+        - push
+    status:
+        - success
+    instance:
+        include:
+            - '*.animebytes.tv'
+
+depends_on:
+    - compliance
+    - tests
+
+---
+kind: pipeline
+name: artifacts
+type: docker
+
+steps:
+    -   name: collect
+        image: golang:1.13
+        environment:
+            GO111MODULE: on
+        commands:
+            - go mod vendor
+    -   name: upload
+        image: plugins/s3-cache
+        settings:
             rebuild: true
-            cache_key: '{{ .Commit.Branch }}'
-            archive_format: gzip
+            path: artifacts/${DRONE_REPO_NAME}/${DRONE_COMMIT}/
             mount:
-                - ./.go
-        depends_on: [ get ]
+                - vendor
+            access_key:
+                from_secret: aws_access_key_id
+            secret_key:
+                from_secret: aws_secret_access_key
+            endpoint:
+                from_secret: aws_endpoint
+    -   name: flush
+        image: plugins/s3-cache
+        settings:
+            flush: true
+            flush_age: 14
+            flush_path: artifacts/${DRONE_REPO_NAME}/
+            access_key:
+                from_secret: aws_access_key_id
+            secret_key:
+                from_secret: aws_secret_access_key
+            endpoint:
+                from_secret: aws_endpoint
+
+trigger:
+    branch:
+        - master
+    event:
+        - push
+    status:
+        - success
+    instance:
+        include:
+            - '*.animebytes.tv'
+
+depends_on:
+    - compliance
+    - tests

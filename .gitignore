@@ -19,10 +19,14 @@ _cgo_export.*
 
 _testmain.go
 
+# Build artifacts
 chihaya
 chihaya.cpu
+
+# Local files
 config.json
 *.gob
 events
 
+# IDE
 .idea
