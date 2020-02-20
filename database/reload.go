@@ -19,7 +19,6 @@ package database
 
 import (
 	"chihaya/config"
-	"io"
 	"log"
 	"time"
 )
@@ -35,7 +34,9 @@ import (
 func (db *Database) startReloading() {
 	go func() {
 		time.Sleep(config.DatabaseReloadInterval)
+
 		count := 0
+
 		for !db.terminate {
 			db.waitGroup.Add(1)
 			db.loadUsers()
@@ -46,8 +47,8 @@ func (db *Database) startReloading() {
 			if count%10 == 0 {
 				db.loadWhitelist()
 			}
-
 			count++
+
 			db.waitGroup.Done()
 			time.Sleep(config.DatabaseReloadInterval)
 		}
@@ -56,49 +57,49 @@ func (db *Database) startReloading() {
 
 func (db *Database) loadUsers() {
 	var err error
+
 	var count uint
 
 	db.UsersMutex.Lock()
 	db.mainConn.mutex.Lock()
+
 	start := time.Now()
-	result := db.mainConn.query(db.loadUsersStmt)
-
 	newUsers := make(map[string]*User, len(db.Users))
+	rows := db.mainConn.query(db.loadUsersStmt)
 
-	row := &rowWrapper{result.MakeRow()}
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	id := result.Map("ID")
-	torrentPass := result.Map("torrent_pass")
-	downMultiplier := result.Map("DownMultiplier")
-	upMultiplier := result.Map("UpMultiplier")
-	disableDownload := result.Map("DisableDownload")
-	trackerHide := result.Map("TrackerHide")
+	for rows.Next() {
+		var id uint32
 
-	for {
-		err = result.ScanRow(row.r)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Panicf("Error scanning user rows: %v", err)
+		var torrentPass string
+
+		var downMultiplier, upMultiplier float64
+
+		var disableDownload, trackerHide bool
+
+		err = rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide)
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! Error scanning user rows: %s", err)
 		}
-
-		torrentPass := row.Str(torrentPass)
 
 		old, exists := db.Users[torrentPass]
 		if exists && old != nil {
-			old.Id = row.Uint64(id)
-			old.DownMultiplier = row.Float64(downMultiplier)
-			old.UpMultiplier = row.Float64(upMultiplier)
-			old.DisableDownload = row.Bool(disableDownload)
-			old.TrackerHide = row.Bool(trackerHide)
+			old.Id = id
+			old.DownMultiplier = downMultiplier
+			old.UpMultiplier = upMultiplier
+			old.DisableDownload = disableDownload
+			old.TrackerHide = trackerHide
 			newUsers[torrentPass] = old
 		} else {
 			newUsers[torrentPass] = &User{
-				Id:              row.Uint64(id),
-				UpMultiplier:    row.Float64(downMultiplier),
-				DownMultiplier:  row.Float64(upMultiplier),
-				DisableDownload: row.Bool(disableDownload),
-				TrackerHide:     row.Bool(trackerHide),
+				Id:              id,
+				UpMultiplier:    downMultiplier,
+				DownMultiplier:  upMultiplier,
+				DisableDownload: disableDownload,
+				TrackerHide:     trackerHide,
 			}
 		}
 		count++
@@ -113,30 +114,32 @@ func (db *Database) loadUsers() {
 
 func (db *Database) loadHitAndRuns() {
 	var err error
+
 	var count uint
 
 	db.mainConn.mutex.Lock()
+
 	start := time.Now()
-	result := db.mainConn.query(db.loadHnrStmt)
-
 	newHnr := make(map[UserTorrentPair]struct{})
+	rows := db.mainConn.query(db.loadHnrStmt)
 
-	row := &rowWrapper{result.MakeRow()}
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	uid := result.Map("uid")
-	fid := result.Map("fid")
+	for rows.Next() {
+		var uid uint32
 
-	for {
-		err = result.ScanRow(row.r)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Panicf("Error scanning hit and run rows: %v", err)
+		var fid uint64
+
+		err = rows.Scan(&uid, &fid)
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! Error scanning hit and run rows: %s", err)
 		}
 
 		hnr := UserTorrentPair{
-			UserId:    row.Uint64(uid),
-			TorrentId: row.Uint64(fid),
+			UserId:    uid,
+			TorrentId: fid,
 		}
 		newHnr[hnr] = struct{}{}
 
@@ -151,49 +154,51 @@ func (db *Database) loadHitAndRuns() {
 
 func (db *Database) loadTorrents() {
 	var err error
+
 	var count uint
 
 	db.TorrentsMutex.Lock()
 	db.mainConn.mutex.Lock()
+
 	start := time.Now()
-	result := db.mainConn.query(db.loadTorrentsStmt)
-
 	newTorrents := make(map[string]*Torrent)
+	rows := db.mainConn.query(db.loadTorrentsStmt)
 
-	row := &rowWrapper{result.MakeRow()}
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	id := result.Map("ID")
-	infoHash := result.Map("info_hash")
-	downMultiplier := result.Map("DownMultiplier")
-	upMultiplier := result.Map("UpMultiplier")
-	snatched := result.Map("Snatched")
-	status := result.Map("Status")
+	for rows.Next() {
+		var infoHash string
 
-	for {
-		err = result.ScanRow(row.r)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Panicf("Error scanning torrent rows: %v", err)
+		var id uint64
+
+		var downMultiplier, upMultiplier float64
+
+		var snatched uint16
+
+		var status uint8
+
+		err = rows.Scan(&id, &infoHash, &downMultiplier, &upMultiplier, &snatched, &status)
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! Error scanning torrent rows: %s", err)
 		}
-
-		infoHash := row.Str(infoHash)
 
 		old, exists := db.Torrents[infoHash]
 		if exists && old != nil {
-			old.Id = row.Uint64(id)
-			old.DownMultiplier = row.Float64(downMultiplier)
-			old.UpMultiplier = row.Float64(upMultiplier)
-			old.Snatched = row.Uint(snatched)
-			old.Status = row.Int64(status)
+			old.Id = id
+			old.DownMultiplier = downMultiplier
+			old.UpMultiplier = upMultiplier
+			old.Snatched = snatched
+			old.Status = status
 			newTorrents[infoHash] = old
 		} else {
 			newTorrents[infoHash] = &Torrent{
-				Id:             row.Uint64(id),
-				UpMultiplier:   row.Float64(upMultiplier),
-				DownMultiplier: row.Float64(downMultiplier),
-				Snatched:       row.Uint(snatched),
-				Status:         row.Int64(status),
+				Id:             id,
+				UpMultiplier:   upMultiplier,
+				DownMultiplier: downMultiplier,
+				Snatched:       snatched,
+				Status:         status,
 
 				Seeders:  make(map[string]*Peer),
 				Leechers: make(map[string]*Peer),
@@ -211,14 +216,21 @@ func (db *Database) loadTorrents() {
 
 func (db *Database) loadConfig() {
 	db.mainConn.mutex.Lock()
-	result := db.mainConn.query(db.loadFreeleechStmt)
-	for {
-		row, err := result.GetRow()
-		if err != nil || row == nil {
-			break
-		} else {
-			config.GlobalFreeleech = row.Bool(0)
+	rows := db.mainConn.query(db.loadFreeleechStmt)
+
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	for rows.Next() {
+		var globalFreelech bool
+
+		err := rows.Scan(&globalFreelech)
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! Error scanning torrent rows: %s", err)
 		}
+
+		config.GlobalFreeleech = globalFreelech
 	}
 	db.mainConn.mutex.Unlock()
 }
@@ -226,25 +238,29 @@ func (db *Database) loadConfig() {
 func (db *Database) loadWhitelist() {
 	db.WhitelistMutex.Lock()
 	db.mainConn.mutex.Lock()
+
 	start := time.Now()
-	result := db.mainConn.query(db.loadWhitelistStmt)
+	rows := db.mainConn.query(db.loadWhitelistStmt)
 
-	row := result.MakeRow()
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	id := result.Map("id")
-	peerId := result.Map("peer_id")
+	db.Whitelist = make(map[uint16]string)
 
-	db.Whitelist = make(map[uint32]string)
+	for rows.Next() {
+		var id uint16
 
-	for {
-		err := result.ScanRow(row)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Panicf("Error scanning whitelist rows: %v", err)
+		var peerId string
+
+		err := rows.Scan(&id, &peerId)
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! Error scanning whitelist rows: %s", err)
 		}
-		db.Whitelist[uint32(row.Uint64(id))] = row.Str(peerId)
+
+		db.Whitelist[id] = peerId
 	}
+
 	db.mainConn.mutex.Unlock()
 	db.WhitelistMutex.Unlock()
 

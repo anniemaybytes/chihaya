@@ -52,6 +52,7 @@ func (db *Database) serialize() {
 		if err != nil {
 			panic(err)
 		}
+
 		err = userFile.Close()
 		if err != nil {
 			panic(err)
@@ -63,19 +64,23 @@ func (db *Database) serialize() {
 	log.Printf("Serializing database to cache file")
 
 	db.TorrentsMutex.RLock()
+
 	err = gob.NewEncoder(torrentFile).Encode(db.Torrents)
 	if err != nil {
 		log.Println("!!! CRITICAL !!! Failed to encode torrents for serialization! ", err)
 		db.TorrentsMutex.RUnlock()
+
 		return
 	}
 	db.TorrentsMutex.RUnlock()
 
 	db.UsersMutex.RLock()
+
 	err = gob.NewEncoder(userFile).Encode(db.Users)
 	if err != nil {
 		log.Println("!!! CRITICAL !!! Failed to encode users for serialization! ", err)
 		db.UsersMutex.RUnlock()
+
 		return
 	}
 	db.UsersMutex.RUnlock()
@@ -89,6 +94,7 @@ func (db *Database) deserialize() {
 		log.Println("Torrent cache missing, skipping deserialization")
 		return
 	}
+
 	userFile, err := os.OpenFile("user-cache.gob", os.O_RDONLY, 0)
 	if err != nil {
 		log.Println("User cache missing, skipping deserialization")
@@ -100,6 +106,7 @@ func (db *Database) deserialize() {
 		if err != nil {
 			panic(err)
 		}
+
 		err = userFile.Close()
 		if err != nil {
 			panic(err)
@@ -135,6 +142,7 @@ func (db *Database) deserialize() {
 	db.TorrentsMutex.RLock()
 	peers := 0
 	torrents := len(db.Torrents)
+
 	for _, t := range db.Torrents {
 		peers += len(t.Leechers) + len(t.Seeders)
 	}

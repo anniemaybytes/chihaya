@@ -31,7 +31,8 @@ import (
 )
 
 type record struct {
-	tid, uid  uint64
+	tid       uint64
+	uid       uint32
 	up, down  int64
 	absup     uint64
 	event, ip string
@@ -41,10 +42,12 @@ func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 
 	tempPath := filepath.Join(os.TempDir(), "chihaya_record-"+util.RandStringBytes(6))
+
 	err := os.Mkdir(tempPath, 0755)
 	if err != nil {
 		panic(err)
 	}
+
 	err = os.Chdir(tempPath)
 	if err != nil {
 		panic(err)
@@ -57,10 +60,11 @@ func TestMain(m *testing.M) {
 
 func TestRecord(t *testing.T) {
 	var recordValues []record
+
 	var expectedOutputs []string
 
 	for i := 0; i < 10; i++ {
-		tmp := record{rand.Uint64(), rand.Uint64(),
+		tmp := record{rand.Uint64(), rand.Uint32(),
 			int64(rand.Uint64()), int64(rand.Uint64()),
 			rand.Uint64(), "completed", "127.0.0.1"}
 		recordValues = append(recordValues, tmp)
@@ -68,7 +72,7 @@ func TestRecord(t *testing.T) {
 			expectedOutputs,
 			"["+
 				strconv.FormatUint(tmp.tid, 10)+","+
-				strconv.FormatUint(tmp.uid, 10)+","+
+				strconv.FormatUint(uint64(tmp.uid), 10)+","+
 				strconv.FormatInt(tmp.up, 10)+","+
 				strconv.FormatInt(tmp.down, 10)+","+
 				strconv.FormatUint(tmp.absup, 10)+","+
@@ -77,6 +81,7 @@ func TestRecord(t *testing.T) {
 				"]",
 		)
 	}
+
 	for _, item := range recordValues {
 		Record(item.tid, item.uid, item.up, item.down, item.absup, item.event, item.ip)
 	}
@@ -92,10 +97,13 @@ func TestRecord(t *testing.T) {
 
 	recordScanner := bufio.NewScanner(recordFile)
 	recordScanner.Split(bufio.ScanLines)
+
 	var recordLines []string
+
 	for recordScanner.Scan() {
 		recordLines = append(recordLines, recordScanner.Text())
 	}
+
 	if err := recordScanner.Err(); err != nil {
 		t.Fatalf("Faced error in reading: %s", err)
 	}

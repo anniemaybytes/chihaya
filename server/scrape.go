@@ -30,13 +30,16 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 	ret["complete"] = len(torrent.Seeders)
 	ret["downloaded"] = torrent.Snatched
 	ret["incomplete"] = len(torrent.Leechers)
+
 	return ret
 }
 
 func scrape(params *queryParams, db *cdb.Database, buf *bytes.Buffer) {
 	scrapeData := make(map[string]interface{})
 	fileData := make(map[string]interface{})
+
 	db.TorrentsMutex.RLock()
+
 	if params.infoHashes != nil {
 		for _, infoHash := range params.infoHashes {
 			torrent, exists := db.Torrents[infoHash]
@@ -51,10 +54,13 @@ func scrape(params *queryParams, db *cdb.Database, buf *bytes.Buffer) {
 		}
 	}
 	db.TorrentsMutex.RUnlock()
+
 	scrapeData["files"] = fileData
+
 	bufdata, err := bencode.EncodeBytes(scrapeData)
 	if err != nil {
 		panic(err)
 	}
+
 	buf.Write(bufdata)
 }

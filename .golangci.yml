@@ -1,0 +1,15 @@
+run:
+  build-tags:
+    - scrape
+    - record
+
+linters:
+  enable:
+    - megacheck
+    - govet
+    - whitespace
+    - wsl
+    - maligned
+    - goconst
+    - unconvert
+    - bodyclose

@@ -22,6 +22,7 @@ _testmain.go
 # Build artifacts
 chihaya
 chihaya.cpu
+coverage.out
 
 # Local files
 config.json

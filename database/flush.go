@@ -59,15 +59,18 @@ func (db *Database) startFlushing() {
 
 func (db *Database) flushTorrents() {
 	var query bytes.Buffer
+
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
+
 	var count int
+
 	conn := OpenDatabaseConnection()
 
 	for {
 		length := util.Max(1, len(db.torrentChannel))
-		query.Reset()
 
+		query.Reset()
 		query.WriteString("INSERT INTO torrents (ID, Snatched, Seeders, Leechers, last_action) VALUES\n")
 
 		for count = 0; count < length; count++ {
@@ -75,6 +78,7 @@ func (db *Database) flushTorrents() {
 			if b == nil {
 				break
 			}
+
 			query.Write(b.Bytes())
 			db.bufferPool.Give(b)
 
@@ -109,15 +113,18 @@ func (db *Database) flushTorrents() {
 
 func (db *Database) flushUsers() {
 	var query bytes.Buffer
+
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
+
 	var count int
+
 	conn := OpenDatabaseConnection()
 
 	for {
 		length := util.Max(1, len(db.userChannel))
-		query.Reset()
 
+		query.Reset()
 		query.WriteString("INSERT INTO users_main (ID, Uploaded, Downloaded, rawdl, rawup) VALUES\n")
 
 		for count = 0; count < length; count++ {
@@ -125,6 +132,7 @@ func (db *Database) flushUsers() {
 			if b == nil {
 				break
 			}
+
 			query.Write(b.Bytes())
 			db.bufferPool.Give(b)
 
@@ -158,9 +166,12 @@ func (db *Database) flushUsers() {
 
 func (db *Database) flushTransferHistory() {
 	var query bytes.Buffer
+
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
+
 	var count int
+
 	conn := OpenDatabaseConnection()
 
 main:
@@ -233,15 +244,18 @@ main:
 
 func (db *Database) flushTransferIps() {
 	var query bytes.Buffer
+
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
+
 	var count int
+
 	conn := OpenDatabaseConnection()
 
 	for {
 		length := util.Max(1, len(db.transferIpsChannel))
-		query.Reset()
 
+		query.Reset()
 		query.WriteString("INSERT INTO transfer_ips (uid, fid, client_id, ip, uploaded, downloaded, starttime, last_announce) VALUES\n")
 
 		for count = 0; count < length; count++ {
@@ -249,6 +263,7 @@ func (db *Database) flushTransferIps() {
 			if b == nil {
 				break
 			}
+
 			query.Write(b.Bytes())
 			db.bufferPool.Give(b)
 
@@ -280,15 +295,18 @@ func (db *Database) flushTransferIps() {
 
 func (db *Database) flushSnatches() {
 	var query bytes.Buffer
+
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
+
 	var count int
+
 	conn := OpenDatabaseConnection()
 
 	for {
 		length := util.Max(1, len(db.snatchChannel))
-		query.Reset()
 
+		query.Reset()
 		query.WriteString("INSERT INTO transfer_history (uid, fid, snatched_time) VALUES\n")
 
 		for count = 0; count < length; count++ {
@@ -296,6 +314,7 @@ func (db *Database) flushSnatches() {
 			if b == nil {
 				break
 			}
+
 			query.Write(b.Bytes())
 			db.bufferPool.Give(b)
 
@@ -342,18 +361,21 @@ func (db *Database) purgeInactivePeers() {
 		db.TorrentsMutex.Lock()
 		for _, torrent := range db.Torrents {
 			countThisTorrent := count
+
 			for id, peer := range torrent.Leechers {
 				if peer.LastAnnounce < oldestActive {
 					delete(torrent.Leechers, id)
 					count++
 				}
 			}
+
 			for id, peer := range torrent.Seeders {
 				if peer.LastAnnounce < oldestActive {
 					delete(torrent.Seeders, id)
 					count++
 				}
 			}
+
 			if countThisTorrent != count {
 				db.RecordTorrent(torrent, 0)
 			}
@@ -367,9 +389,14 @@ func (db *Database) purgeInactivePeers() {
 
 		// Then set them to inactive in the database
 		db.mainConn.mutex.Lock()
+
 		start = time.Now()
 		result := db.mainConn.exec(db.cleanStalePeersStmt, oldestActive)
-		rows := result.AffectedRows()
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! Error in getting affected rows: %s", err)
+		}
 		db.mainConn.mutex.Unlock()
 
 		log.Printf("Updated %d inactive peers in database (%dms)\n", rows, time.Since(start).Nanoseconds()/1000000)

@@ -40,6 +40,7 @@ func main() {
 
 	if profile {
 		log.Println("Running with profiling enabled")
+
 		f, err := os.Create("chihaya.cpu")
 		if err != nil {
 			log.Fatalf("Failed to create profile file: %s\n", err)

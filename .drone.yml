@@ -3,16 +3,10 @@ name: compliance
 type: docker
 
 steps:
-    -   name: vet
-        image: golang:1.13
-        environment:
-            GO111MODULE: on
-        commands:
-            - go vet -tags "scrape record"
     -   name: linter
         image: golangci/golangci-lint:latest
         commands:
-            - golangci-lint run --color always --build-tags "scrape record"
+            - golangci-lint run --color always
 
 trigger:
     event:
@@ -30,7 +24,8 @@ steps:
         environment:
             GO111MODULE: on
         commands:
-            - go test ./... -tags "scrape record"
+            - go test ./... -tags "scrape record" -coverprofile=coverage.out
+            - go tool cover -func=coverage.out
 
 trigger:
     event:

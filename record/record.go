@@ -40,6 +40,7 @@ func Init() {
 
 	start := time.Now()
 	recordChan = make(chan []byte)
+
 	recordFile, err := openEventFile(start)
 	if err != nil {
 		panic(err)
@@ -50,15 +51,18 @@ func Init() {
 			now := time.Now()
 			if now.Hour() != start.Hour() {
 				start = now
+
 				err := recordFile.Close()
 				if err != nil {
 					panic(err)
 				}
+
 				recordFile, err = openEventFile(start)
 				if err != nil {
 					panic(err)
 				}
 			}
+
 			_, err := recordFile.Write(buf)
 			if err != nil {
 				panic(err)
@@ -67,17 +71,18 @@ func Init() {
 	}()
 }
 
-func Record(tid, uid uint64, up, down int64, absup uint64, event, ip string) {
+func Record(tid uint64, uid uint32, up, down int64, absup uint64, event, ip string) {
 	if up == 0 && down == 0 {
 		return
 	}
+
 	b := make([]byte, 0, 64)
 	buf := bytes.NewBuffer(b)
 
 	buf.WriteString("[")
 	buf.WriteString(strconv.FormatUint(tid, 10))
 	buf.WriteString(",")
-	buf.WriteString(strconv.FormatUint(uid, 10))
+	buf.WriteString(strconv.FormatUint(uint64(uid), 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatInt(up, 10))
 	buf.WriteString(",")

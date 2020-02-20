@@ -34,19 +34,24 @@ func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 
 	tempPath := filepath.Join(os.TempDir(), "chihaya_config-"+util.RandStringBytes(6))
+
 	err := os.Mkdir(tempPath, 0755)
 	if err != nil {
 		panic(err)
 	}
+
 	err = os.Chdir(tempPath)
 	if err != nil {
 		panic(err)
 	}
+
 	configFile = "test_config.json"
+
 	f, err := os.OpenFile(configFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		panic(err)
 	}
+
 	configTest = make(ConfigMap)
 	dbConfig := make(map[string]interface{})
 	dbConfig["username"] = "user"
@@ -57,30 +62,36 @@ func TestMain(m *testing.M) {
 	dbConfig["encoding"] = "utf8"
 	configTest["database"] = dbConfig
 	configTest["addr"] = ":8080"
+
 	err = json.NewEncoder(f).Encode(&configTest)
 	if err != nil {
 		panic(err)
 	}
-	f.Close()
+
+	_ = f.Close()
 
 	os.Exit(m.Run())
 }
 
 func TestReadConfig(t *testing.T) {
 	once.Do(readConfig)
+
 	if config == nil {
 		t.Fatalf("Config is nil!")
 	}
+
 	same := reflect.DeepEqual(config, configTest)
 	if !same {
 		t.Fatalf("Config (%v) was not same as the config that was written (%v)!", config, configTest)
 	}
+
 	defer cleanup() // TODO Go 1.14: Use testing.Cleanup()
 }
 
 func TestGet(t *testing.T) {
 	got := Get("addr")
 	expected := configTest["addr"]
+
 	if got != expected {
 		t.Fatalf("Got %s whereas expected %s for \"addr\"!", got, expected)
 	}
@@ -89,16 +100,19 @@ func TestGet(t *testing.T) {
 func TestSection(t *testing.T) {
 	got := Section("database")
 	gotMap := make(map[string]interface{}, len(got))
+
 	for k, v := range got {
 		gotMap[k] = v
 	}
+
 	expected := configTest["database"]
 	same := reflect.DeepEqual(gotMap, expected)
+
 	if !same {
 		t.Fatalf("Got (%v) whereas expected (%v) for \"database\"", gotMap, expected)
 	}
 }
 
 func cleanup() {
-	os.Remove(configFile)
+	_ = os.Remove(configFile)
 }

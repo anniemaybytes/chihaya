@@ -41,6 +41,7 @@ func (pool *BufferPool) Take() (buf *bytes.Buffer) {
 		internalBuf := make([]byte, 0, pool.bufSize)
 		buf = bytes.NewBuffer(internalBuf)
 	}
+
 	return
 }
 

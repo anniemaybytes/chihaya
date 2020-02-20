@@ -21,106 +21,110 @@ import (
 	"bytes"
 	"chihaya/config"
 	"chihaya/util"
-	"github.com/ziutek/mymysql/mysql"
-	_ "github.com/ziutek/mymysql/native"
+	"database/sql"
+	"fmt"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 type Peer struct {
-	Id        string
-	ClientId  uint32
-	UserId    uint64
-	TorrentId uint64
-
-	Port   uint
-	IpAddr string
-	Ip     uint32
-	Addr   []byte
-
-	Uploaded   uint64
-	Downloaded uint64
-	Left       uint64
-	Seeding    bool
-
+	Seeding      bool
+	ClientId     uint16
+	Port         uint16
+	UserId       uint32
+	Ip           uint32
+	TorrentId    uint64
+	Uploaded     uint64
+	Downloaded   uint64
+	Left         uint64
 	StartTime    int64 // unix time
 	LastAnnounce int64
+	Id           string
+	IpAddr       string
+	Addr         []byte
 }
 
 type Torrent struct {
+	Status         uint8
+	Snatched       uint16
 	Id             uint64
+	LastAction     int64
 	UpMultiplier   float64
 	DownMultiplier float64
 
 	Seeders  map[string]*Peer
 	Leechers map[string]*Peer
-
-	Snatched   uint
-	Status     int64
-	LastAction int64
 }
 
 type User struct {
-	Id              uint64
-	UpMultiplier    float64
-	DownMultiplier  float64
 	DisableDownload bool
 	TrackerHide     bool
+	Id              uint32
+	UpMultiplier    float64
+	DownMultiplier  float64
 }
 
 type UserTorrentPair struct {
-	UserId    uint64
+	UserId    uint32
 	TorrentId uint64
 }
 
 type DatabaseConnection struct {
-	sqlDb mysql.Conn
+	sqlDb *sql.DB
 	mutex sync.Mutex
 }
 
 type Database struct {
-	terminate bool
+	TorrentsMutex sync.RWMutex
+
+	snatchChannel          chan *bytes.Buffer
+	transferHistoryChannel chan *bytes.Buffer
+	transferIpsChannel     chan *bytes.Buffer
+
+	loadTorrentsStmt    *sql.Stmt
+	loadWhitelistStmt   *sql.Stmt
+	loadFreeleechStmt   *sql.Stmt
+	cleanStalePeersStmt *sql.Stmt
+	unPruneTorrentStmt  *sql.Stmt
+
+	Users map[string]*User // 32 bytes
+
+	loadHnrStmt *sql.Stmt
+
+	HitAndRuns map[UserTorrentPair]struct{}
+	Torrents   map[string]*Torrent // SHA-1 hash (20 bytes)
+
+	loadUsersStmt *sql.Stmt
+
+	Whitelist map[uint16]string
 
 	mainConn *DatabaseConnection // Used for reloading and misc queries
 
-	loadUsersStmt       mysql.Stmt
-	loadHnrStmt         mysql.Stmt
-	loadTorrentsStmt    mysql.Stmt
-	loadWhitelistStmt   mysql.Stmt
-	loadFreeleechStmt   mysql.Stmt
-	cleanStalePeersStmt mysql.Stmt
-	unPruneTorrentStmt  mysql.Stmt
+	torrentChannel chan *bytes.Buffer
+	userChannel    chan *bytes.Buffer
 
-	Users      map[string]*User // 32 bytes
-	UsersMutex sync.RWMutex
+	bufferPool *util.BufferPool
 
-	HitAndRuns map[UserTorrentPair]struct{}
-
-	Torrents      map[string]*Torrent // SHA-1 hash (20 bytes)
-	TorrentsMutex sync.RWMutex
-
-	Whitelist      map[uint32]string
 	WhitelistMutex sync.RWMutex
+	UsersMutex     sync.RWMutex
 
-	torrentChannel         chan *bytes.Buffer
-	userChannel            chan *bytes.Buffer
-	transferHistoryChannel chan *bytes.Buffer
-	transferIpsChannel     chan *bytes.Buffer
-	snatchChannel          chan *bytes.Buffer
+	waitGroup sync.WaitGroup
 
-	waitGroup                  sync.WaitGroup
 	transferHistoryWaitGroup   sync.WaitGroup
 	transferHistoryWaitGroupMu sync.Mutex
 	transferHistoryWaitGroupSe uint8
 
-	bufferPool *util.BufferPool
+	terminate bool
 }
 
 func (db *Database) Init() {
 	db.terminate = false
 
 	log.Printf("Opening database connection...")
+
 	db.mainConn = OpenDatabaseConnection()
 
 	maxBuffers := config.TorrentFlushBufferSize + config.UserFlushBufferSize + config.TransferHistoryFlushBufferSize +
@@ -140,7 +144,7 @@ func (db *Database) Init() {
 	db.Users = make(map[string]*User)
 	db.HitAndRuns = make(map[UserTorrentPair]struct{})
 	db.Torrents = make(map[string]*Torrent)
-	db.Whitelist = make(map[uint32]string)
+	db.Whitelist = make(map[uint16]string)
 
 	db.deserialize()
 
@@ -182,19 +186,26 @@ func (db *Database) Terminate() {
 func OpenDatabaseConnection() (db *DatabaseConnection) {
 	db = &DatabaseConnection{}
 	databaseConfig := config.Section("database")
-
-	db.sqlDb = mysql.New(databaseConfig["proto"].(string),
-		"",
-		databaseConfig["addr"].(string),
+	databaseDSN := fmt.Sprintf("%s:%s@%s(%s)/%s",
 		databaseConfig["username"].(string),
 		databaseConfig["password"].(string),
+		databaseConfig["proto"].(string),
+		databaseConfig["addr"].(string),
 		databaseConfig["database"].(string),
-	)
+	) // DSN Format: username:password@protocol(address)/dbname?param=value
 
-	err := db.sqlDb.Connect()
+	sqlDb, err := sql.Open("mysql", databaseDSN)
 	if err != nil {
-		log.Fatalf("Couldn't connect to database at %s:%s - %s", databaseConfig["proto"], databaseConfig["addr"], err)
+		log.Fatalf("Couldn't connect to database at %s - %s", databaseDSN, err)
 	}
+
+	err = sqlDb.Ping()
+	if err != nil {
+		log.Fatalf("Couldn't ping database at %s - %s", databaseDSN, err)
+	}
+
+	db.sqlDb = sqlDb
+
 	return
 }
 
@@ -202,76 +213,68 @@ func (db *DatabaseConnection) Close() error {
 	return db.sqlDb.Close()
 }
 
-func (db *DatabaseConnection) prepareStatement(sql string) mysql.Stmt {
+func (db *DatabaseConnection) prepareStatement(sql string) *sql.Stmt {
 	stmt, err := db.sqlDb.Prepare(sql)
 	if err != nil {
 		log.Fatalf("%s for SQL: %s", err, sql)
 	}
+
 	return stmt
 }
 
-/*
- * mymysql uses different semantics than the database/sql interface
- * For some reason (for prepared statements), mymysql's Exec is the equivalent of Query, and Run is the equivalent of Exec.
- * For the connection object, Query is still Query, but Start is Exec
- *
- * This is really confusing, which is why these wrapper functions are named as such
- */
+func (db *DatabaseConnection) query(stmt *sql.Stmt, args ...interface{}) *sql.Rows {
+	rows, _ := handleDeadlock(func() (interface{}, error) {
+		return stmt.Query(args...)
+	}).(*sql.Rows)
 
-func (db *DatabaseConnection) query(stmt mysql.Stmt, args ...interface{}) mysql.Result {
-	return db.exec(stmt, args...)
+	return rows
 }
 
-func (db *DatabaseConnection) exec(stmt mysql.Stmt, args ...interface{}) (result mysql.Result) {
+func (db *DatabaseConnection) exec(stmt *sql.Stmt, args ...interface{}) sql.Result {
+	result, _ := handleDeadlock(func() (interface{}, error) {
+		return stmt.Exec(args...)
+	}).(sql.Result)
+
+	return result
+}
+
+func (db *DatabaseConnection) execBuffer(query *bytes.Buffer, args ...interface{}) sql.Result {
+	result, _ := handleDeadlock(func() (interface{}, error) {
+		return db.sqlDb.Exec(query.String(), args...)
+	}).(sql.Result)
+
+	return result
+}
+
+func handleDeadlock(execFunc func() (interface{}, error)) (result interface{}) {
 	var err error
+
 	var tries int
+
 	var wait int64
 
 	for tries = 0; tries < config.MaxDeadlockRetries; tries++ {
-		result, err = stmt.Run(args...)
+		result, err = execFunc()
 		if err != nil {
-			if merr, isMysqlError := err.(*mysql.Error); isMysqlError {
-				if merr.Code == 1213 || merr.Code == 1205 {
+			if merr, isMysqlError := err.(*mysql.MySQLError); isMysqlError {
+				if merr.Number == 1213 || merr.Number == 1205 {
 					wait = config.DeadlockWaitTime.Nanoseconds() * int64(tries+1)
 					log.Printf("!!! DEADLOCK !!! Retrying in %dms (%d/20)", wait/1000000, tries)
 					time.Sleep(time.Duration(wait))
+
 					continue
 				} else {
-					log.Printf("!!! CRITICAL !!! SQL error: %v", err)
+					log.Printf("!!! CRITICAL !!! SQL error (CODE %d): %s", merr.Number, merr.Message)
 				}
 			} else {
-				log.Panicf("Error executing SQL: %v", err)
+				log.Panicf("Error executing SQL: %s", err)
 			}
 		}
+
 		return
 	}
-	log.Printf("!!! CRITICAL !!! Deadlocked %d times, giving up!", tries)
-	return
-}
 
-func (db *DatabaseConnection) execBuffer(query *bytes.Buffer) (result mysql.Result) {
-	var err error
-	var tries int
-	var wait int64
-
-	for tries = 0; tries < config.MaxDeadlockRetries; tries++ {
-		result, err = db.sqlDb.Start(query.String())
-		if err != nil {
-			if merr, isMysqlError := err.(*mysql.Error); isMysqlError {
-				if merr.Code == 1213 || merr.Code == 1205 {
-					wait = config.DeadlockWaitTime.Nanoseconds() * int64(tries+1)
-					log.Printf("!!! DEADLOCK !!! Retrying in %dms (%d/20)", wait/1000000, tries)
-					time.Sleep(time.Duration(wait))
-					continue
-				} else {
-					log.Printf("!!! CRITICAL !!! SQL error: %v", err)
-				}
-			} else {
-				log.Panicf("Error executing SQL: %v", err)
-			}
-		}
-		return
-	}
 	log.Printf("!!! CRITICAL !!! Deadlocked %d times, giving up!", tries)
+
 	return
 }

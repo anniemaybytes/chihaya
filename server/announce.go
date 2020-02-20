@@ -34,38 +34,45 @@ import (
 	"github.com/zeebo/bencode"
 )
 
-func whitelisted(peerId string, db *cdb.Database) uint32 {
+func whitelisted(peerId string, db *cdb.Database) uint16 {
 	db.WhitelistMutex.RLock()
 	defer db.WhitelistMutex.RUnlock()
 
 	var widLen int
+
 	var i int
+
 	var matched bool
 
 	for id, whitelistedId := range db.Whitelist {
 		widLen = len(whitelistedId)
 		if widLen <= len(peerId) {
 			matched = true
+
 			for i = 0; i < widLen; i++ {
 				if peerId[i] != whitelistedId[i] {
 					matched = false
 					break
 				}
 			}
+
 			if matched {
 				return id
 			}
 		}
 	}
+
 	return 0
 }
 
-func hasHitAndRun(db *cdb.Database, userId uint64, torrentId uint64) bool {
+func hasHitAndRun(db *cdb.Database, userId uint32, torrentId uint64) bool {
 	hnr := cdb.UserTorrentPair{
 		UserId:    userId,
 		TorrentId: torrentId,
 	}
+
 	_, exists := db.HitAndRuns[hnr]
+
 	return exists
 }
 
@@ -116,7 +123,9 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	event, _ := params.get("event")
 
 	var numWantStr string
+
 	var numWant int
+
 	numWantStr, exists = params.get("numwant")
 	if !exists {
 		numWant = 25
@@ -132,6 +141,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 
 	// Match or create peer
 	var peer *cdb.Peer
+
 	newPeer := false
 	seeding := false
 	active := true
@@ -146,6 +156,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 				return
 			}
 		}
+
 		peer, exists = torrent.Leechers[peerKey]
 		if !exists {
 			newPeer = true
@@ -199,6 +210,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	if rawDeltaUpload < 0 {
 		rawDeltaUpload = 0
 	}
+
 	if rawDeltaDownload < 0 {
 		rawDeltaDownload = 0
 	}
@@ -207,14 +219,14 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	if !config.GlobalFreeleech {
 		deltaDownload = int64(float64(rawDeltaDownload) * math.Abs(user.DownMultiplier) * math.Abs(torrent.DownMultiplier))
 	}
-	deltaUpload := int64(float64(rawDeltaUpload) * math.Abs(user.UpMultiplier) * math.Abs(torrent.UpMultiplier))
 
+	deltaUpload := int64(float64(rawDeltaUpload) * math.Abs(user.UpMultiplier) * math.Abs(torrent.UpMultiplier))
 	peer.Uploaded = uploaded
 	peer.Downloaded = downloaded
 	peer.Left = left
 	peer.Seeding = seeding
-
 	deltaTime := now - peer.LastAnnounce
+
 	if deltaTime > 2*int64(config.AnnounceInterval.Seconds()) {
 		deltaTime = 0
 	}
@@ -223,6 +235,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	if seeding {
 		deltaSeedTime = now - peer.LastAnnounce
 	}
+
 	if deltaSeedTime > 2*int64(config.AnnounceInterval.Seconds()) {
 		deltaSeedTime = 0
 	}
@@ -236,6 +249,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 
 	// Handle events
 	var deltaSnatch uint64
+
 	if event == "stopped" {
 		/* We can remove the peer from the list and still have their stats be recorded,
 		since we still have a reference to their object. After flushing, all references
@@ -245,6 +259,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		} else {
 			delete(torrent.Leechers, peerKey)
 		}
+
 		active = false
 	} else if completed {
 		db.RecordSnatch(peer, now)
@@ -257,13 +272,15 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	ipLong := binary.BigEndian.Uint32(ipBytes)
 
 	peer.Addr = []byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
-	peer.Port = uint(port)
+	peer.Port = uint16(port)
 	peer.IpAddr = ipAddr
+
 	if user.TrackerHide {
 		peer.Ip = 0
 	} else {
 		peer.Ip = ipLong
 	}
+
 	peer.ClientId = clientId
 
 	// If the channels are already full, record* blocks until a flush occurs
@@ -286,7 +303,6 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 	respData["interval"] = (config.AnnounceInterval + time.Duration(util.Min(600, seedCount))*time.Second) / time.Second // Assuming seconds
 
 	if numWant > 0 && active {
-
 		compactString, exists := params.get("compact")
 		compact := !exists || compactString != "0" // Defaults to being compact
 
@@ -312,9 +328,11 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 				if len(peersToSend) >= numWant {
 					break
 				}
+
 				if leech.UserId == peer.UserId {
 					continue
 				}
+
 				peersToSend = append(peersToSend, leech)
 			}
 		} else {
@@ -322,7 +340,7 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 			 * Send 1 peer/user. This is to ensure that
 			 * users seeding at multiple locations don't exclusively act as peers.
 			 */
-			uniqueSeeders := make(map[uint64]*cdb.Peer)
+			uniqueSeeders := make(map[uint32]*cdb.Peer)
 			for _, seed := range torrent.Seeders {
 				if len(peersToSend) >= numWant {
 					break
@@ -349,9 +367,11 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 
 		if compact {
 			var peerBuff bytes.Buffer
+
 			for _, other := range peersToSend {
 				peerBuff.Write(other.Addr)
 			}
+
 			respData["peers"] = peerBuff.String()
 		} else {
 			peerList := make([]map[string]interface{}, len(peersToSend))
@@ -367,9 +387,11 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 			respData["peers"] = peerList
 		}
 	}
+
 	bufdata, err := bencode.EncodeBytes(respData)
 	if err != nil {
 		panic(err)
 	}
+
 	buf.Write(bufdata)
 }

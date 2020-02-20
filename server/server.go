@@ -37,15 +37,18 @@ import (
 )
 
 type httpHandler struct {
-	db         *cdb.Database
-	bufferPool *util.BufferPool
-	waitGroup  sync.WaitGroup
-	startTime  time.Time
-	terminate  bool
+	terminate bool
+
+	waitGroup sync.WaitGroup
 
 	// Internal stats
 	deltaRequests int64
 	throughput    int64
+
+	bufferPool *util.BufferPool
+	db         *cdb.Database
+
+	startTime time.Time
 }
 
 type queryParams struct {
@@ -62,12 +65,15 @@ func (p *queryParams) getUint64(which string) (ret uint64, exists bool) {
 	str, exists := p.params[which]
 	if exists {
 		var err error
+
 		exists = false
+
 		ret, err = strconv.ParseUint(str, 10, 64)
 		if err == nil {
 			exists = true
 		}
 	}
+
 	return
 }
 
@@ -76,10 +82,12 @@ func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 	failureData["failure reason"] = err
 	failureData["interval"] = interval / time.Second     // Assuming in seconds
 	failureData["min interval"] = interval / time.Second // Assuming in seconds
+
 	data, errz := bencode.EncodeBytes(failureData)
 	if errz != nil {
 		panic(err)
 	}
+
 	buf.Write(data)
 }
 
@@ -94,11 +102,15 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 	onKey := true
 
 	var keyStart int
+
 	var keyEnd int
+
 	var valStart int
+
 	var valEnd int
 
 	hasInfoHash := false
+
 	var firstInfoHash string
 
 	for i := 0; i < queryLen; i++ {
@@ -113,6 +125,7 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 				if query[i] == '=' {
 					continue
 				}
+
 				valEnd = i
 			}
 
@@ -121,6 +134,7 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 				err = err1
 				return
 			}
+
 			valStr, err1 := url.QueryUnescape(query[valStart : valEnd+1])
 			if err1 != nil {
 				err = err1
@@ -135,12 +149,14 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 					if ret.infoHashes == nil {
 						ret.infoHashes = []string{firstInfoHash}
 					}
+
 					ret.infoHashes = append(ret.infoHashes, valStr)
 				} else {
 					firstInfoHash = valStr
 					hasInfoHash = true
 				}
 			}
+
 			onKey = true
 			keyStart = i + 1
 		} else if query[i] == '=' {
@@ -152,6 +168,7 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 			valEnd = i
 		}
 	}
+
 	return
 }
 
@@ -174,6 +191,7 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 	handler.db.UsersMutex.RLock()
 	user, exists := handler.db.Users[passkey]
 	handler.db.UsersMutex.RUnlock()
+
 	if !exists {
 		failure("Your passkey is invalid", buf, 1*time.Hour)
 		return
@@ -183,7 +201,8 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 	if !exists {
 		ipAddr, exists = params.get("ip")      // then try to get public ip if sent by client
 		ipBytes := (net.ParseIP(ipAddr)).To4() // and make sure it is ipv4 one
-		if !exists || nil == ipBytes {         // finally, if there is no ip sent by client in http request or ip sent is ipv6 only ...
+
+		if !exists || nil == ipBytes { // finally, if there is no ip sent by client in http request or ip sent is ipv6 only ...
 			ips, exists := r.Header["X-Real-Ip"] // ... check if there is X-Real-Ip header sent by proxy?
 			if exists && len(ips) > 0 {          // if yes, assume it
 				ipAddr = ips[0]
@@ -194,6 +213,7 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 						break
 					}
 				}
+
 				if portIndex != -1 { // read ip from socket
 					ipAddr = r.RemoteAddr[0:portIndex]
 				} else { // if everything failed, abort request
@@ -229,6 +249,7 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if handler.terminate {
 		return
 	}
+
 	handler.waitGroup.Add(1)
 	defer handler.waitGroup.Done()
 
@@ -297,7 +318,6 @@ func Start() {
 	record.Init()
 
 	listener, err = net.Listen("tcp", config.Get("addr"))
-
 	if err != nil {
 		panic(err)
 	}
@@ -307,13 +327,16 @@ func Start() {
 	 * This is pretty fast and scalable since goroutines are nice and efficient.
 	 */
 	log.Printf("Ready and accepting new connections on %s", config.Get("addr"))
+
 	_ = server.Serve(listener)
 
 	// Wait for active connections to finish processing
 	handler.waitGroup.Wait()
 
 	_ = server.Close() // close server so that it does not Accept(), https://github.com/golang/go/issues/10527
+
 	log.Println("Now closed and not accepting any new connections")
+
 	handler.db.Terminate()
 
 	log.Println("Shutdown complete")
@@ -327,13 +350,17 @@ func Stop() {
 
 func collectStatistics() {
 	lastTime := time.Now()
+
 	for {
 		time.Sleep(time.Minute)
+
 		duration := time.Since(lastTime)
 		handler.throughput = int64(float64(handler.deltaRequests)/duration.Seconds()*60 + 0.5)
+
 		atomic.StoreInt64(&handler.deltaRequests, 0)
 
 		log.Printf("Throughput: %d rpm\n", handler.throughput)
+
 		lastTime = time.Now()
 	}
 }
