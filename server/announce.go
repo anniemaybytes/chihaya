@@ -25,12 +25,13 @@ import (
 	"chihaya/util"
 	"encoding/binary"
 	"fmt"
-	"github.com/zeebo/bencode"
 	"log"
 	"math"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/zeebo/bencode"
 )
 
 func whitelisted(peerId string, db *cdb.Database) uint32 {
@@ -317,6 +318,11 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 				peersToSend = append(peersToSend, leech)
 			}
 		} else {
+			/*
+			 * Send 1 peer/user. This is to ensure that
+			 * users seeding at multiple locations don't exclusively act as peers.
+			 */
+			uniqueSeeders := make(map[uint64]*cdb.Peer)
 			for _, seed := range torrent.Seeders {
 				if len(peersToSend) >= numWant {
 					break
@@ -324,9 +330,12 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 				if seed.UserId == peer.UserId {
 					continue
 				}
-				peersToSend = append(peersToSend, seed)
+				_, exists = uniqueSeeders[seed.UserId]
+				if !exists {
+					uniqueSeeders[seed.UserId] = seed
+					peersToSend = append(peersToSend, seed)
+				}
 			}
-
 			for _, leech := range torrent.Leechers {
 				if len(peersToSend) >= numWant {
 					break
