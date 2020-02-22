@@ -4,7 +4,7 @@ type: docker
 
 steps:
     -   name: linter
-        image: golangci/golangci-lint:latest
+        image: golangci/golangci-lint:latest-alpine
         commands:
             - golangci-lint run --color always
 
@@ -20,11 +20,11 @@ type: docker
 
 steps:
     -   name: test
-        image: golang:1.13
+        image: golang:1.13-alpine
         environment:
             GO111MODULE: on
         commands:
-            - go test ./... -tags "scrape record" -coverprofile=coverage.out
+            - CGO_ENABLED=0 go test ./... -tags "scrape record" -coverprofile=coverage.out
             - go tool cover -func=coverage.out
 
 trigger:
@@ -34,64 +34,27 @@ trigger:
 
 ---
 kind: pipeline
-name: deploy
+name: docker
 type: docker
 
 steps:
     -   name: build
-        image: golang:1.13
+        image: plugins/docker
+        privileged: true
         environment:
-            GO111MODULE: on
+            DOCKER_REGISTRY:
+                from_secret: docker_registry
+        settings:
+            username:
+                from_secret: docker_username
+            password:
+                from_secret: docker_password
+            tags:
+                - "${DRONE_COMMIT_SHA:0:7}"
+                - "${DRONE_DEPLOY_TO}"
         commands:
-            - go build -tags "scrape"
-    -   name: upload
-        image: plugins/s3
-        settings:
-            region: ab-1
-            path_style: true
-            bucket: deploy
-            source: chihaya
-            target: ${DRONE_REPO_NAME}
-            access_key:
-                from_secret: aws_access_key_id
-            secret_key:
-                from_secret: aws_secret_access_key
-            endpoint:
-                from_secret: aws_endpoint
-        when:
-            target:
-                - production
-    -   name: archive
-        image: plugins/s3-cache
-        settings:
-            rebuild: true
-            path: deploy/${DRONE_REPO_NAME}/archive/${DRONE_COMMIT}/
-            mount:
-                - chihaya
-            access_key:
-                from_secret: aws_access_key_id
-            secret_key:
-                from_secret: aws_secret_access_key
-            endpoint:
-                from_secret: aws_endpoint
-        when:
-            target:
-                - production
-    -   name: flush
-        image: plugins/s3-cache
-        settings:
-            flush: true
-            flush_age: 14
-            flush_path: deploy/${DRONE_REPO_NAME}/archive/
-            access_key:
-                from_secret: aws_access_key_id
-            secret_key:
-                from_secret: aws_secret_access_key
-            endpoint:
-                from_secret: aws_endpoint
-        when:
-            target:
-                - production
+            - export PLUGIN_REPO=$DOCKER_REGISTRY/chihaya
+            - /usr/local/bin/dockerd-entrypoint.sh /bin/drone-docker
 
 trigger:
     event:
@@ -104,7 +67,7 @@ type: docker
 
 steps:
     -   name: collect
-        image: golang:1.13
+        image: golang:1.13-alpine
         environment:
             GO111MODULE: on
         commands:
