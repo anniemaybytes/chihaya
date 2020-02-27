@@ -9,3 +9,6 @@ charset = utf-8
 [*.go]
 indent_style = tab
 indent_size = 2
+
+[VERSION]
+insert_final_newline = false

@@ -21,6 +21,7 @@ _testmain.go
 
 # Build artifacts
 chihaya
+chihaya.exe
 chihaya.cpu
 coverage.out
 

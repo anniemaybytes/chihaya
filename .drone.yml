@@ -50,7 +50,6 @@ steps:
             password:
                 from_secret: docker_password
             tags:
-                - "${DRONE_COMMIT_SHA:0:7}"
                 - "${DRONE_DEPLOY_TO}"
         commands:
             - export PLUGIN_REPO=$DOCKER_REGISTRY/chihaya

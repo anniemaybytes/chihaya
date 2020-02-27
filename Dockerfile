@@ -9,8 +9,9 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -tags "scrape" -o chihaya && \
-    strip chihaya
+RUN export CGO_ENABLED=0 && export VERSION=$(cat ./VERSION) && export DATE=$(date -Iseconds) && \
+    go build -ldflags="-X 'main.BuildDate=$DATE' -X 'main.BuildVersion=$VERSION'" -tags "scrape" \
+    -o chihaya && strip chihaya
 
 FROM scratch AS release
 

@@ -20,6 +20,7 @@ package main
 import (
 	"chihaya/server"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -30,16 +31,24 @@ import (
 
 var profile bool
 
+// provided at compile-time
+var (
+	BuildDate    = "undefined"
+	BuildVersion = "development"
+)
+
 func init() {
 	flag.BoolVar(&profile, "profile", false, "Generate profiling data for pprof into chihaya.cpu")
 }
 
 func main() {
+	fmt.Printf("chihaya, build=%s date=%s runtime=%s\n", BuildVersion, BuildDate, runtime.Version())
+
 	flag.Parse()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	if profile {
-		log.Println("Running with profiling enabled")
+		log.Printf("Running with profiling enabled, found %d CPUs", runtime.NumCPU())
 
 		f, err := os.Create("chihaya.cpu")
 		if err != nil {
