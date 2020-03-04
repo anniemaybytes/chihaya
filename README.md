@@ -4,7 +4,7 @@ chihaya (kuroneko)
 Installation
 -------------
 
-chihaya requires Golang (versions >= 1.11 recommended) and MariaDB >= 10.3.3.
+chihaya requires Golang >= 1.14 and MariaDB >= 10.3.3.
 
 ```
 $ go get
@@ -38,11 +38,15 @@ Database configuration is done in `config.json`, which you'll need to create wit
 		"encoding": "utf8"
 	},
 
-	"addr": ":34000"
+	"addr": ":34000",
+	"admin_token": "admintoken",
+	"proxy": null
 }
 ```
 
 `addr` specifies the address to bind the server to. Possible values for `database.proto` are `unix` and `tcp`. If protocol is `tcp` then `addr` should be in form of `ip:port`
+`admin_token` is for advanced metrics in /metrics endpoint. Use with `/metrics?token=<your token>`.
+`proxy` decides which proxy headers to check for IP, if a valid IP cannot be found in parameters. Can be `null` or a valid header.
 
 Running
 -------

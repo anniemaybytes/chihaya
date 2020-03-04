@@ -85,7 +85,7 @@ func TestReadConfig(t *testing.T) {
 		t.Fatalf("Config (%v) was not same as the config that was written (%v)!", config, configTest)
 	}
 
-	defer cleanup() // TODO Go 1.14: Use testing.Cleanup()
+	t.Cleanup(cleanup)
 }
 
 func TestGet(t *testing.T) {

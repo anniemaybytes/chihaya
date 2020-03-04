@@ -4,7 +4,7 @@ type: docker
 
 steps:
     -   name: linter
-        image: golangci/golangci-lint:latest-alpine
+        image: golangci/golangci-lint:v1.23.8-alpine
         commands:
             - golangci-lint run --color always
 
@@ -20,11 +20,11 @@ type: docker
 
 steps:
     -   name: test
-        image: golang:1.13-alpine
+        image: golang:1.14-alpine
         environment:
             GO111MODULE: on
         commands:
-            - CGO_ENABLED=0 go test ./... -tags "scrape record" -coverprofile=coverage.out
+            - CGO_ENABLED=0 go test ./... -v -tags "scrape record" -coverprofile=coverage.out
             - go tool cover -func=coverage.out
 
 trigger:
@@ -66,7 +66,7 @@ type: docker
 
 steps:
     -   name: collect
-        image: golang:1.13-alpine
+        image: golang:1.14-alpine
         environment:
             GO111MODULE: on
         commands:
@@ -84,14 +84,11 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
-        when:
-            target:
-                - production
     -   name: flush
         image: plugins/s3-cache
         settings:
             flush: true
-            flush_age: 14
+            flush_age: 7
             flush_path: artifacts/${DRONE_REPO_NAME}/
             access_key:
                 from_secret: aws_access_key_id
@@ -99,10 +96,9 @@ steps:
                 from_secret: aws_secret_access_key
             endpoint:
                 from_secret: aws_endpoint
-        when:
-            target:
-                - production
 
 trigger:
     event:
         - promote
+    target:
+        - production

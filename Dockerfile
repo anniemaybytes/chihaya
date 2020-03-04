@@ -1,4 +1,4 @@
-FROM golang:1.13 AS builder
+FROM golang:1.14 AS builder
 
 WORKDIR /app
 
@@ -18,5 +18,7 @@ FROM scratch AS release
 WORKDIR /app
 
 COPY --from=builder /app/chihaya /chihaya
+
+USER 1000:1000
 
 CMD [ "/chihaya" ]

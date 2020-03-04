@@ -2,8 +2,5 @@
   "extends": [
     "config:base"
   ],
-  "ignorePaths": [
-    ".drone.yml",
-    "Dockerfile"
-  ]
+  "ignorePaths": []
 }

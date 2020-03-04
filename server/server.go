@@ -23,8 +23,6 @@ import (
 	cdb "chihaya/database"
 	"chihaya/record"
 	"chihaya/util"
-	"fmt"
-	"github.com/zeebo/bencode"
 	"log"
 	"net"
 	"net/http"
@@ -34,6 +32,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/zeebo/bencode"
 )
 
 type httpHandler struct {
@@ -42,11 +43,12 @@ type httpHandler struct {
 	waitGroup sync.WaitGroup
 
 	// Internal stats
-	deltaRequests int64
-	throughput    int64
+	requests uint64
 
-	bufferPool *util.BufferPool
-	db         *cdb.Database
+	bufferPool       *util.BufferPool
+	db               *cdb.Database
+	normalRegisterer prometheus.Registerer
+	normalCollector  *NormalCollector
 
 	startTime time.Time
 }
@@ -55,6 +57,8 @@ type queryParams struct {
 	params     map[string]string
 	infoHashes []string
 }
+
+var privateIPBlocks []*net.IPNet
 
 func (p *queryParams) get(which string) (ret string, exists bool) {
 	ret, exists = p.params[which]
@@ -75,6 +79,36 @@ func (p *queryParams) getUint64(which string) (ret uint64, exists bool) {
 	}
 
 	return
+}
+
+func getPublicIpV4(ipAddr string, exists bool) (string, bool) {
+	if !exists { // Already does not exist, fail
+		return ipAddr, exists
+	}
+
+	ip := net.ParseIP(ipAddr)
+	if ip == nil { // Invalid IP provided, fail
+		return ipAddr, false
+	}
+
+	if ip.To4() == nil { // IPv6 provided, fail
+		return ipAddr, false
+	}
+
+	private := false
+
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		private = true
+	} else {
+		for _, block := range privateIPBlocks {
+			if block.Contains(ip) {
+				private = true
+				break
+			}
+		}
+	}
+
+	return ipAddr, !private
 }
 
 func failure(err string, buf *bytes.Buffer, interval time.Duration) {
@@ -197,31 +231,49 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 		return
 	}
 
-	ipAddr, exists := params.get("ipv4") // first try to get ipv4 address if client sent it
-	if !exists {
-		ipAddr, exists = params.get("ip")      // then try to get public ip if sent by client
-		ipBytes := (net.ParseIP(ipAddr)).To4() // and make sure it is ipv4 one
+	ipAddr, exists := func() (string, bool) {
+		ipV4, existsV4 := getPublicIpV4(params.get("ipv4")) // first try to get ipv4 address if client sent it
+		ip, exists := getPublicIpV4(params.get("ip"))       // then try to get public ip if sent by client
 
-		if !exists || nil == ipBytes { // finally, if there is no ip sent by client in http request or ip sent is ipv6 only ...
-			ips, exists := r.Header["X-Real-Ip"] // ... check if there is X-Real-Ip header sent by proxy?
-			if exists && len(ips) > 0 {          // if yes, assume it
-				ipAddr = ips[0]
-			} else { // if not, assume ip to be in socket
-				portIndex := len(r.RemoteAddr) - 1
-				for ; portIndex >= 0; portIndex-- {
-					if r.RemoteAddr[portIndex] == ':' {
-						break
-					}
-				}
+		if existsV4 && exists && ip != ipV4 { // fail if ip and ipv4 are not same, and both are provided
+			return "", false
+		}
 
-				if portIndex != -1 { // read ip from socket
-					ipAddr = r.RemoteAddr[0:portIndex]
-				} else { // if everything failed, abort request
-					failure("Failed to parse IP address", buf, 1*time.Hour)
-					return
-				}
+		if existsV4 {
+			return ipV4, true
+		}
+
+		if exists {
+			return ip, true
+		}
+
+		// check if there is proxy in header IF allowed in config
+		proxy_header_type := config.Get("proxy")
+		if proxy_header_type != "" {
+			ips, exists := r.Header[proxy_header_type]
+			if exists && len(ips) > 0 {
+				return ips[0], true
 			}
 		}
+
+		// check for IP in socket
+		portIndex := len(r.RemoteAddr) - 1
+		for ; portIndex >= 0; portIndex-- {
+			if r.RemoteAddr[portIndex] == ':' {
+				break
+			}
+		}
+
+		if portIndex != -1 {
+			return r.RemoteAddr[0:portIndex], true
+		}
+
+		return "", false // everything failed, abort request
+	}()
+
+	if !exists {
+		failure("Failed to parse IP address", buf, 1*time.Hour)
+		return
 	}
 
 	ipBytes := (net.ParseIP(ipAddr)).To4()
@@ -236,6 +288,9 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 		return
 	case "scrape":
 		scrape(params, handler.db, buf)
+		return
+	case "metrics":
+		metrics(r.Header.Get("Authorization"), handler.normalCollector, handler.db, buf)
 		return
 	}
 
@@ -263,30 +318,7 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buf := handler.bufferPool.Take()
 	defer handler.bufferPool.Give(buf)
 
-	if r.URL.Path == "/stats" {
-		db := handler.db
-		peers := 0
-
-		db.UsersMutex.RLock()
-		db.TorrentsMutex.RLock()
-
-		for _, t := range db.Torrents {
-			peers += len(t.Leechers) + len(t.Seeders)
-		}
-
-		buf.WriteString(fmt.Sprintf("Uptime: %f\nUsers: %d\nTorrents: %d\nPeers: %d\nThroughput: %d rpm\n",
-			time.Since(handler.startTime).Seconds(),
-			len(db.Users),
-			len(db.Torrents),
-			peers,
-			handler.throughput,
-		))
-
-		db.UsersMutex.RUnlock()
-		db.TorrentsMutex.RUnlock()
-	} else {
-		handler.respond(r, buf)
-	}
+	handler.respond(r, buf)
 
 	w.Header().Add("Content-Type", "text/plain")
 	w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
@@ -294,13 +326,28 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The response should always be 200, even on failure
 	_, _ = w.Write(buf.Bytes())
 
-	atomic.AddInt64(&handler.deltaRequests, 1)
+	atomic.AddUint64(&handler.requests, 1)
 
 	w.(http.Flusher).Flush()
 }
 
 func Start() {
 	var err error
+
+	for _, cidr := range []string{
+		"10.0.0.0/8",     // RFC1918
+		"172.16.0.0/12",  // RFC1918
+		"192.168.0.0/16", // RFC1918
+		"169.254.0.0/16", // RFC3927 link-local
+		"100.64.0.0/10",  // RFC6598
+	} {
+		_, block, err := net.ParseCIDR(cidr)
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! parse error on %q: %v", cidr, err)
+		} else {
+			privateIPBlocks = append(privateIPBlocks, block)
+		}
+	}
 
 	handler = &httpHandler{db: &cdb.Database{}, startTime: time.Now()}
 
@@ -312,10 +359,12 @@ func Start() {
 		ReadTimeout: 20 * time.Second,
 	}
 
-	go collectStatistics()
-
 	handler.db.Init()
 	record.Init()
+
+	handler.normalRegisterer = prometheus.NewRegistry()
+	handler.normalCollector = NewNormalCollector()
+	handler.normalRegisterer.MustRegister(handler.normalCollector)
 
 	listener, err = net.Listen("tcp", config.Get("addr"))
 	if err != nil {
@@ -346,21 +395,4 @@ func Stop() {
 	// Closing the listener stops accepting connections and causes Serve to return
 	_ = listener.Close()
 	handler.terminate = true
-}
-
-func collectStatistics() {
-	lastTime := time.Now()
-
-	for {
-		time.Sleep(time.Minute)
-
-		duration := time.Since(lastTime)
-		handler.throughput = int64(float64(handler.deltaRequests)/duration.Seconds()*60 + 0.5)
-
-		atomic.StoreInt64(&handler.deltaRequests, 0)
-
-		log.Printf("Throughput: %d rpm\n", handler.throughput)
-
-		lastTime = time.Now()
-	}
 }
