@@ -19,6 +19,7 @@ package database
 
 import (
 	"bytes"
+	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/util"
 	"database/sql"
@@ -134,8 +135,8 @@ func (db *Database) Init() {
 	db.bufferPool = util.NewBufferPool(maxBuffers, 128)
 
 	db.loadUsersStmt = db.mainConn.prepareStatement("SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide FROM users_main WHERE Enabled='1'")
-	db.loadHnrStmt = db.mainConn.prepareStatement("SELECT h.uid,h.fid FROM transfer_history AS h JOIN users_main AS u ON u.ID = h.uid WHERE hnr='1' AND Enabled='1'")
-	db.loadTorrentsStmt = db.mainConn.prepareStatement("SELECT t.ID ID, t.info_hash info_hash, (IFNULL(tg.DownMultiplier,1) * t.DownMultiplier) DownMultiplier, (IFNULL(tg.UpMultiplier,1) * t.UpMultiplier) UpMultiplier, t.Snatched Snatched, t.Status Status FROM torrents AS t LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID=t.GroupID AND (tg.Type=t.TorrentType OR (tg.Type='music' AND t.TorrentType='ost'))")
+	db.loadHnrStmt = db.mainConn.prepareStatement("SELECT h.uid,h.fid FROM transfer_history AS h JOIN users_main AS u ON u.ID = h.uid WHERE h.hnr='1' AND u.Enabled='1'")
+	db.loadTorrentsStmt = db.mainConn.prepareStatement("SELECT t.ID ID, t.info_hash info_hash, (IFNULL(tg.DownMultiplier,1) * t.DownMultiplier) DownMultiplier, (IFNULL(tg.UpMultiplier,1) * t.UpMultiplier) UpMultiplier, t.Snatched Snatched, t.Status Status FROM torrents AS t LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID=t.GroupID AND tg.Type=t.TorrentType")
 	db.loadWhitelistStmt = db.mainConn.prepareStatement("SELECT id, peer_id FROM client_whitelist WHERE archived = 0")
 	db.loadFreeleechStmt = db.mainConn.prepareStatement("SELECT mod_setting FROM mod_core WHERE mod_option='global_freeleech'")
 	db.cleanStalePeersStmt = db.mainConn.prepareStatement("UPDATE transfer_history SET active = '0' WHERE last_announce < ? AND active='1'")
@@ -260,6 +261,8 @@ func handleDeadlock(execFunc func() (interface{}, error)) (result interface{}) {
 				if merr.Number == 1213 || merr.Number == 1205 {
 					wait = config.DeadlockWaitTime.Nanoseconds() * int64(tries+1)
 					log.Printf("!!! DEADLOCK !!! Retrying in %dms (%d/20)", wait/1000000, tries)
+					collectors.IncrementDeadlockCount()
+					collectors.IncrementDeadlockTime(time.Duration(wait))
 					time.Sleep(time.Duration(wait))
 
 					continue

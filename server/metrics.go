@@ -19,6 +19,7 @@ package server
 
 import (
 	"bytes"
+	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database"
 	"log"
@@ -31,7 +32,7 @@ import (
 
 var bearerPrefix = "Bearer "
 
-func metrics(auth string, collector *NormalCollector, db *cdb.Database, buf *bytes.Buffer) {
+func metrics(auth string, db *cdb.Database, buf *bytes.Buffer) {
 	peers := 0
 
 	db.UsersMutex.RLock()
@@ -41,11 +42,13 @@ func metrics(auth string, collector *NormalCollector, db *cdb.Database, buf *byt
 		peers += len(t.Leechers) + len(t.Seeders)
 	}
 
-	collector.UpdateUptime(time.Since(handler.startTime).Seconds())
-	collector.UpdateUsers(len(db.Users))
-	collector.UpdateTorrents(len(db.Torrents))
-	collector.UpdatePeers(peers)
-	collector.UpdateRequests(atomic.LoadUint64(&handler.requests))
+	collectors.UpdateUptime(time.Since(handler.startTime).Seconds())
+	collectors.UpdateUsers(len(db.Users))
+	collectors.UpdateTorrents(len(db.Torrents))
+	collectors.UpdateWhitelist(len(db.Whitelist))
+	collectors.UpdateHitAndRuns(len(db.HitAndRuns))
+	collectors.UpdatePeers(peers)
+	collectors.UpdateRequests(atomic.LoadUint64(&handler.requests))
 
 	db.UsersMutex.RUnlock()
 	db.TorrentsMutex.RUnlock()

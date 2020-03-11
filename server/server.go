@@ -19,6 +19,7 @@ package server
 
 import (
 	"bytes"
+	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database"
 	"chihaya/record"
@@ -48,7 +49,8 @@ type httpHandler struct {
 	bufferPool       *util.BufferPool
 	db               *cdb.Database
 	normalRegisterer prometheus.Registerer
-	normalCollector  *NormalCollector
+	normalCollector  *collectors.NormalCollector
+	adminCollector   *collectors.AdminCollector
 
 	startTime time.Time
 }
@@ -57,8 +59,6 @@ type queryParams struct {
 	params     map[string]string
 	infoHashes []string
 }
-
-var privateIPBlocks []*net.IPNet
 
 func (p *queryParams) get(which string) (ret string, exists bool) {
 	ret, exists = p.params[which]
@@ -79,36 +79,6 @@ func (p *queryParams) getUint64(which string) (ret uint64, exists bool) {
 	}
 
 	return
-}
-
-func getPublicIpV4(ipAddr string, exists bool) (string, bool) {
-	if !exists { // Already does not exist, fail
-		return ipAddr, exists
-	}
-
-	ip := net.ParseIP(ipAddr)
-	if ip == nil { // Invalid IP provided, fail
-		return ipAddr, false
-	}
-
-	if ip.To4() == nil { // IPv6 provided, fail
-		return ipAddr, false
-	}
-
-	private := false
-
-	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-		private = true
-	} else {
-		for _, block := range privateIPBlocks {
-			if block.Contains(ip) {
-				private = true
-				break
-			}
-		}
-	}
-
-	return ipAddr, !private
 }
 
 func failure(err string, buf *bytes.Buffer, interval time.Duration) {
@@ -231,66 +201,15 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 		return
 	}
 
-	ipAddr, exists := func() (string, bool) {
-		ipV4, existsV4 := getPublicIpV4(params.get("ipv4")) // first try to get ipv4 address if client sent it
-		ip, exists := getPublicIpV4(params.get("ip"))       // then try to get public ip if sent by client
-
-		if existsV4 && exists && ip != ipV4 { // fail if ip and ipv4 are not same, and both are provided
-			return "", false
-		}
-
-		if existsV4 {
-			return ipV4, true
-		}
-
-		if exists {
-			return ip, true
-		}
-
-		// check if there is proxy in header IF allowed in config
-		proxy_header_type := config.Get("proxy")
-		if proxy_header_type != "" {
-			ips, exists := r.Header[proxy_header_type]
-			if exists && len(ips) > 0 {
-				return ips[0], true
-			}
-		}
-
-		// check for IP in socket
-		portIndex := len(r.RemoteAddr) - 1
-		for ; portIndex >= 0; portIndex-- {
-			if r.RemoteAddr[portIndex] == ':' {
-				break
-			}
-		}
-
-		if portIndex != -1 {
-			return r.RemoteAddr[0:portIndex], true
-		}
-
-		return "", false // everything failed, abort request
-	}()
-
-	if !exists {
-		failure("Failed to parse IP address", buf, 1*time.Hour)
-		return
-	}
-
-	ipBytes := (net.ParseIP(ipAddr)).To4()
-	if nil == ipBytes {
-		failure("Assertion failed (net.ParseIP(ipAddr)).To4() == nil)! please report this issue to staff", buf, 1*time.Hour)
-		return
-	}
-
 	switch action {
 	case "announce":
-		announce(params, user, ipAddr, handler.db, buf)
+		announce(params, r.Header, r.RemoteAddr, user, handler.db, buf)
 		return
 	case "scrape":
 		scrape(params, handler.db, buf)
 		return
 	case "metrics":
-		metrics(r.Header.Get("Authorization"), handler.normalCollector, handler.db, buf)
+		metrics(r.Header.Get("Authorization"), handler.db, buf)
 		return
 	}
 
@@ -334,20 +253,7 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func Start() {
 	var err error
 
-	for _, cidr := range []string{
-		"10.0.0.0/8",     // RFC1918
-		"172.16.0.0/12",  // RFC1918
-		"192.168.0.0/16", // RFC1918
-		"169.254.0.0/16", // RFC3927 link-local
-		"100.64.0.0/10",  // RFC6598
-	} {
-		_, block, err := net.ParseCIDR(cidr)
-		if err != nil {
-			log.Printf("!!! CRITICAL !!! parse error on %q: %v", cidr, err)
-		} else {
-			privateIPBlocks = append(privateIPBlocks, block)
-		}
-	}
+	InitPrivateIPBlocks()
 
 	handler = &httpHandler{db: &cdb.Database{}, startTime: time.Now()}
 
@@ -363,8 +269,12 @@ func Start() {
 	record.Init()
 
 	handler.normalRegisterer = prometheus.NewRegistry()
-	handler.normalCollector = NewNormalCollector()
+	handler.normalCollector = collectors.NewNormalCollector()
 	handler.normalRegisterer.MustRegister(handler.normalCollector)
+
+	// Register additional metrics for DefaultGatherer
+	handler.adminCollector = collectors.NewAdminCollector()
+	prometheus.MustRegister(handler.adminCollector)
 
 	listener, err = net.Listen("tcp", config.Get("addr"))
 	if err != nil {

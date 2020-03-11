@@ -18,6 +18,7 @@
 package database
 
 import (
+	"chihaya/collectors"
 	"chihaya/config"
 	"log"
 	"time"
@@ -109,7 +110,9 @@ func (db *Database) loadUsers() {
 	db.Users = newUsers
 	db.UsersMutex.Unlock()
 
-	log.Printf("User load complete (%d rows, %dms)", count, time.Since(start).Nanoseconds()/1000000)
+	elapsedTime := time.Since(start)
+	collectors.UpdateReloadTime("users", elapsedTime)
+	log.Printf("User load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) loadHitAndRuns() {
@@ -149,7 +152,9 @@ func (db *Database) loadHitAndRuns() {
 
 	db.HitAndRuns = newHnr
 
-	log.Printf("Hit and run load complete (%d rows, %dms)", count, time.Since(start).Nanoseconds()/1000000)
+	elapsedTime := time.Since(start)
+	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
+	log.Printf("Hit and run load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) loadTorrents() {
@@ -211,7 +216,9 @@ func (db *Database) loadTorrents() {
 	db.Torrents = newTorrents
 	db.TorrentsMutex.Unlock()
 
-	log.Printf("Torrent load complete (%d rows, %dms)", count, time.Since(start).Nanoseconds()/1000000)
+	elapsedTime := time.Since(start)
+	collectors.UpdateReloadTime("torrents", elapsedTime)
+	log.Printf("Torrent load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) loadConfig() {
@@ -264,5 +271,7 @@ func (db *Database) loadWhitelist() {
 	db.mainConn.mutex.Unlock()
 	db.WhitelistMutex.Unlock()
 
-	log.Printf("Whitelist load complete (%d rows, %dms)", len(db.Whitelist), time.Since(start).Nanoseconds()/1000000)
+	elapsedTime := time.Since(start)
+	collectors.UpdateReloadTime("whitelist", elapsedTime)
+	log.Printf("Whitelist load complete (%d rows, %dms)", len(db.Whitelist), elapsedTime.Nanoseconds()/1000000)
 }

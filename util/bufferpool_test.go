@@ -18,11 +18,11 @@
 package util
 
 import (
-	"testing"
 	"bytes"
+	"testing"
 )
 
-func TestBufferPool(t *testing.T){
+func TestBufferPool(t *testing.T) {
 	bufferpool := NewBufferPool(1, 1)
 
 	poolBuf := bufferpool.Take()

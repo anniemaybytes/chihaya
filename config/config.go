@@ -59,7 +59,7 @@ var (
 const LogFlushes = true
 
 // Config file stuff
-var configFile string = "config.json"
+var configFile = "config.json"
 
 var once sync.Once
 

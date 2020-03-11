@@ -18,6 +18,7 @@
 package database
 
 import (
+	"chihaya/collectors"
 	"chihaya/config"
 	"encoding/gob"
 	"log"
@@ -85,7 +86,9 @@ func (db *Database) serialize() {
 	}
 	db.UsersMutex.RUnlock()
 
-	log.Printf("Done serializing (%dms)\n", time.Since(start).Nanoseconds()/1000000)
+	elapsedTime := time.Since(start)
+	collectors.UpdateSerializationTime(elapsedTime)
+	log.Printf("Done serializing (%dms)\n", elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) deserialize() {

@@ -28,11 +28,61 @@ import (
 	"log"
 	"math"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/zeebo/bencode"
 )
+
+var privateIPBlocks []*net.IPNet
+
+func InitPrivateIPBlocks() {
+	for _, cidr := range []string{
+		"10.0.0.0/8",     // RFC1918
+		"172.16.0.0/12",  // RFC1918
+		"192.168.0.0/16", // RFC1918
+		"169.254.0.0/16", // RFC3927 link-local
+		"100.64.0.0/10",  // RFC6598
+	} {
+		_, block, err := net.ParseCIDR(cidr)
+		if err != nil {
+			log.Printf("!!! CRITICAL !!! parse error on %q: %v", cidr, err)
+		} else {
+			privateIPBlocks = append(privateIPBlocks, block)
+		}
+	}
+}
+
+func getPublicIpV4(ipAddr string, exists bool) (string, bool) {
+	if !exists { // Already does not exist, fail
+		return ipAddr, exists
+	}
+
+	ip := net.ParseIP(ipAddr)
+	if ip == nil { // Invalid IP provided, fail
+		return ipAddr, false
+	}
+
+	if ip.To4() == nil { // IPv6 provided, fail
+		return ipAddr, false
+	}
+
+	private := false
+
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		private = true
+	} else {
+		for _, block := range privateIPBlocks {
+			if block.Contains(ip) {
+				private = true
+				break
+			}
+		}
+	}
+
+	return ipAddr, !private
+}
 
 func whitelisted(peerId string, db *cdb.Database) uint16 {
 	db.WhitelistMutex.RLock()
@@ -76,7 +126,7 @@ func hasHitAndRun(db *cdb.Database, userId uint32, torrentId uint64) bool {
 	return exists
 }
 
-func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Database, buf *bytes.Buffer) {
+func announce(params *queryParams, header http.Header, remoteAddr string, user *cdb.User, db *cdb.Database, buf *bytes.Buffer) {
 	var exists bool
 
 	// Mandatory parameters
@@ -89,6 +139,57 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 
 	if !(infoHash != "" && peerId != "" && portExists && uploadedExists && downloadedExists && leftExists) {
 		failure("Malformed request - missing mandatory parameter", buf, 1*time.Hour)
+		return
+	}
+
+	ipAddr, exists := func() (string, bool) {
+		ipV4, existsV4 := getPublicIpV4(params.get("ipv4")) // first try to get ipv4 address if client sent it
+		ip, exists := getPublicIpV4(params.get("ip"))       // then try to get public ip if sent by client
+
+		if existsV4 && exists && ip != ipV4 { // fail if ip and ipv4 are not same, and both are provided
+			return "", false
+		}
+
+		if existsV4 {
+			return ipV4, true
+		}
+
+		if exists {
+			return ip, true
+		}
+
+		// check if there is proxy in header IF allowed in config
+		proxyHeaderType := config.Get("proxy")
+		if proxyHeaderType != "" {
+			ips, exists := header[proxyHeaderType]
+			if exists && len(ips) > 0 {
+				return ips[0], true
+			}
+		}
+
+		// check for IP in socket
+		portIndex := len(remoteAddr) - 1
+		for ; portIndex >= 0; portIndex-- {
+			if remoteAddr[portIndex] == ':' {
+				break
+			}
+		}
+
+		if portIndex != -1 {
+			return remoteAddr[0:portIndex], true
+		}
+
+		return "", false // everything failed, abort request
+	}()
+
+	if !exists {
+		failure("Failed to parse IP address", buf, 1*time.Hour)
+		return
+	}
+
+	ipBytes := net.ParseIP(ipAddr).To4()
+	if nil == ipBytes {
+		failure("Assertion failed (net.ParseIP(ipAddr)).To4() == nil)! please report this issue to staff", buf, 1*time.Hour)
 		return
 	}
 
@@ -265,8 +366,6 @@ func announce(params *queryParams, user *cdb.User, ipAddr string, db *cdb.Databa
 		db.RecordSnatch(peer, now)
 		deltaSnatch = 1
 	}
-
-	ipBytes := net.ParseIP(ipAddr).To4()
 
 	// Converts in a way equivalent to PHP's ip2long
 	ipLong := binary.BigEndian.Uint32(ipBytes)

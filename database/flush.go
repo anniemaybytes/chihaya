@@ -19,6 +19,7 @@ package database
 
 import (
 	"bytes"
+	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/util"
 	"log"
@@ -92,11 +93,17 @@ func (db *Database) flushTorrents() {
 		}
 
 		if count > 0 {
+			startTime := time.Now()
+
 			query.WriteString("\nON DUPLICATE KEY UPDATE Snatched = Snatched + VALUE(Snatched), " +
 				"Seeders = VALUE(Seeders), Leechers = VALUE(Leechers), " +
 				"last_action = IF(last_action < VALUE(last_action), VALUE(last_action), last_action);")
 
 			conn.execBuffer(&query)
+
+			elapsedTime := time.Since(startTime)
+			collectors.UpdateFlushTime("torrents", elapsedTime)
+			collectors.UpdateChannelsLen("torrents", count)
 
 			if length < (config.TorrentFlushBufferSize >> 1) {
 				time.Sleep(config.FlushSleepInterval)
@@ -146,10 +153,16 @@ func (db *Database) flushUsers() {
 		}
 
 		if count > 0 {
+			startTime := time.Now()
+
 			query.WriteString("\nON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUE(Uploaded), " +
 				"Downloaded = Downloaded + VALUE(Downloaded), rawdl = rawdl + VALUE(rawdl), rawup = rawup + VALUE(rawup);")
 
 			conn.execBuffer(&query)
+
+			elapsedTime := time.Since(startTime)
+			collectors.UpdateFlushTime("users", elapsedTime)
+			collectors.UpdateChannelsLen("users", count)
 
 			if length < (config.UserFlushBufferSize >> 1) {
 				time.Sleep(config.FlushSleepInterval)
@@ -218,6 +231,8 @@ main:
 		}
 
 		if count > 0 {
+			startTime := time.Now()
+
 			query.WriteString("\nON DUPLICATE KEY UPDATE uploaded = uploaded + VALUE(uploaded), " +
 				"downloaded = downloaded + VALUE(downloaded), remaining = VALUE(remaining), " +
 				"seeding = VALUE(seeding), activetime = activetime + VALUE(activetime), " +
@@ -226,6 +241,10 @@ main:
 
 			conn.execBuffer(&query)
 			db.transferHistoryWaitGroup.Done()
+
+			elapsedTime := time.Since(startTime)
+			collectors.UpdateFlushTime("transfer_history", elapsedTime)
+			collectors.UpdateChannelsLen("transfer_history", count)
 
 			if length < (config.TransferHistoryFlushBufferSize >> 1) {
 				time.Sleep(config.FlushSleepInterval)
@@ -277,8 +296,14 @@ func (db *Database) flushTransferIps() {
 		}
 
 		if count > 0 {
+			startTime := time.Now()
+
 			query.WriteString("\nON DUPLICATE KEY UPDATE downloaded = downloaded + VALUE(downloaded), uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce);")
 			conn.execBuffer(&query)
+
+			elapsedTime := time.Since(startTime)
+			collectors.UpdateFlushTime("transfer_ips", elapsedTime)
+			collectors.UpdateChannelsLen("transfer_ips", count)
 
 			if length < (config.TransferIpsFlushBufferSize >> 1) {
 				time.Sleep(config.FlushSleepInterval)
@@ -328,9 +353,15 @@ func (db *Database) flushSnatches() {
 		}
 
 		if count > 0 {
+			startTime := time.Now()
+
 			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time);")
 
 			conn.execBuffer(&query)
+
+			elapsedTime := time.Since(startTime)
+			collectors.UpdateFlushTime("snatches", elapsedTime)
+			collectors.UpdateChannelsLen("snatches", count)
 
 			if length < (config.SnatchFlushBufferSize >> 1) {
 				time.Sleep(config.FlushSleepInterval)
@@ -382,7 +413,9 @@ func (db *Database) purgeInactivePeers() {
 		}
 		db.TorrentsMutex.Unlock()
 
-		log.Printf("Purged %d inactive peers from memory (%dms)\n", count, time.Since(start).Nanoseconds()/1000000)
+		elapsedTime := time.Since(start)
+		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
+		log.Printf("Purged %d inactive peers from memory (%dms)\n", count, elapsedTime.Nanoseconds()/1000000)
 
 		// Wait on flushing to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
 		db.goTransferHistoryWait()
