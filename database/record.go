@@ -33,7 +33,8 @@ import (
  */
 
 func (db *Database) RecordTorrent(torrent *Torrent, deltaSnatch uint64) {
-	tq := db.bufferPool.Take() // ~50 bytes per record max
+	tq := db.bufferPool.Take()
+
 	tq.WriteString("('")
 	tq.WriteString(strconv.FormatUint(torrent.Id, 10))
 	tq.WriteString("','")
@@ -50,7 +51,8 @@ func (db *Database) RecordTorrent(torrent *Torrent, deltaSnatch uint64) {
 }
 
 func (db *Database) RecordUser(user *User, rawDeltaUpload int64, rawDeltaDownload int64, deltaUpload int64, deltaDownload int64) {
-	uq := db.bufferPool.Take() // ~60 bytes per record max
+	uq := db.bufferPool.Take()
+
 	uq.WriteString("('")
 	uq.WriteString(strconv.FormatUint(uint64(user.Id), 10))
 	uq.WriteString("','")
@@ -67,7 +69,7 @@ func (db *Database) RecordUser(user *User, rawDeltaUpload int64, rawDeltaDownloa
 }
 
 func (db *Database) RecordTransferHistory(peer *Peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime int64, deltaSnatch uint64, active bool) {
-	th := db.bufferPool.Take() // ~110 bytes per record max
+	th := db.bufferPool.Take()
 
 	th.WriteString("('")
 	th.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
@@ -99,10 +101,8 @@ func (db *Database) RecordTransferHistory(peer *Peer, rawDeltaUpload, rawDeltaDo
 }
 
 func (db *Database) RecordTransferIp(peer *Peer, rawDeltaUpload int64, rawDeltaDownload int64) {
-	ti := db.bufferPool.Take() // ~40 bytes per record max
+	ti := db.bufferPool.Take()
 
-	// used with:
-	// INSERT INTO transfer_ips (uid, fid, client_id, ip, uploaded, downloaded, starttime, last_announce)
 	ti.WriteString("('")
 	ti.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
 	ti.WriteString("','")
@@ -111,6 +111,8 @@ func (db *Database) RecordTransferIp(peer *Peer, rawDeltaUpload int64, rawDeltaD
 	ti.WriteString(strconv.FormatUint(uint64(peer.ClientId), 10))
 	ti.WriteString("','")
 	ti.WriteString(strconv.FormatUint(uint64(peer.Ip), 10))
+	ti.WriteString("','")
+	ti.WriteString(strconv.FormatUint(uint64(peer.Port), 10))
 	ti.WriteString("','")
 	ti.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
 	ti.WriteString("','")
@@ -125,7 +127,7 @@ func (db *Database) RecordTransferIp(peer *Peer, rawDeltaUpload int64, rawDeltaD
 }
 
 func (db *Database) RecordSnatch(peer *Peer, now int64) {
-	sn := db.bufferPool.Take() // ~36 bytes per record max
+	sn := db.bufferPool.Take()
 
 	sn.WriteString("('")
 	sn.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))

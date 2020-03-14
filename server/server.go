@@ -65,18 +65,29 @@ func (p *queryParams) get(which string) (ret string, exists bool) {
 	return
 }
 
-func (p *queryParams) getUint64(which string) (ret uint64, exists bool) {
+func (p *queryParams) getUint(which string, bitSize int) (ret uint64, exists bool) {
 	str, exists := p.params[which]
 	if exists {
 		var err error
 
 		exists = false
 
-		ret, err = strconv.ParseUint(str, 10, 64)
+		ret, err = strconv.ParseUint(str, 10, bitSize)
 		if err == nil {
 			exists = true
 		}
 	}
+
+	return
+}
+
+func (p *queryParams) getUint64(which string) (ret uint64, exists bool) {
+	return p.getUint(which, 64)
+}
+
+func (p *queryParams) getUint16(which string) (ret uint16, exists bool) {
+	tmp, exists := p.getUint(which, 16)
+	ret = uint16(tmp)
 
 	return
 }

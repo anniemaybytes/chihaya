@@ -132,13 +132,18 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	// Mandatory parameters
 	infoHash, _ := params.get("info_hash")
 	peerId, _ := params.get("peer_id")
-	port, portExists := params.getUint64("port")
+	port, portExists := params.getUint16("port")
 	uploaded, uploadedExists := params.getUint64("uploaded")
 	downloaded, downloadedExists := params.getUint64("downloaded")
 	left, leftExists := params.getUint64("left")
 
-	if !(infoHash != "" && peerId != "" && portExists && uploadedExists && downloadedExists && leftExists) {
-		failure("Malformed request - missing mandatory parameter", buf, 1*time.Hour)
+	if infoHash == "" ||
+		peerId == "" ||
+		(!portExists || port < 1024 || port > 65535) ||
+		!uploadedExists ||
+		!downloadedExists ||
+		!leftExists {
+		failure("Malformed request - missing mandatory parameter(s)", buf, 1*time.Hour)
 		return
 	}
 
@@ -182,14 +187,10 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		return "", false // everything failed, abort request
 	}()
 
-	if !exists {
-		failure("Failed to parse IP address", buf, 1*time.Hour)
-		return
-	}
-
 	ipBytes := net.ParseIP(ipAddr).To4()
-	if nil == ipBytes {
-		failure("Assertion failed (net.ParseIP(ipAddr)).To4() == nil)! please report this issue to staff", buf, 1*time.Hour)
+
+	if !exists || nil == ipBytes {
+		failure(fmt.Sprintf("Failed to parse IP address (ip: %s)", ipAddr), buf, 1*time.Hour)
 		return
 	}
 
@@ -371,11 +372,11 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	ipLong := binary.BigEndian.Uint32(ipBytes)
 
 	peer.Addr = []byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
-	peer.Port = uint16(port)
+	peer.Port = port
 	peer.IpAddr = ipAddr
 
 	if user.TrackerHide {
-		peer.Ip = 0
+		peer.Ip = 2130706433 // 127.0.0.1
 	} else {
 		peer.Ip = ipLong
 	}
@@ -386,7 +387,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	db.RecordTorrent(torrent, deltaSnatch)
 	db.RecordTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
 	db.RecordUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	record.Record(peer.TorrentId, user.Id, rawDeltaUpload, rawDeltaDownload, uploaded, event, ipAddr)
+	record.Record(peer.TorrentId, user.Id, rawDeltaUpload, rawDeltaDownload, uploaded, event, ipAddr, port)
 	db.RecordTransferIp(peer, rawDeltaUpload, rawDeltaDownload)
 
 	// Generate response

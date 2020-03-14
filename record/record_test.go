@@ -31,10 +31,11 @@ import (
 )
 
 type record struct {
-	tid       uint64
+	port      uint16
 	uid       uint32
-	up, down  int64
+	tid       uint64
 	absup     uint64
+	up, down  int64
 	event, ip string
 }
 
@@ -64,9 +65,16 @@ func TestRecord(t *testing.T) {
 	var expectedOutputs []string
 
 	for i := 0; i < 10; i++ {
-		tmp := record{rand.Uint64(), rand.Uint32(),
-			int64(rand.Uint64()), int64(rand.Uint64()),
-			rand.Uint64(), "completed", "127.0.0.1"}
+		tmp := record{
+			uint16(rand.Uint32()),
+			rand.Uint32(),
+			rand.Uint64(),
+			rand.Uint64(),
+			int64(rand.Uint64()),
+			int64(rand.Uint64()),
+			"completed",
+			"127.0.0.1",
+		}
 		recordValues = append(recordValues, tmp)
 		expectedOutputs = append(
 			expectedOutputs,
@@ -77,13 +85,14 @@ func TestRecord(t *testing.T) {
 				strconv.FormatInt(tmp.down, 10)+","+
 				strconv.FormatUint(tmp.absup, 10)+","+
 				"\""+tmp.event+"\""+","+
-				"\""+tmp.ip+"\""+
+				"\""+tmp.ip+"\","+
+				strconv.FormatUint(uint64(tmp.port), 10)+
 				"]",
 		)
 	}
 
 	for _, item := range recordValues {
-		Record(item.tid, item.uid, item.up, item.down, item.absup, item.event, item.ip)
+		Record(item.tid, item.uid, item.up, item.down, item.absup, item.event, item.ip, item.port)
 	}
 
 	time.Sleep(200 * time.Millisecond)

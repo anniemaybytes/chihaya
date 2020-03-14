@@ -19,5 +19,5 @@
 
 package record
 
-func Record(tid uint64, uid uint32, up, down int64, absup uint64, event, ip string) {}
-func Init()                                                                         {}
+func Record(tid uint64, uid uint32, up, down int64, absup uint64, event, ip string, port uint16) {}
+func Init()                                                                                      {}
