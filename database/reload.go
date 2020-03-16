@@ -20,7 +20,7 @@ package database
 import (
 	"chihaya/collectors"
 	"chihaya/config"
-	"log"
+	"chihaya/log"
 	"time"
 )
 
@@ -83,7 +83,7 @@ func (db *Database) loadUsers() {
 
 		err = rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide)
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! Error scanning user rows: %s", err)
+			log.Error.Printf("Error scanning user rows: %s", err)
 		}
 
 		old, exists := db.Users[torrentPass]
@@ -112,7 +112,7 @@ func (db *Database) loadUsers() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("users", elapsedTime)
-	log.Printf("User load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("User load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) loadHitAndRuns() {
@@ -137,7 +137,7 @@ func (db *Database) loadHitAndRuns() {
 
 		err = rows.Scan(&uid, &fid)
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! Error scanning hit and run rows: %s", err)
+			log.Error.Printf("Error scanning hit and run rows: %s", err)
 		}
 
 		hnr := UserTorrentPair{
@@ -154,7 +154,7 @@ func (db *Database) loadHitAndRuns() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
-	log.Printf("Hit and run load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Hit and run load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) loadTorrents() {
@@ -186,7 +186,7 @@ func (db *Database) loadTorrents() {
 
 		err = rows.Scan(&id, &infoHash, &downMultiplier, &upMultiplier, &snatched, &status)
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! Error scanning torrent rows: %s", err)
+			log.Error.Printf("Error scanning torrent rows: %s", err)
 		}
 
 		old, exists := db.Torrents[infoHash]
@@ -218,7 +218,7 @@ func (db *Database) loadTorrents() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("torrents", elapsedTime)
-	log.Printf("Torrent load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Torrent load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) loadConfig() {
@@ -234,7 +234,7 @@ func (db *Database) loadConfig() {
 
 		err := rows.Scan(&globalFreelech)
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! Error scanning torrent rows: %s", err)
+			log.Error.Printf("Error scanning torrent rows: %s", err)
 		}
 
 		config.GlobalFreeleech = globalFreelech
@@ -262,7 +262,7 @@ func (db *Database) loadWhitelist() {
 
 		err := rows.Scan(&id, &peerId)
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! Error scanning whitelist rows: %s", err)
+			log.Error.Printf("Error scanning whitelist rows: %s", err)
 		}
 
 		db.Whitelist[id] = peerId
@@ -273,5 +273,5 @@ func (db *Database) loadWhitelist() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("whitelist", elapsedTime)
-	log.Printf("Whitelist load complete (%d rows, %dms)", len(db.Whitelist), elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Whitelist load complete (%d rows, %dms)", len(db.Whitelist), elapsedTime.Nanoseconds()/1000000)
 }

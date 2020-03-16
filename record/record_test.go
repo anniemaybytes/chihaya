@@ -1,5 +1,3 @@
-// +build record
-
 /*
  * This file is part of Chihaya.
  *
@@ -53,6 +51,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+
+	enabledByDefault = true // force-enable for tests
 
 	Init()
 

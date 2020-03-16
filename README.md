@@ -11,15 +11,6 @@ $ go get
 $ go build
 ```
 
-Additionally, you may pass tags during build to control which functions you want to enable. Supported tags are:
-- scrape: Enables optional support for /scrape endpoint
-- record: Enables simple experimental JSON recorder of announce events to flat file
-
-Example:
-```
-$ go build -tags "scrape record"
-```
-
 Configuration
 -------------
 
@@ -30,23 +21,26 @@ Database configuration is done in `config.json`, which you'll need to create wit
 ```json
 {
 	"database": {
-		"username": "user",
-		"password": "pass",
-		"database": "database",
-		"proto": "unix",
-		"addr": "/var/run/mysqld/mysqld.sock",
-		"encoding": "utf8"
+		"username": "chihaya",
+		"password": "",
+		"database": "chihaya",
+		"proto": "tcp",
+		"addr": "127.0.0.1:3306"
 	},
 
 	"addr": ":34000",
-	"admin_token": "admintoken",
-	"proxy": null
+	"admin_token": null,
+	"proxy": null,
+	"record": false,
+	"scrape": true
 }
 ```
 
 `addr` specifies the address to bind the server to. Possible values for `database.proto` are `unix` and `tcp`. If protocol is `tcp` then `addr` should be in form of `ip:port`
-`admin_token` is for advanced metrics in /metrics endpoint. Use with `/metrics?token=<your token>`.
-`proxy` decides which proxy headers to check for IP, if a valid IP cannot be found in parameters. Can be `null` or a valid header.
+`admin_token` is for advanced metrics in /metrics endpoint. Use with `/metrics?token=<your token>`. Can be `null` or empty string to disable.
+`proxy` decides which proxy headers to check for IP, if a valid IP cannot be found in parameters. Can be `null` or empty string to disable or a valid header name to enable.
+`scrape` enables optional support for /scrape endpoint. Optional, defaults to `false`.
+`record` enables simple experimental JSON recorder of announce events to flat file. Optional, defaults to `true`.
 
 Running
 -------

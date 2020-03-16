@@ -1,5 +1,3 @@
-// +build record
-
 /*
  * This file is part of Chihaya.
  *
@@ -21,10 +19,13 @@ package record
 
 import (
 	"bytes"
+	"chihaya/config"
 	"os"
 	"strconv"
 	"time"
 )
+
+var enabledByDefault = false
 
 var recordChan chan []byte
 
@@ -33,6 +34,10 @@ func openEventFile(t time.Time) (*os.File, error) {
 }
 
 func Init() {
+	if !config.GetBool("record", enabledByDefault) {
+		return
+	}
+
 	err := os.Mkdir("events", 0755)
 	if err != nil && !os.IsExist(err) {
 		panic(err)
@@ -71,7 +76,11 @@ func Init() {
 	}()
 }
 
-func Record(tid uint64, uid uint32, up, down int64, absup uint64, event, ip string, port uint16) {
+func Record(tid uint64, uid uint32, up, down int64, absup uint64, event string, ip string, port uint16) {
+	if !config.GetBool("record", enabledByDefault) {
+		return
+	}
+
 	if up == 0 && down == 0 {
 		return
 	}

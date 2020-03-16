@@ -1,5 +1,3 @@
-// +build scrape
-
 /*
  * This file is part of Chihaya.
  *
@@ -21,7 +19,10 @@ package server
 
 import (
 	"bytes"
+	"chihaya/config"
 	cdb "chihaya/database"
+	"time"
+
 	"github.com/zeebo/bencode"
 )
 
@@ -35,27 +36,45 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 }
 
 func scrape(params *queryParams, db *cdb.Database, buf *bytes.Buffer) {
+	if !config.GetBool("scrape", true) {
+		failure("Scrape convention is not supported", buf, 1*time.Hour)
+		return
+	}
+
 	scrapeData := make(map[string]interface{})
 	fileData := make(map[string]interface{})
 
-	db.TorrentsMutex.RLock()
-
 	if params.infoHashes != nil {
+		db.TorrentsMutex.RLock()
+
 		for _, infoHash := range params.infoHashes {
 			torrent, exists := db.Torrents[infoHash]
 			if exists {
 				fileData[infoHash] = writeScrapeInfo(torrent)
 			}
 		}
+
+		db.TorrentsMutex.RUnlock()
 	} else if infoHash, exists := params.get("info_hash"); exists {
+		db.TorrentsMutex.RLock()
+
 		torrent, exists := db.Torrents[infoHash]
 		if exists {
 			fileData[infoHash] = writeScrapeInfo(torrent)
 		}
+
+		db.TorrentsMutex.RUnlock()
+	} else {
+		scrapeData["failure reason"] = "Scrape without info_hash is not supported"
 	}
-	db.TorrentsMutex.RUnlock()
 
 	scrapeData["files"] = fileData
+	scrapeData["flags"] = map[string]interface{}{
+		"min_request_interval": config.MinScrapeInterval / time.Second, // Assuming in seconds
+	}
+	// the following are for compatibility with clients that don't implement scrape flags
+	scrapeData["interval"] = config.MinScrapeInterval / time.Second     // Assuming in seconds
+	scrapeData["min interval"] = config.MinScrapeInterval / time.Second // Assuming in seconds
 
 	bufdata, err := bencode.EncodeBytes(scrapeData)
 	if err != nil {

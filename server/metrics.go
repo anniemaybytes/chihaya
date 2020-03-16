@@ -22,7 +22,7 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database"
-	"log"
+	"chihaya/log"
 	"sync/atomic"
 	"time"
 
@@ -58,20 +58,20 @@ func metrics(auth string, db *cdb.Database, buf *bytes.Buffer) {
 	for _, mf := range mfs {
 		_, err := expfmt.MetricFamilyToText(buf, mf)
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! Error in converting metrics to text")
+			log.Error.Printf("Error in converting metrics to text")
 			return
 		}
 	}
 
 	n := len(bearerPrefix)
-	if len(auth) > n && auth[:n] == bearerPrefix {
-		if auth[n:] == config.Get("admin_token") {
+	if len(auth) > n && auth[:n] == bearerPrefix && auth[n:] != "" { // empty string means admin metrics disabled
+		if auth[n:] == config.Get("admin_token", "") {
 			mfs, _ := prometheus.DefaultGatherer.Gather()
 
 			for _, mf := range mfs {
 				_, err := expfmt.MetricFamilyToText(buf, mf)
 				if err != nil {
-					log.Printf("!!! CRITICAL !!! Error in converting metrics to text")
+					log.Error.Printf("Error in converting metrics to text")
 					return
 				}
 			}

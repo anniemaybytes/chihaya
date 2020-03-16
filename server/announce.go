@@ -21,11 +21,11 @@ import (
 	"bytes"
 	"chihaya/config"
 	cdb "chihaya/database"
+	"chihaya/log"
 	"chihaya/record"
 	"chihaya/util"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"net"
 	"net/http"
@@ -47,7 +47,7 @@ func InitPrivateIPBlocks() {
 	} {
 		_, block, err := net.ParseCIDR(cidr)
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! parse error on %q: %v", cidr, err)
+			log.Error.Printf("IP parse error on %q: %v", cidr, err)
 		} else {
 			privateIPBlocks = append(privateIPBlocks, block)
 		}
@@ -137,13 +137,38 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	downloaded, downloadedExists := params.getUint64("downloaded")
 	left, leftExists := params.getUint64("left")
 
-	if infoHash == "" ||
-		peerId == "" ||
-		(!portExists || port < 1024 || port > 65535) ||
-		!uploadedExists ||
-		!downloadedExists ||
-		!leftExists {
-		failure("Malformed request - missing mandatory parameter(s)", buf, 1*time.Hour)
+	if infoHash == "" {
+		failure("Malformed request - missing info_hash", buf, 1*time.Hour)
+		return
+	}
+
+	if peerId == "" {
+		failure("Malformed request - missing peer_id", buf, 1*time.Hour)
+		return
+	}
+
+	if !portExists {
+		failure("Malformed request - missing port", buf, 1*time.Hour)
+		return
+	}
+
+	if port < 1024 || port > 65535 {
+		failure(fmt.Sprintf("Malformed request - port outside of acceptable range (port: %d)", port), buf, 1*time.Hour)
+		return
+	}
+
+	if !uploadedExists {
+		failure("Malformed request - missing uploaded", buf, 1*time.Hour)
+		return
+	}
+
+	if !downloadedExists {
+		failure("Malformed request - missing downloaded", buf, 1*time.Hour)
+		return
+	}
+
+	if !leftExists {
+		failure("Malformed request - missing left", buf, 1*time.Hour)
 		return
 	}
 
@@ -164,7 +189,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		}
 
 		// check if there is proxy in header IF allowed in config
-		proxyHeaderType := config.Get("proxy")
+		proxyHeaderType := config.Get("proxy", "")
 		if proxyHeaderType != "" {
 			ips, exists := header[proxyHeaderType]
 			if exists && len(ips) > 0 {
@@ -211,7 +236,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	}
 
 	if torrent.Status == 1 && left == 0 {
-		log.Printf("Unpruning torrent %d", torrent.Id)
+		log.Info.Printf("Unpruning torrent %d", torrent.Id)
 		db.UnPrune(torrent)
 		torrent.Status = 0
 	} else if torrent.Status != 0 {

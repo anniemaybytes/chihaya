@@ -20,8 +20,8 @@ package database
 import (
 	"chihaya/collectors"
 	"chihaya/config"
+	"chihaya/log"
 	"encoding/gob"
-	"log"
 	"os"
 	"time"
 )
@@ -38,13 +38,13 @@ func (db *Database) startSerializing() {
 func (db *Database) serialize() {
 	torrentFile, err := os.OpenFile("torrent-cache.gob", os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
-		log.Println("!!! CRITICAL !!! Couldn't open torrent cache file for writing! ", err)
+		log.Error.Println("Couldn't open torrent cache file for writing! ", err)
 		return
 	}
 
 	userFile, err := os.OpenFile("user-cache.gob", os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
-		log.Println("!!! CRITICAL !!! Couldn't open user cache file for writing! ", err)
+		log.Error.Println("Couldn't open user cache file for writing! ", err)
 		return
 	}
 
@@ -62,13 +62,13 @@ func (db *Database) serialize() {
 
 	start := time.Now()
 
-	log.Printf("Serializing database to cache file")
+	log.Info.Printf("Serializing database to cache file")
 
 	db.TorrentsMutex.RLock()
 
 	err = gob.NewEncoder(torrentFile).Encode(db.Torrents)
 	if err != nil {
-		log.Println("!!! CRITICAL !!! Failed to encode torrents for serialization! ", err)
+		log.Error.Println("Failed to encode torrents for serialization! ", err)
 		db.TorrentsMutex.RUnlock()
 
 		return
@@ -79,7 +79,7 @@ func (db *Database) serialize() {
 
 	err = gob.NewEncoder(userFile).Encode(db.Users)
 	if err != nil {
-		log.Println("!!! CRITICAL !!! Failed to encode users for serialization! ", err)
+		log.Error.Println("Failed to encode users for serialization! ", err)
 		db.UsersMutex.RUnlock()
 
 		return
@@ -88,19 +88,19 @@ func (db *Database) serialize() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateSerializationTime(elapsedTime)
-	log.Printf("Done serializing (%dms)\n", elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Done serializing (%dms)\n", elapsedTime.Nanoseconds()/1000000)
 }
 
 func (db *Database) deserialize() {
 	torrentFile, err := os.OpenFile("torrent-cache.gob", os.O_RDONLY, 0)
 	if err != nil {
-		log.Println("Torrent cache missing, skipping deserialization")
+		log.Warning.Println("Torrent cache missing, skipping deserialization")
 		return
 	}
 
 	userFile, err := os.OpenFile("user-cache.gob", os.O_RDONLY, 0)
 	if err != nil {
-		log.Println("User cache missing, skipping deserialization")
+		log.Warning.Println("User cache missing, skipping deserialization")
 		return
 	}
 
@@ -118,7 +118,7 @@ func (db *Database) deserialize() {
 
 	start := time.Now()
 
-	log.Printf("Deserializing database from cache file...")
+	log.Info.Printf("Deserializing database from cache file...")
 
 	decoder := gob.NewDecoder(torrentFile)
 
@@ -127,8 +127,8 @@ func (db *Database) deserialize() {
 	db.TorrentsMutex.Unlock()
 
 	if err != nil {
-		log.Println("!!! CRITICAL !!! Failed to deserialize torrent cache! You may need to delete it.", err)
-		panic("Torrent deserialization failed")
+		log.Panic.Println("Failed to deserialize torrent cache! You may need to delete it.", err)
+		panic(err)
 	}
 
 	decoder = gob.NewDecoder(userFile)
@@ -138,8 +138,8 @@ func (db *Database) deserialize() {
 	db.UsersMutex.Unlock()
 
 	if err != nil {
-		log.Println("!!! CRITICAL !!! Failed to deserialize user cache! You may need to delete it.", err)
-		panic("User deserialization failed")
+		log.Panic.Println("Failed to deserialize user cache! You may need to delete it.", err)
+		panic(err)
 	}
 
 	db.TorrentsMutex.RLock()
@@ -155,5 +155,5 @@ func (db *Database) deserialize() {
 	users := len(db.Users)
 	db.UsersMutex.RUnlock()
 
-	log.Printf("Loaded %d users, %d torrents, %d peers (%dms)\n", users, torrents, peers, time.Since(start).Nanoseconds()/1000000)
+	log.Info.Printf("Loaded %d users, %d torrents, %d peers (%dms)\n", users, torrents, peers, time.Since(start).Nanoseconds()/1000000)
 }

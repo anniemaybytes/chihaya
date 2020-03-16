@@ -18,10 +18,9 @@
 package main
 
 import (
+	"chihaya/log"
 	"chihaya/server"
 	"flag"
-	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
@@ -42,21 +41,21 @@ func init() {
 }
 
 func main() {
-	fmt.Printf("chihaya, build=%s date=%s runtime=%s\n", BuildVersion, BuildDate, runtime.Version())
+	log.Info.Printf("chihaya (kuroneko), build=%s date=%s runtime=%s\n", BuildVersion, BuildDate, runtime.Version())
 
 	flag.Parse()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	if profile {
-		log.Printf("Running with profiling enabled, found %d CPUs", runtime.NumCPU())
+		log.Info.Printf("Running with profiling enabled, found %d CPUs", runtime.NumCPU())
 
 		f, err := os.Create("chihaya.cpu")
 		if err != nil {
-			log.Fatalf("Failed to create profile file: %s\n", err)
+			log.Fatal.Fatalf("Failed to create profile file: %s\n", err)
 		} else {
 			err = pprof.StartCPUProfile(f)
 			if err != nil {
-				log.Fatalf("Can not start profiling session: %s\n", err)
+				log.Fatal.Fatalf("Can not start profiling session: %s\n", err)
 			}
 		}
 	}
@@ -70,7 +69,7 @@ func main() {
 			pprof.StopCPUProfile()
 		}
 
-		log.Println("Caught interrupt, shutting down...")
+		log.Info.Println("Caught interrupt, shutting down...")
 		server.Stop()
 		<-c
 		os.Exit(0)

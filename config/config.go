@@ -18,8 +18,8 @@
 package config
 
 import (
+	"chihaya/log"
 	"encoding/json"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -32,6 +32,7 @@ var GlobalFreeleech = false
 var (
 	AnnounceInterval    = 45 * time.Minute
 	MinAnnounceInterval = 30 * time.Minute
+	MinScrapeInterval   = 15 * time.Minute
 
 	DatabaseReloadInterval        = 45 * time.Second
 	DatabaseSerializationInterval = 68 * time.Second
@@ -67,9 +68,14 @@ type ConfigMap map[string]interface{}
 
 var config ConfigMap
 
-func Get(s string) string {
+func Get(s string, defaultValue string) string {
 	once.Do(readConfig)
-	return config.Get(s)
+	return config.Get(s, defaultValue)
+}
+
+func GetBool(s string, defaultValue bool) bool {
+	once.Do(readConfig)
+	return config.GetBool(s, defaultValue)
 }
 
 func Section(s string) ConfigMap {
@@ -77,9 +83,20 @@ func Section(s string) ConfigMap {
 	return config.Section(s)
 }
 
-func (m ConfigMap) Get(s string) string {
-	result, _ := m[s].(string)
-	return result
+func (m ConfigMap) Get(s string, defaultValue string) string {
+	if result, exists := m[s]; exists {
+		return result.(string)
+	} else {
+		return defaultValue
+	}
+}
+
+func (m ConfigMap) GetBool(s string, defaultValue bool) bool {
+	if result, exists := m[s]; exists {
+		return result.(bool)
+	} else {
+		return defaultValue
+	}
 }
 
 func (m ConfigMap) Section(s string) ConfigMap {
@@ -91,14 +108,14 @@ func readConfig() {
 	f, err := os.Open(configFile)
 
 	if err != nil {
-		log.Fatalf("Error opening config file: %s", err)
+		log.Warning.Printf("Error opening config file, defaults will be used! (%s)", err)
 		return
 	}
 
 	err = json.NewDecoder(f).Decode(&config)
 
 	if err != nil {
-		log.Fatalf("Error parsing config file: %s", err)
+		log.Warning.Printf("Error parsing config file, defaults will be used! (%s)", err)
 		return
 	}
 }

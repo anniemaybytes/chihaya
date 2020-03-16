@@ -19,7 +19,7 @@ package collectors
 
 import (
 	"chihaya/config"
-	"log"
+	"chihaya/log"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -168,6 +168,6 @@ func UpdateChannelsLen(channelType string, length int) {
 	case "snatches":
 		snatchFlushBufferLength.Observe(float64(length))
 	default:
-		log.Printf("!!! CRITICAL !!! Trying to update channel length for unknown type %s", channelType)
+		log.Error.Printf("Trying to update channel length for unknown type %s", channelType)
 	}
 }

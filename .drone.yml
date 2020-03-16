@@ -4,7 +4,7 @@ type: docker
 
 steps:
     -   name: linter
-        image: golangci/golangci-lint:v1.23.8-alpine
+        image: golangci/golangci-lint:v1.24.0-alpine
         commands:
             - golangci-lint run --color always
 
@@ -24,7 +24,7 @@ steps:
         environment:
             GO111MODULE: on
         commands:
-            - CGO_ENABLED=0 go test ./... -v -tags "scrape record" -coverprofile=coverage.out
+            - CGO_ENABLED=0 go test ./... -v -coverprofile=coverage.out
             - go tool cover -func=coverage.out
 
 trigger:

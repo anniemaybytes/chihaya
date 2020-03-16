@@ -53,15 +53,15 @@ func TestMain(m *testing.M) {
 	}
 
 	configTest = make(ConfigMap)
-	dbConfig := make(map[string]interface{})
-	dbConfig["username"] = "user"
-	dbConfig["password"] = "pass"
-	dbConfig["database"] = "database"
-	dbConfig["proto"] = "tcp"
-	dbConfig["addr"] = "127.0.0.1:3306"
-	dbConfig["encoding"] = "utf8"
+	dbConfig := map[string]interface{}{
+		"username": "chihaya",
+		"password": "",
+		"proto":    "tcp",
+		"addr":     "127.0.0.1:3306",
+		"database": "chihaya",
+	}
 	configTest["database"] = dbConfig
-	configTest["addr"] = ":8080"
+	configTest["addr"] = ":34000"
 
 	err = json.NewEncoder(f).Encode(&configTest)
 	if err != nil {
@@ -89,11 +89,19 @@ func TestReadConfig(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	got := Get("addr")
+	got := Get("addr", "")
 	expected := configTest["addr"]
 
 	if got != expected {
 		t.Fatalf("Got %s whereas expected %s for \"addr\"!", got, expected)
+	}
+}
+
+func TestGetDefault(t *testing.T) {
+	got := Get("idontexist", "iamdefault")
+
+	if got != "iamdefault" {
+		t.Fatalf("Got %s whereas expected iamdefault for \"idontexist\"!", got)
 	}
 }
 

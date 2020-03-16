@@ -22,9 +22,10 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database"
+	"chihaya/log"
 	"chihaya/record"
 	"chihaya/util"
-	"log"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -224,7 +225,7 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
 		return
 	}
 
-	failure("Unknown action", buf, 1*time.Hour)
+	failure(fmt.Sprintf("Unknown action (%s)", action), buf, 1*time.Hour)
 }
 
 var handler *httpHandler
@@ -241,7 +242,7 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			log.Printf("!!! ServeHTTP panic !!! %v", err)
+			log.Error.Printf("ServeHTTP panic - %v", err)
 		}
 	}()
 
@@ -287,7 +288,7 @@ func Start() {
 	handler.adminCollector = collectors.NewAdminCollector()
 	prometheus.MustRegister(handler.adminCollector)
 
-	listener, err = net.Listen("tcp", config.Get("addr"))
+	listener, err = net.Listen("tcp", config.Get("addr", ":34000"))
 	if err != nil {
 		panic(err)
 	}
@@ -296,7 +297,7 @@ func Start() {
 	 * Behind the scenes, this works by spawning a new goroutine for each client.
 	 * This is pretty fast and scalable since goroutines are nice and efficient.
 	 */
-	log.Printf("Ready and accepting new connections on %s", config.Get("addr"))
+	log.Info.Printf("Ready and accepting new connections on %s", config.Get("addr", ":34000"))
 
 	_ = server.Serve(listener)
 
@@ -305,11 +306,11 @@ func Start() {
 
 	_ = server.Close() // close server so that it does not Accept(), https://github.com/golang/go/issues/10527
 
-	log.Println("Now closed and not accepting any new connections")
+	log.Info.Println("Now closed and not accepting any new connections")
 
 	handler.db.Terminate()
 
-	log.Println("Shutdown complete")
+	log.Info.Println("Shutdown complete")
 }
 
 func Stop() {

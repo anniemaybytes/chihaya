@@ -21,10 +21,10 @@ import (
 	"bytes"
 	"chihaya/collectors"
 	"chihaya/config"
+	"chihaya/log"
 	"chihaya/util"
 	"database/sql"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -121,10 +121,18 @@ type Database struct {
 	terminate bool
 }
 
+var defaultDsn = map[string]string{
+	"username": "chihaya",
+	"password": "",
+	"proto":    "tcp",
+	"addr":     "127.0.0.1:3306",
+	"database": "chihaya",
+}
+
 func (db *Database) Init() {
 	db.terminate = false
 
-	log.Printf("Opening database connection...")
+	log.Info.Printf("Opening database connection...")
 
 	db.mainConn = OpenDatabaseConnection()
 
@@ -150,14 +158,14 @@ func (db *Database) Init() {
 	db.deserialize()
 
 	// Run initial load to populate data in memory before we start accepting connections
-	log.Printf("Populating initial data into memory, please wait...")
+	log.Info.Printf("Populating initial data into memory, please wait...")
 	db.loadUsers()
 	db.loadHitAndRuns()
 	db.loadTorrents()
 	db.loadConfig()
 	db.loadWhitelist()
 
-	log.Printf("Starting goroutines...")
+	log.Info.Printf("Starting goroutines...")
 	db.startReloading()
 	db.startSerializing()
 	db.startFlushing()
@@ -174,7 +182,7 @@ func (db *Database) Terminate() {
 
 	go func() {
 		time.Sleep(10 * time.Second)
-		log.Printf("Waiting for database flushing to finish. This can take a few minutes, please be patient!")
+		log.Info.Printf("Waiting for database flushing to finish. This can take a few minutes, please be patient!")
 	}()
 
 	db.waitGroup.Wait()
@@ -187,22 +195,22 @@ func (db *Database) Terminate() {
 func OpenDatabaseConnection() (db *DatabaseConnection) {
 	db = &DatabaseConnection{}
 	databaseConfig := config.Section("database")
-	databaseDSN := fmt.Sprintf("%s:%s@%s(%s)/%s",
-		databaseConfig["username"].(string),
-		databaseConfig["password"].(string),
-		databaseConfig["proto"].(string),
-		databaseConfig["addr"].(string),
-		databaseConfig["database"].(string),
+	databaseDsn := fmt.Sprintf("%s:%s@%s(%s)/%s",
+		databaseConfig.Get("username", defaultDsn["username"]),
+		databaseConfig.Get("password", defaultDsn["password"]),
+		databaseConfig.Get("proto", defaultDsn["proto"]),
+		databaseConfig.Get("addr", defaultDsn["addr"]),
+		databaseConfig.Get("database", defaultDsn["database"]),
 	) // DSN Format: username:password@protocol(address)/dbname?param=value
 
-	sqlDb, err := sql.Open("mysql", databaseDSN)
+	sqlDb, err := sql.Open("mysql", databaseDsn)
 	if err != nil {
-		log.Fatalf("Couldn't connect to database at %s - %s", databaseDSN, err)
+		log.Fatal.Fatalf("Couldn't connect to database at %s - %s", databaseDsn, err)
 	}
 
 	err = sqlDb.Ping()
 	if err != nil {
-		log.Fatalf("Couldn't ping database at %s - %s", databaseDSN, err)
+		log.Fatal.Fatalf("Couldn't ping database at %s - %s", databaseDsn, err)
 	}
 
 	db.sqlDb = sqlDb
@@ -217,7 +225,8 @@ func (db *DatabaseConnection) Close() error {
 func (db *DatabaseConnection) prepareStatement(sql string) *sql.Stmt {
 	stmt, err := db.sqlDb.Prepare(sql)
 	if err != nil {
-		log.Fatalf("%s for SQL: %s", err, sql)
+		log.Panic.Printf("%s for SQL: %s", err, sql)
+		panic(err)
 	}
 
 	return stmt
@@ -260,24 +269,25 @@ func handleDeadlock(execFunc func() (interface{}, error)) (result interface{}) {
 			if merr, isMysqlError := err.(*mysql.MySQLError); isMysqlError {
 				if merr.Number == 1213 || merr.Number == 1205 {
 					wait = config.DeadlockWaitTime.Nanoseconds() * int64(tries+1)
-					log.Printf("!!! DEADLOCK !!! Retrying in %dms (%d/20)", wait/1000000, tries)
+					log.Warning.Printf("Deadlock found! Retrying in %dms (%d/20)", wait/1000000, tries)
 					collectors.IncrementDeadlockCount()
 					collectors.IncrementDeadlockTime(time.Duration(wait))
 					time.Sleep(time.Duration(wait))
 
 					continue
 				} else {
-					log.Printf("!!! CRITICAL !!! SQL error (CODE %d): %s", merr.Number, merr.Message)
+					log.Error.Printf("SQL error (CODE %d): %s", merr.Number, merr.Message)
 				}
 			} else {
-				log.Panicf("Error executing SQL: %s", err)
+				log.Panic.Printf("Error executing SQL: %s", err)
+				panic(err)
 			}
 		}
 
 		return
 	}
 
-	log.Printf("!!! CRITICAL !!! Deadlocked %d times, giving up!", tries)
+	log.Error.Printf("Deadlocked %d times, giving up!", tries)
 
 	return
 }

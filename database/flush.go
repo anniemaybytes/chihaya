@@ -21,8 +21,8 @@ import (
 	"bytes"
 	"chihaya/collectors"
 	"chihaya/config"
+	"chihaya/log"
 	"chihaya/util"
-	"log"
 	"time"
 )
 
@@ -89,7 +89,7 @@ func (db *Database) flushTorrents() {
 		}
 
 		if config.LogFlushes && !db.terminate {
-			log.Printf("[torrents] Flushing %d\n", count)
+			log.Info.Printf("{torrents} Flushing %d\n", count)
 		}
 
 		if count > 0 {
@@ -149,7 +149,7 @@ func (db *Database) flushUsers() {
 		}
 
 		if config.LogFlushes && !db.terminate {
-			log.Printf("[users_main] Flushing %d\n", count)
+			log.Info.Printf("{users_main} Flushing %d\n", count)
 		}
 
 		if count > 0 {
@@ -192,7 +192,7 @@ main:
 		db.transferHistoryWaitGroupMu.Lock()
 		if db.transferHistoryWaitGroupSe == 1 {
 			db.transferHistoryWaitGroupMu.Unlock()
-			log.Printf("goTransferHistoryWait has started... (skipping flushTransferHistory)")
+			log.Warning.Printf("goTransferHistoryWait has started... (skipping flushTransferHistory)")
 			time.Sleep(time.Second)
 			continue
 		}
@@ -227,7 +227,7 @@ main:
 		}
 
 		if config.LogFlushes && !db.terminate {
-			log.Printf("[transfer_history] Flushing %d\n", count)
+			log.Info.Printf("{transfer_history} Flushing %d\n", count)
 		}
 
 		if count > 0 {
@@ -293,7 +293,7 @@ func (db *Database) flushTransferIps() {
 		}
 
 		if config.LogFlushes && !db.terminate {
-			log.Printf("[transfer_ips] Flushing %d\n", count)
+			log.Info.Printf("{transfer_ips} Flushing %d\n", count)
 		}
 
 		if count > 0 {
@@ -352,7 +352,7 @@ func (db *Database) flushSnatches() {
 		}
 
 		if config.LogFlushes && !db.terminate {
-			log.Printf("[snatches] Flushing %d\n", count)
+			log.Info.Printf("{snatches} Flushing %d\n", count)
 		}
 
 		if count > 0 {
@@ -418,7 +418,7 @@ func (db *Database) purgeInactivePeers() {
 
 		elapsedTime := time.Since(start)
 		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
-		log.Printf("Purged %d inactive peers from memory (%dms)\n", count, elapsedTime.Nanoseconds()/1000000)
+		log.Info.Printf("Purged %d inactive peers from memory (%dms)\n", count, elapsedTime.Nanoseconds()/1000000)
 
 		// Wait on flushing to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
 		db.goTransferHistoryWait()
@@ -431,11 +431,11 @@ func (db *Database) purgeInactivePeers() {
 
 		rows, err := result.RowsAffected()
 		if err != nil {
-			log.Printf("!!! CRITICAL !!! Error in getting affected rows: %s", err)
+			log.Error.Printf("Error in getting affected rows: %s", err)
 		}
 		db.mainConn.mutex.Unlock()
 
-		log.Printf("Updated %d inactive peers in database (%dms)\n", rows, time.Since(start).Nanoseconds()/1000000)
+		log.Info.Printf("Updated %d inactive peers in database (%dms)\n", rows, time.Since(start).Nanoseconds()/1000000)
 
 		db.waitGroup.Done()
 		time.Sleep(config.PurgeInactiveInterval)
@@ -443,7 +443,7 @@ func (db *Database) purgeInactivePeers() {
 }
 
 func (db *Database) goTransferHistoryWait() {
-	log.Printf("Starting goTransferHistoryWait")
+	log.Info.Printf("Starting goTransferHistoryWait")
 	db.transferHistoryWaitGroupMu.Lock()
 	db.transferHistoryWaitGroupSe = 1
 	db.transferHistoryWaitGroupMu.Unlock()
@@ -451,5 +451,5 @@ func (db *Database) goTransferHistoryWait() {
 	db.transferHistoryWaitGroupMu.Lock()
 	db.transferHistoryWaitGroupSe = 0
 	db.transferHistoryWaitGroupMu.Unlock()
-	log.Printf("Releasing goTransferHistoryWait")
+	log.Info.Printf("Releasing goTransferHistoryWait")
 }

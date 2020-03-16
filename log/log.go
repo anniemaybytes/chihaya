@@ -1,5 +1,3 @@
-// +build !record
-
 /*
  * This file is part of Chihaya.
  *
@@ -17,7 +15,21 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package record
+package log
 
-func Record(tid uint64, uid uint32, up, down int64, absup uint64, event, ip string, port uint16) {}
-func Init()                                                                                      {}
+import (
+	"log"
+)
+
+var (
+	writer = log.Writer()
+	flags  = log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix
+)
+
+var (
+	Info    = log.New(writer, "[I] ", flags)
+	Warning = log.New(writer, "[W] ", flags)
+	Error   = log.New(writer, "[E] ", flags)
+	Fatal   = log.New(writer, "[F] ", flags)
+	Panic   = log.New(writer, "[P] ", flags)
+)
