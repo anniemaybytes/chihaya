@@ -18,6 +18,7 @@
 package database
 
 import (
+	"chihaya/database/types"
 	"chihaya/util"
 	"strconv"
 )
@@ -32,13 +33,13 @@ import (
  * so it's expected that the buffers are returned in the flush functions
  */
 
-func (db *Database) RecordTorrent(torrent *Torrent, deltaSnatch uint64) {
+func (db *Database) RecordTorrent(torrent *types.Torrent, deltaSnatch uint8) {
 	tq := db.bufferPool.Take()
 
 	tq.WriteString("('")
-	tq.WriteString(strconv.FormatUint(torrent.Id, 10))
+	tq.WriteString(strconv.FormatUint(uint64(torrent.Id), 10))
 	tq.WriteString("','")
-	tq.WriteString(strconv.FormatUint(deltaSnatch, 10))
+	tq.WriteString(strconv.FormatUint(uint64(deltaSnatch), 10))
 	tq.WriteString("','")
 	tq.WriteString(strconv.FormatInt(int64(len(torrent.Seeders)), 10))
 	tq.WriteString("','")
@@ -50,7 +51,7 @@ func (db *Database) RecordTorrent(torrent *Torrent, deltaSnatch uint64) {
 	db.torrentChannel <- tq
 }
 
-func (db *Database) RecordUser(user *User, rawDeltaUpload int64, rawDeltaDownload int64, deltaUpload int64, deltaDownload int64) {
+func (db *Database) RecordUser(user *types.User, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload int64) {
 	uq := db.bufferPool.Take()
 
 	uq.WriteString("('")
@@ -68,13 +69,13 @@ func (db *Database) RecordUser(user *User, rawDeltaUpload int64, rawDeltaDownloa
 	db.userChannel <- uq
 }
 
-func (db *Database) RecordTransferHistory(peer *Peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime int64, deltaSnatch uint64, active bool) {
+func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime int64, deltaSnatch uint8, active bool) {
 	th := db.bufferPool.Take()
 
 	th.WriteString("('")
 	th.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
 	th.WriteString("','")
-	th.WriteString(strconv.FormatUint(peer.TorrentId, 10))
+	th.WriteString(strconv.FormatUint(uint64(peer.TorrentId), 10))
 	th.WriteString("','")
 	th.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
 	th.WriteString("','")
@@ -92,7 +93,7 @@ func (db *Database) RecordTransferHistory(peer *Peer, rawDeltaUpload, rawDeltaDo
 	th.WriteString("','")
 	th.WriteString(util.Btoa(active))
 	th.WriteString("','")
-	th.WriteString(strconv.FormatUint(deltaSnatch, 10))
+	th.WriteString(strconv.FormatUint(uint64(deltaSnatch), 10))
 	th.WriteString("','")
 	th.WriteString(strconv.FormatUint(peer.Left, 10))
 	th.WriteString("')")
@@ -100,13 +101,13 @@ func (db *Database) RecordTransferHistory(peer *Peer, rawDeltaUpload, rawDeltaDo
 	db.transferHistoryChannel <- th
 }
 
-func (db *Database) RecordTransferIp(peer *Peer, rawDeltaUpload int64, rawDeltaDownload int64) {
+func (db *Database) RecordTransferIp(peer *types.Peer, rawDeltaUpload, rawDeltaDownload int64) {
 	ti := db.bufferPool.Take()
 
 	ti.WriteString("('")
 	ti.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
 	ti.WriteString("','")
-	ti.WriteString(strconv.FormatUint(peer.TorrentId, 10))
+	ti.WriteString(strconv.FormatUint(uint64(peer.TorrentId), 10))
 	ti.WriteString("','")
 	ti.WriteString(strconv.FormatUint(uint64(peer.ClientId), 10))
 	ti.WriteString("','")
@@ -126,13 +127,13 @@ func (db *Database) RecordTransferIp(peer *Peer, rawDeltaUpload int64, rawDeltaD
 	db.transferIpsChannel <- ti
 }
 
-func (db *Database) RecordSnatch(peer *Peer, now int64) {
+func (db *Database) RecordSnatch(peer *types.Peer, now int64) {
 	sn := db.bufferPool.Take()
 
 	sn.WriteString("('")
 	sn.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
 	sn.WriteString("','")
-	sn.WriteString(strconv.FormatUint(peer.TorrentId, 10))
+	sn.WriteString(strconv.FormatUint(uint64(peer.TorrentId), 10))
 	sn.WriteString("','")
 	sn.WriteString(strconv.FormatInt(now, 10))
 	sn.WriteString("')")
@@ -140,7 +141,7 @@ func (db *Database) RecordSnatch(peer *Peer, now int64) {
 	db.snatchChannel <- sn
 }
 
-func (db *Database) UnPrune(torrent *Torrent) {
+func (db *Database) UnPrune(torrent *types.Torrent) {
 	db.mainConn.mutex.Lock()
 	db.mainConn.exec(db.unPruneTorrentStmt, torrent.Id)
 	db.mainConn.mutex.Unlock()

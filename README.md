@@ -29,18 +29,22 @@ Database configuration is done in `config.json`, which you'll need to create wit
 	},
 
 	"addr": ":34000",
-	"admin_token": null,
-	"proxy": null,
+
+	"admin_token": "",
+	"proxy": "",
+
 	"record": false,
-	"scrape": true
+	"scrape": true,
+	"log_flushes": true
 }
 ```
 
-`addr` specifies the address to bind the server to. Possible values for `database.proto` are `unix` and `tcp`. If protocol is `tcp` then `addr` should be in form of `ip:port`
-`admin_token` is for advanced metrics in /metrics endpoint. Use with `/metrics?token=<your token>`. Can be `null` or empty string to disable.
-`proxy` decides which proxy headers to check for IP, if a valid IP cannot be found in parameters. Can be `null` or empty string to disable or a valid header name to enable.
-`scrape` enables optional support for /scrape endpoint. Optional, defaults to `false`.
-`record` enables simple experimental JSON recorder of announce events to flat file. Optional, defaults to `true`.
+- `addr` specifies the address to bind the server to. Possible values for `database.proto` are `unix` and `tcp`. If protocol is `tcp` then `addr` should be in form of `ip:port`
+- `admin_token` is for advanced metrics in `/metrics` endpoint. Can be empty string `""` to disable.
+- `proxy` decides which proxy headers to check for IP, if a valid IP cannot be found in parameters. Can be empty string `""` to disable or a valid header name to enable.
+- `scrape` enables optional support for /scrape endpoint. Optional, defaults to `false`.
+- `record` enables simple experimental JSON recorder of announce events to flat file. Optional, defaults to `true`.
+- `log_flushes` enables logging of all flush actions, defaults to `true`
 
 Running
 -------

@@ -19,6 +19,7 @@ package log
 
 import (
 	"log"
+	"runtime/debug"
 )
 
 var (
@@ -33,3 +34,7 @@ var (
 	Fatal   = log.New(writer, "[F] ", flags)
 	Panic   = log.New(writer, "[P] ", flags)
 )
+
+func WriteStack() {
+	debug.PrintStack()
+}

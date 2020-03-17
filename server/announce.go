@@ -20,7 +20,8 @@ package server
 import (
 	"bytes"
 	"chihaya/config"
-	cdb "chihaya/database"
+	"chihaya/database"
+	cdb "chihaya/database/types"
 	"chihaya/log"
 	"chihaya/record"
 	"chihaya/util"
@@ -48,6 +49,7 @@ func InitPrivateIPBlocks() {
 		_, block, err := net.ParseCIDR(cidr)
 		if err != nil {
 			log.Error.Printf("IP parse error on %q: %v", cidr, err)
+			log.WriteStack()
 		} else {
 			privateIPBlocks = append(privateIPBlocks, block)
 		}
@@ -84,15 +86,14 @@ func getPublicIpV4(ipAddr string, exists bool) (string, bool) {
 	return ipAddr, !private
 }
 
-func whitelisted(peerId string, db *cdb.Database) uint16 {
+func whitelisted(peerId string, db *database.Database) uint16 {
 	db.WhitelistMutex.RLock()
 	defer db.WhitelistMutex.RUnlock()
 
-	var widLen int
-
-	var i int
-
-	var matched bool
+	var (
+		widLen, i int
+		matched   bool
+	)
 
 	for id, whitelistedId := range db.Whitelist {
 		widLen = len(whitelistedId)
@@ -115,7 +116,7 @@ func whitelisted(peerId string, db *cdb.Database) uint16 {
 	return 0
 }
 
-func hasHitAndRun(db *cdb.Database, userId uint32, torrentId uint64) bool {
+func hasHitAndRun(db *database.Database, userId, torrentId uint32) bool {
 	hnr := cdb.UserTorrentPair{
 		UserId:    userId,
 		TorrentId: torrentId,
@@ -126,7 +127,7 @@ func hasHitAndRun(db *cdb.Database, userId uint32, torrentId uint64) bool {
 	return exists
 }
 
-func announce(params *queryParams, header http.Header, remoteAddr string, user *cdb.User, db *cdb.Database, buf *bytes.Buffer) {
+func announce(params *queryParams, header http.Header, remoteAddr string, user *cdb.User, db *database.Database, buf *bytes.Buffer) {
 	var exists bool
 
 	// Mandatory parameters
@@ -249,15 +250,16 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	// Optional parameters
 	event, _ := params.get("event")
 
-	var numWantStr string
-
-	var numWant int
+	var (
+		numWantStr string
+		numWant    int
+	)
 
 	numWantStr, exists = params.get("numwant")
 	if !exists {
 		numWant = 25
 	} else {
-		numWant64, _ := strconv.ParseInt(numWantStr, 10, 32)
+		numWant64, _ := strconv.ParseInt(numWantStr, 10, 16)
 		numWant = int(numWant64)
 		if numWant > 50 {
 			numWant = 50
@@ -375,7 +377,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	}
 
 	// Handle events
-	var deltaSnatch uint64
+	var deltaSnatch uint8
 
 	if event == "stopped" {
 		/* We can remove the peer from the list and still have their stats be recorded,

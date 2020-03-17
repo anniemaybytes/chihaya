@@ -20,8 +20,10 @@ package database
 import (
 	"chihaya/collectors"
 	"chihaya/config"
+	cdb "chihaya/database/types"
 	"chihaya/log"
 	"encoding/gob"
+	"fmt"
 	"os"
 	"time"
 )
@@ -36,15 +38,19 @@ func (db *Database) startSerializing() {
 }
 
 func (db *Database) serialize() {
-	torrentFile, err := os.OpenFile("torrent-cache.gob", os.O_WRONLY|os.O_CREATE, 0600)
+	torrentFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.TorrentCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		log.Error.Println("Couldn't open torrent cache file for writing! ", err)
+		log.WriteStack()
+
 		return
 	}
 
-	userFile, err := os.OpenFile("user-cache.gob", os.O_WRONLY|os.O_CREATE, 0600)
+	userFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.UserCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		log.Error.Println("Couldn't open user cache file for writing! ", err)
+		log.WriteStack()
+
 		return
 	}
 
@@ -69,6 +75,7 @@ func (db *Database) serialize() {
 	err = gob.NewEncoder(torrentFile).Encode(db.Torrents)
 	if err != nil {
 		log.Error.Println("Failed to encode torrents for serialization! ", err)
+		log.WriteStack()
 		db.TorrentsMutex.RUnlock()
 
 		return
@@ -80,6 +87,7 @@ func (db *Database) serialize() {
 	err = gob.NewEncoder(userFile).Encode(db.Users)
 	if err != nil {
 		log.Error.Println("Failed to encode users for serialization! ", err)
+		log.WriteStack()
 		db.UsersMutex.RUnlock()
 
 		return

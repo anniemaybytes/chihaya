@@ -37,16 +37,16 @@ var (
 	DatabaseReloadInterval        = 45 * time.Second
 	DatabaseSerializationInterval = 68 * time.Second
 	PurgeInactiveInterval         = 120 * time.Second
+
+	// Time to sleep between flushes if the buffer is less than half full
+	FlushSleepInterval = 3000 * time.Millisecond
+
+	// Initial time to wait before retrying the query when the database deadlocks (ramps linearly)
+	DeadlockWaitTime = 1000 * time.Millisecond
+
+	// Maximum times to retry a deadlocked query before giving up
+	MaxDeadlockRetries = 20
 )
-
-// Time to sleep between flushes if the buffer is less than half full
-var FlushSleepInterval = 3000 * time.Millisecond
-
-// Initial time to wait before retrying the query when the database deadlocks (ramps linearly)
-var DeadlockWaitTime = 1000 * time.Millisecond
-
-// Maximum times to retry a deadlocked query before giving up
-var MaxDeadlockRetries = 20
 
 // Buffer sizes, see @Database.startFlushing()
 var (
@@ -57,16 +57,14 @@ var (
 	SnatchFlushBufferSize          = 100
 )
 
-const LogFlushes = true
-
 // Config file stuff
-var configFile = "config.json"
-
-var once sync.Once
+var (
+	configFile = "config.json"
+	config     ConfigMap
+	once       sync.Once
+)
 
 type ConfigMap map[string]interface{}
-
-var config ConfigMap
 
 func Get(s string, defaultValue string) string {
 	once.Do(readConfig)

@@ -3,6 +3,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v2.4.0
+### Added
+- Ability to configure logging of flushes in `config.json`
+- Utility for exporting cache into readable JSON format
+- Ability to specify custom arguments `CGO_ENABLED`, `GOOS` and `GOARCH` in Dockerfile 
+during build process
+- Dump stacktrace when error is encountered
+
+### Changed
+- Changed `users` and `torrents` flush SQL queries to use temporary table with `UPDATE` instead
+of `INSERT INTO ... ON DUPLICATE KEY ...`, this avoids rare cases where previously removed entry
+from these tables is inserted back with default values by chihaya
+- Code cleanup
+- Make torrentId `uint32`
+- Moved `main.go` to `cmd/chihaya` to allow for building multiple binaries
+
+### Fixed
+- README was improperly showing `null` as valid value for `admin_token` and `proxy`.
+
 ## v2.3.0
 ### Added
 - Support for interval time in `/scrape` endpoint

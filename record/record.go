@@ -76,7 +76,7 @@ func Init() {
 	}()
 }
 
-func Record(tid uint64, uid uint32, up, down int64, absup uint64, event string, ip string, port uint16) {
+func Record(tid, uid uint32, up, down int64, absup uint64, event string, ip string, port uint16) {
 	if !config.GetBool("record", enabledByDefault) {
 		return
 	}
@@ -89,7 +89,7 @@ func Record(tid uint64, uid uint32, up, down int64, absup uint64, event string, 
 	buf := bytes.NewBuffer(b)
 
 	buf.WriteString("[")
-	buf.WriteString(strconv.FormatUint(tid, 10))
+	buf.WriteString(strconv.FormatUint(uint64(tid), 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(uint64(uid), 10))
 	buf.WriteString(",")

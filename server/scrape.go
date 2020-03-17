@@ -20,7 +20,8 @@ package server
 import (
 	"bytes"
 	"chihaya/config"
-	cdb "chihaya/database"
+	"chihaya/database"
+	cdb "chihaya/database/types"
 	"time"
 
 	"github.com/zeebo/bencode"
@@ -35,7 +36,7 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 	return ret
 }
 
-func scrape(params *queryParams, db *cdb.Database, buf *bytes.Buffer) {
+func scrape(params *queryParams, db *database.Database, buf *bytes.Buffer) {
 	if !config.GetBool("scrape", true) {
 		failure("Scrape convention is not supported", buf, 1*time.Hour)
 		return

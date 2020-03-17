@@ -169,5 +169,6 @@ func UpdateChannelsLen(channelType string, length int) {
 		snatchFlushBufferLength.Observe(float64(length))
 	default:
 		log.Error.Printf("Trying to update channel length for unknown type %s", channelType)
+		log.WriteStack()
 	}
 }

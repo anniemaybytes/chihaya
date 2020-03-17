@@ -31,7 +31,7 @@ import (
 type record struct {
 	port      uint16
 	uid       uint32
-	tid       uint64
+	tid       uint32
 	absup     uint64
 	up, down  int64
 	event, ip string
@@ -60,15 +60,16 @@ func TestMain(m *testing.M) {
 }
 
 func TestRecord(t *testing.T) {
-	var recordValues []record
-
-	var expectedOutputs []string
+	var (
+		recordValues    []record
+		expectedOutputs []string
+	)
 
 	for i := 0; i < 10; i++ {
 		tmp := record{
 			uint16(rand.Uint32()),
 			rand.Uint32(),
-			rand.Uint64(),
+			rand.Uint32(),
 			rand.Uint64(),
 			int64(rand.Uint64()),
 			int64(rand.Uint64()),
@@ -79,7 +80,7 @@ func TestRecord(t *testing.T) {
 		expectedOutputs = append(
 			expectedOutputs,
 			"["+
-				strconv.FormatUint(tmp.tid, 10)+","+
+				strconv.FormatUint(uint64(tmp.tid), 10)+","+
 				strconv.FormatUint(uint64(tmp.uid), 10)+","+
 				strconv.FormatInt(tmp.up, 10)+","+
 				strconv.FormatInt(tmp.down, 10)+","+

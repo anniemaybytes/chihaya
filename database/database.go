@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"chihaya/collectors"
 	"chihaya/config"
+	"chihaya/database/types"
 	"chihaya/log"
 	"chihaya/util"
 	"database/sql"
@@ -30,48 +31,6 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 )
-
-type Peer struct {
-	Seeding      bool
-	ClientId     uint16
-	Port         uint16
-	UserId       uint32
-	Ip           uint32
-	TorrentId    uint64
-	Uploaded     uint64
-	Downloaded   uint64
-	Left         uint64
-	StartTime    int64 // unix time
-	LastAnnounce int64
-	Id           string
-	IpAddr       string
-	Addr         []byte
-}
-
-type Torrent struct {
-	Status         uint8
-	Snatched       uint16
-	Id             uint64
-	LastAction     int64
-	UpMultiplier   float64
-	DownMultiplier float64
-
-	Seeders  map[string]*Peer
-	Leechers map[string]*Peer
-}
-
-type User struct {
-	DisableDownload bool
-	TrackerHide     bool
-	Id              uint32
-	UpMultiplier    float64
-	DownMultiplier  float64
-}
-
-type UserTorrentPair struct {
-	UserId    uint32
-	TorrentId uint64
-}
 
 type DatabaseConnection struct {
 	sqlDb *sql.DB
@@ -91,12 +50,12 @@ type Database struct {
 	cleanStalePeersStmt *sql.Stmt
 	unPruneTorrentStmt  *sql.Stmt
 
-	Users map[string]*User // 32 bytes
+	Users map[string]*types.User
 
 	loadHnrStmt *sql.Stmt
 
-	HitAndRuns map[UserTorrentPair]struct{}
-	Torrents   map[string]*Torrent // SHA-1 hash (20 bytes)
+	HitAndRuns map[types.UserTorrentPair]struct{}
+	Torrents   map[string]*types.Torrent // SHA-1 hash (20 bytes)
 
 	loadUsersStmt *sql.Stmt
 
@@ -142,17 +101,17 @@ func (db *Database) Init() {
 	// Used for recording updates, so the max required size should be < 128 bytes. See record.go for details
 	db.bufferPool = util.NewBufferPool(maxBuffers, 128)
 
-	db.loadUsersStmt = db.mainConn.prepareStatement("SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide FROM users_main WHERE Enabled='1'")
-	db.loadHnrStmt = db.mainConn.prepareStatement("SELECT h.uid,h.fid FROM transfer_history AS h JOIN users_main AS u ON u.ID = h.uid WHERE h.hnr='1' AND u.Enabled='1'")
-	db.loadTorrentsStmt = db.mainConn.prepareStatement("SELECT t.ID ID, t.info_hash info_hash, (IFNULL(tg.DownMultiplier,1) * t.DownMultiplier) DownMultiplier, (IFNULL(tg.UpMultiplier,1) * t.UpMultiplier) UpMultiplier, t.Snatched Snatched, t.Status Status FROM torrents AS t LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID=t.GroupID AND tg.Type=t.TorrentType")
+	db.loadUsersStmt = db.mainConn.prepareStatement("SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide FROM users_main WHERE Enabled = '1'")
+	db.loadHnrStmt = db.mainConn.prepareStatement("SELECT h.uid, h.fid FROM transfer_history AS h JOIN users_main AS u ON u.ID = h.uid WHERE h.hnr = '1' AND u.Enabled = '1'")
+	db.loadTorrentsStmt = db.mainConn.prepareStatement("SELECT t.ID ID, t.info_hash info_hash, (IFNULL(tg.DownMultiplier, 1) * t.DownMultiplier) DownMultiplier, (IFNULL(tg.UpMultiplier, 1) * t.UpMultiplier) UpMultiplier, t.Snatched Snatched, t.Status Status FROM torrents AS t LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID = t.GroupID AND tg.Type = t.TorrentType")
 	db.loadWhitelistStmt = db.mainConn.prepareStatement("SELECT id, peer_id FROM client_whitelist WHERE archived = 0")
-	db.loadFreeleechStmt = db.mainConn.prepareStatement("SELECT mod_setting FROM mod_core WHERE mod_option='global_freeleech'")
-	db.cleanStalePeersStmt = db.mainConn.prepareStatement("UPDATE transfer_history SET active = '0' WHERE last_announce < ? AND active='1'")
-	db.unPruneTorrentStmt = db.mainConn.prepareStatement("UPDATE torrents SET Status=0 WHERE ID = ?")
+	db.loadFreeleechStmt = db.mainConn.prepareStatement("SELECT mod_setting FROM mod_core WHERE mod_option = 'global_freeleech'")
+	db.cleanStalePeersStmt = db.mainConn.prepareStatement("UPDATE transfer_history SET active = '0' WHERE last_announce < ? AND active = '1'")
+	db.unPruneTorrentStmt = db.mainConn.prepareStatement("UPDATE torrents SET Status = 0 WHERE ID = ?")
 
-	db.Users = make(map[string]*User)
-	db.HitAndRuns = make(map[UserTorrentPair]struct{})
-	db.Torrents = make(map[string]*Torrent)
+	db.Users = make(map[string]*types.User)
+	db.HitAndRuns = make(map[types.UserTorrentPair]struct{})
+	db.Torrents = make(map[string]*types.Torrent)
 	db.Whitelist = make(map[uint16]string)
 
 	db.deserialize()
@@ -233,7 +192,7 @@ func (db *DatabaseConnection) prepareStatement(sql string) *sql.Stmt {
 }
 
 func (db *DatabaseConnection) query(stmt *sql.Stmt, args ...interface{}) *sql.Rows {
-	rows, _ := handleDeadlock(func() (interface{}, error) {
+	rows, _ := doPerform(func() (interface{}, error) {
 		return stmt.Query(args...)
 	}).(*sql.Rows)
 
@@ -241,7 +200,7 @@ func (db *DatabaseConnection) query(stmt *sql.Stmt, args ...interface{}) *sql.Ro
 }
 
 func (db *DatabaseConnection) exec(stmt *sql.Stmt, args ...interface{}) sql.Result {
-	result, _ := handleDeadlock(func() (interface{}, error) {
+	result, _ := doPerform(func() (interface{}, error) {
 		return stmt.Exec(args...)
 	}).(sql.Result)
 
@@ -249,19 +208,19 @@ func (db *DatabaseConnection) exec(stmt *sql.Stmt, args ...interface{}) sql.Resu
 }
 
 func (db *DatabaseConnection) execBuffer(query *bytes.Buffer, args ...interface{}) sql.Result {
-	result, _ := handleDeadlock(func() (interface{}, error) {
+	result, _ := doPerform(func() (interface{}, error) {
 		return db.sqlDb.Exec(query.String(), args...)
 	}).(sql.Result)
 
 	return result
 }
 
-func handleDeadlock(execFunc func() (interface{}, error)) (result interface{}) {
-	var err error
-
-	var tries int
-
-	var wait int64
+func doPerform(execFunc func() (interface{}, error)) (result interface{}) {
+	var (
+		err   error
+		tries int
+		wait  int64
+	)
 
 	for tries = 0; tries < config.MaxDeadlockRetries; tries++ {
 		result, err = execFunc()
@@ -276,7 +235,8 @@ func handleDeadlock(execFunc func() (interface{}, error)) (result interface{}) {
 
 					continue
 				} else {
-					log.Error.Printf("SQL error (CODE %d): %s", merr.Number, merr.Message)
+					log.Error.Printf("SQL error %d: %s", merr.Number, merr.Message)
+					log.WriteStack()
 				}
 			} else {
 				log.Panic.Printf("Error executing SQL: %s", err)
@@ -288,6 +248,7 @@ func handleDeadlock(execFunc func() (interface{}, error)) (result interface{}) {
 	}
 
 	log.Error.Printf("Deadlocked %d times, giving up!", tries)
+	log.WriteStack()
 
 	return
 }

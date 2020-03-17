@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"chihaya/collectors"
 	"chihaya/config"
-	cdb "chihaya/database"
+	"chihaya/database"
 	"chihaya/log"
 	"chihaya/record"
 	"chihaya/util"
@@ -48,7 +48,7 @@ type httpHandler struct {
 	requests uint64
 
 	bufferPool       *util.BufferPool
-	db               *cdb.Database
+	db               *database.Database
 	normalRegisterer prometheus.Registerer
 	normalCollector  *collectors.NormalCollector
 	adminCollector   *collectors.AdminCollector
@@ -101,7 +101,7 @@ func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 
 	data, errz := bencode.EncodeBytes(failureData)
 	if errz != nil {
-		panic(err)
+		panic(errz)
 	}
 
 	buf.Write(data)
@@ -115,19 +115,14 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 	ret = &queryParams{make(map[string]string), nil}
 	queryLen := len(query)
 
+	var (
+		keyStart, keyEnd int
+		valStart, valEnd int
+		firstInfoHash    string
+	)
+
 	onKey := true
-
-	var keyStart int
-
-	var keyEnd int
-
-	var valStart int
-
-	var valEnd int
-
 	hasInfoHash := false
-
-	var firstInfoHash string
 
 	for i := 0; i < queryLen; i++ {
 		separator := query[i] == '&' || query[i] == ';'
@@ -243,6 +238,7 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err := recover()
 		if err != nil {
 			log.Error.Printf("ServeHTTP panic - %v", err)
+			log.WriteStack()
 		}
 	}()
 
@@ -267,7 +263,7 @@ func Start() {
 
 	InitPrivateIPBlocks()
 
-	handler = &httpHandler{db: &cdb.Database{}, startTime: time.Now()}
+	handler = &httpHandler{db: &database.Database{}, startTime: time.Now()}
 
 	bufferPool := util.NewBufferPool(500, 500)
 	handler.bufferPool = bufferPool

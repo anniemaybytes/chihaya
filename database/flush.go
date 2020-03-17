@@ -59,12 +59,13 @@ func (db *Database) startFlushing() {
 }
 
 func (db *Database) flushTorrents() {
-	var query bytes.Buffer
-
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
 
-	var count int
+	var (
+		query bytes.Buffer
+		count int
+	)
 
 	conn := OpenDatabaseConnection()
 
@@ -72,7 +73,20 @@ func (db *Database) flushTorrents() {
 		length := util.Max(1, len(db.torrentChannel))
 
 		query.Reset()
-		query.WriteString("INSERT INTO torrents (ID, Snatched, Seeders, Leechers, last_action) VALUES\n")
+		query.WriteString("DROP TABLE IF EXISTS flush_torrents")
+		conn.execBuffer(&query)
+
+		query.Reset()
+		query.WriteString("CREATE TEMPORARY TABLE flush_torrents (" +
+			"ID int(10) NOT NULL, " +
+			"Snatched int(10) unsigned NOT NULL DEFAULT 0, " +
+			"Seeders int(6) NOT NULL DEFAULT 0, " +
+			"Leechers int(6) NOT NULL DEFAULT 0, " +
+			"last_action int(11) NOT NULL DEFAULT 0)")
+		conn.execBuffer(&query)
+
+		query.Reset()
+		query.WriteString("INSERT INTO flush_torrents VALUES\n")
 
 		for count = 0; count < length; count++ {
 			b := <-db.torrentChannel
@@ -88,17 +102,22 @@ func (db *Database) flushTorrents() {
 			}
 		}
 
-		if config.LogFlushes && !db.terminate {
+		if config.GetBool("log_flushes", true) && !db.terminate {
 			log.Info.Printf("{torrents} Flushing %d\n", count)
 		}
 
 		if count > 0 {
 			startTime := time.Now()
 
-			query.WriteString("\nON DUPLICATE KEY UPDATE Snatched = Snatched + VALUE(Snatched), " +
-				"Seeders = VALUE(Seeders), Leechers = VALUE(Leechers), " +
-				"last_action = IF(last_action < VALUE(last_action), VALUE(last_action), last_action);")
+			conn.execBuffer(&query)
 
+			query.Reset()
+			query.WriteString("UPDATE torrents t, flush_torrents ft SET " +
+				"t.Snatched = t.Snatched + ft.Snatched, " +
+				"t.Seeders = ft.Seeders, " +
+				"t.Leechers = ft.Leechers, " +
+				"t.last_action = IF(t.last_action < ft.last_action, ft.last_action, t.last_action)" +
+				"WHERE t.ID = ft.ID")
 			conn.execBuffer(&query)
 
 			elapsedTime := time.Since(startTime)
@@ -119,12 +138,13 @@ func (db *Database) flushTorrents() {
 }
 
 func (db *Database) flushUsers() {
-	var query bytes.Buffer
-
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
 
-	var count int
+	var (
+		query bytes.Buffer
+		count int
+	)
 
 	conn := OpenDatabaseConnection()
 
@@ -132,7 +152,20 @@ func (db *Database) flushUsers() {
 		length := util.Max(1, len(db.userChannel))
 
 		query.Reset()
-		query.WriteString("INSERT INTO users_main (ID, Uploaded, Downloaded, rawdl, rawup) VALUES\n")
+		query.WriteString("DROP TABLE IF EXISTS flush_users")
+		conn.execBuffer(&query)
+
+		query.Reset()
+		query.WriteString("CREATE TEMPORARY TABLE flush_users (" +
+			"ID int(10) unsigned NOT NULL, " +
+			"Uploaded bigint(20) unsigned NOT NULL DEFAULT 0, " +
+			"Downloaded bigint(20) unsigned NOT NULL DEFAULT 0, " +
+			"rawdl bigint(20) NOT NULL, " +
+			"rawup bigint(20) NOT NULL)")
+		conn.execBuffer(&query)
+
+		query.Reset()
+		query.WriteString("INSERT INTO flush_users VALUES\n")
 
 		for count = 0; count < length; count++ {
 			b := <-db.userChannel
@@ -148,16 +181,22 @@ func (db *Database) flushUsers() {
 			}
 		}
 
-		if config.LogFlushes && !db.terminate {
+		if config.GetBool("log_flushes", true) && !db.terminate {
 			log.Info.Printf("{users_main} Flushing %d\n", count)
 		}
 
 		if count > 0 {
 			startTime := time.Now()
 
-			query.WriteString("\nON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUE(Uploaded), " +
-				"Downloaded = Downloaded + VALUE(Downloaded), rawdl = rawdl + VALUE(rawdl), rawup = rawup + VALUE(rawup);")
+			conn.execBuffer(&query)
 
+			query.Reset()
+			query.WriteString("UPDATE users_main u, flush_users fu SET " +
+				"u.Uploaded = u.Uploaded + fu.Uploaded, " +
+				"u.Downloaded = u.Downloaded + fu.Downloaded, " +
+				"u.rawdl = u.rawdl + fu.rawdl, " +
+				"u.rawup = u.rawup + fu.rawup " +
+				"WHERE u.ID = fu.ID")
 			conn.execBuffer(&query)
 
 			elapsedTime := time.Since(startTime)
@@ -178,12 +217,13 @@ func (db *Database) flushUsers() {
 }
 
 func (db *Database) flushTransferHistory() {
-	var query bytes.Buffer
-
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
 
-	var count int
+	var (
+		query bytes.Buffer
+		count int
+	)
 
 	conn := OpenDatabaseConnection()
 
@@ -226,7 +266,7 @@ main:
 			}
 		}
 
-		if config.LogFlushes && !db.terminate {
+		if config.GetBool("log_flushes", true) && !db.terminate {
 			log.Info.Printf("{transfer_history} Flushing %d\n", count)
 		}
 
@@ -262,12 +302,13 @@ main:
 }
 
 func (db *Database) flushTransferIps() {
-	var query bytes.Buffer
-
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
 
-	var count int
+	var (
+		query bytes.Buffer
+		count int
+	)
 
 	conn := OpenDatabaseConnection()
 
@@ -292,7 +333,7 @@ func (db *Database) flushTransferIps() {
 			}
 		}
 
-		if config.LogFlushes && !db.terminate {
+		if config.GetBool("log_flushes", true) && !db.terminate {
 			log.Info.Printf("{transfer_ips} Flushing %d\n", count)
 		}
 
@@ -301,7 +342,7 @@ func (db *Database) flushTransferIps() {
 
 			// todo in future, port should be part of PK
 			query.WriteString("\nON DUPLICATE KEY UPDATE port = VALUE(port), downloaded = downloaded + VALUE(downloaded), " +
-				"uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce);")
+				"uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce)")
 			conn.execBuffer(&query)
 
 			elapsedTime := time.Since(startTime)
@@ -322,12 +363,13 @@ func (db *Database) flushTransferIps() {
 }
 
 func (db *Database) flushSnatches() {
-	var query bytes.Buffer
-
 	db.waitGroup.Add(1)
 	defer db.waitGroup.Done()
 
-	var count int
+	var (
+		query bytes.Buffer
+		count int
+	)
 
 	conn := OpenDatabaseConnection()
 
@@ -351,15 +393,14 @@ func (db *Database) flushSnatches() {
 			}
 		}
 
-		if config.LogFlushes && !db.terminate {
+		if config.GetBool("log_flushes", true) && !db.terminate {
 			log.Info.Printf("{snatches} Flushing %d\n", count)
 		}
 
 		if count > 0 {
 			startTime := time.Now()
 
-			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time);")
-
+			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time)")
 			conn.execBuffer(&query)
 
 			elapsedTime := time.Since(startTime)
@@ -432,6 +473,7 @@ func (db *Database) purgeInactivePeers() {
 		rows, err := result.RowsAffected()
 		if err != nil {
 			log.Error.Printf("Error in getting affected rows: %s", err)
+			log.WriteStack()
 		}
 		db.mainConn.mutex.Unlock()
 
