@@ -153,23 +153,40 @@ func (db *Database) Terminate() {
 
 func OpenDatabaseConnection() (db *DatabaseConnection) {
 	db = &DatabaseConnection{}
+
 	databaseConfig := config.Section("database")
+	dbUsername, _ := databaseConfig.Get("username", defaultDsn["username"])
+	dbPassword, _ := databaseConfig.Get("password", defaultDsn["password"])
+	dbProto, _ := databaseConfig.Get("proto", defaultDsn["proto"])
+	dbAddr, _ := databaseConfig.Get("addr", defaultDsn["addr"])
+	dbDatabase, _ := databaseConfig.Get("database", defaultDsn["database"])
+
 	databaseDsn := fmt.Sprintf("%s:%s@%s(%s)/%s",
-		databaseConfig.Get("username", defaultDsn["username"]),
-		databaseConfig.Get("password", defaultDsn["password"]),
-		databaseConfig.Get("proto", defaultDsn["proto"]),
-		databaseConfig.Get("addr", defaultDsn["addr"]),
-		databaseConfig.Get("database", defaultDsn["database"]),
+		dbUsername,
+		dbPassword,
+		dbProto,
+		dbAddr,
+		dbDatabase,
 	) // DSN Format: username:password@protocol(address)/dbname?param=value
 
 	sqlDb, err := sql.Open("mysql", databaseDsn)
 	if err != nil {
-		log.Fatal.Fatalf("Couldn't connect to database at %s - %s", databaseDsn, err)
+		log.Fatal.Fatalf("Couldn't connect to database at %s:*****@%s(%s)/%s - %s",
+			dbDatabase,
+			dbProto,
+			dbAddr,
+			dbDatabase,
+			err)
 	}
 
 	err = sqlDb.Ping()
 	if err != nil {
-		log.Fatal.Fatalf("Couldn't ping database at %s - %s", databaseDsn, err)
+		log.Fatal.Fatalf("Couldn't ping database at %s:*****@%s(%s)/%s - %s",
+			dbDatabase,
+			dbProto,
+			dbAddr,
+			dbDatabase,
+			err)
 	}
 
 	db.sqlDb = sqlDb

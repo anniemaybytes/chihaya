@@ -19,7 +19,7 @@ COPY . .
 
 RUN export VERSION=$(cat ./VERSION) && export DATE=$(date -Iseconds) && \
     go build -o .bin/ -v -trimpath -ldflags="-X 'main.BuildDate=$DATE' -X 'main.BuildVersion=$VERSION'" ./cmd/... && \
-    strip bin/*
+    strip .bin/*
 
 FROM scratch AS release
 

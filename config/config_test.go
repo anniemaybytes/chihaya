@@ -89,7 +89,7 @@ func TestReadConfig(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	got := Get("addr", "")
+	got, _ := Get("addr", "")
 	expected := configTest["addr"]
 
 	if got != expected {
@@ -98,7 +98,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetDefault(t *testing.T) {
-	got := Get("idontexist", "iamdefault")
+	got, _ := Get("idontexist", "iamdefault")
 
 	if got != "iamdefault" {
 		t.Fatalf("Got %s whereas expected iamdefault for \"idontexist\"!", got)

@@ -153,7 +153,8 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		return
 	}
 
-	if port < 1024 || port > 65535 {
+	strictPort, _ := config.GetBool("strict_port", false)
+	if strictPort && port < 1024 || port > 65535 {
 		failure(fmt.Sprintf("Malformed request - port outside of acceptable range (port: %d)", port), buf, 1*time.Hour)
 		return
 	}
@@ -190,8 +191,8 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		}
 
 		// check if there is proxy in header IF allowed in config
-		proxyHeaderType := config.Get("proxy", "")
-		if proxyHeaderType != "" {
+		proxyHeaderType, exists := config.Get("proxy", "")
+		if !exists {
 			ips, exists := header[proxyHeaderType]
 			if exists && len(ips) > 0 {
 				return ips[0], true

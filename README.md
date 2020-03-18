@@ -35,7 +35,8 @@ Database configuration is done in `config.json`, which you'll need to create wit
 
 	"record": false,
 	"scrape": true,
-	"log_flushes": true
+	"log_flushes": true,
+	"strict_port": false
 }
 ```
 
@@ -45,6 +46,7 @@ Database configuration is done in `config.json`, which you'll need to create wit
 - `scrape` enables optional support for /scrape endpoint. Optional, defaults to `false`.
 - `record` enables simple experimental JSON recorder of announce events to flat file. Optional, defaults to `true`.
 - `log_flushes` enables logging of all flush actions, defaults to `true`
+- `strict_port` enables strict port checking for announces (1024-65535), defaults to `false`
 
 Running
 -------

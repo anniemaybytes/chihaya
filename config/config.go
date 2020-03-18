@@ -66,14 +66,20 @@ var (
 
 type ConfigMap map[string]interface{}
 
-func Get(s string, defaultValue string) string {
+func Get(s string, defaultValue string) (string, bool) {
 	once.Do(readConfig)
 	return config.Get(s, defaultValue)
 }
 
-func GetBool(s string, defaultValue bool) bool {
+func GetBool(s string, defaultValue bool) (bool, bool) {
 	once.Do(readConfig)
 	return config.GetBool(s, defaultValue)
+}
+
+//noinspection GoUnusedExportedFunction
+func GetInt(s string, defaultValue int64) (int64, bool) {
+	once.Do(readConfig)
+	return config.GetInt(s, defaultValue)
 }
 
 func Section(s string) ConfigMap {
@@ -81,19 +87,27 @@ func Section(s string) ConfigMap {
 	return config.Section(s)
 }
 
-func (m ConfigMap) Get(s string, defaultValue string) string {
+func (m ConfigMap) Get(s string, defaultValue string) (string, bool) {
 	if result, exists := m[s]; exists {
-		return result.(string)
+		return result.(string), true
 	} else {
-		return defaultValue
+		return defaultValue, false
 	}
 }
 
-func (m ConfigMap) GetBool(s string, defaultValue bool) bool {
+func (m ConfigMap) GetInt(s string, defaultValue int64) (int64, bool) {
 	if result, exists := m[s]; exists {
-		return result.(bool)
+		return result.(int64), true
 	} else {
-		return defaultValue
+		return defaultValue, false
+	}
+}
+
+func (m ConfigMap) GetBool(s string, defaultValue bool) (bool, bool) {
+	if result, exists := m[s]; exists {
+		return result.(bool), true
+	} else {
+		return defaultValue, false
 	}
 }
 

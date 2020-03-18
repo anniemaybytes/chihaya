@@ -37,7 +37,8 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 }
 
 func scrape(params *queryParams, db *database.Database, buf *bytes.Buffer) {
-	if !config.GetBool("scrape", true) {
+	enabledByDefault, _ := config.GetBool("scrape", true)
+	if !enabledByDefault {
 		failure("Scrape convention is not supported", buf, 1*time.Hour)
 		return
 	}

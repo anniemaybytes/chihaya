@@ -284,7 +284,9 @@ func Start() {
 	handler.adminCollector = collectors.NewAdminCollector()
 	prometheus.MustRegister(handler.adminCollector)
 
-	listener, err = net.Listen("tcp", config.Get("addr", ":34000"))
+	addr, _ := config.Get("addr", ":34000")
+
+	listener, err = net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
 	}
@@ -293,7 +295,7 @@ func Start() {
 	 * Behind the scenes, this works by spawning a new goroutine for each client.
 	 * This is pretty fast and scalable since goroutines are nice and efficient.
 	 */
-	log.Info.Printf("Ready and accepting new connections on %s", config.Get("addr", ":34000"))
+	log.Info.Printf("Ready and accepting new connections on %s", addr)
 
 	_ = server.Serve(listener)
 

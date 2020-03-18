@@ -102,7 +102,8 @@ func (db *Database) flushTorrents() {
 			}
 		}
 
-		if config.GetBool("log_flushes", true) && !db.terminate {
+		logFlushes, _ := config.GetBool("log_flushes", true)
+		if logFlushes && !db.terminate {
 			log.Info.Printf("{torrents} Flushing %d\n", count)
 		}
 
@@ -181,7 +182,8 @@ func (db *Database) flushUsers() {
 			}
 		}
 
-		if config.GetBool("log_flushes", true) && !db.terminate {
+		logFlushes, _ := config.GetBool("log_flushes", true)
+		if logFlushes && !db.terminate {
 			log.Info.Printf("{users_main} Flushing %d\n", count)
 		}
 
@@ -266,7 +268,8 @@ main:
 			}
 		}
 
-		if config.GetBool("log_flushes", true) && !db.terminate {
+		logFlushes, _ := config.GetBool("log_flushes", true)
+		if logFlushes && !db.terminate {
 			log.Info.Printf("{transfer_history} Flushing %d\n", count)
 		}
 
@@ -333,7 +336,8 @@ func (db *Database) flushTransferIps() {
 			}
 		}
 
-		if config.GetBool("log_flushes", true) && !db.terminate {
+		logFlushes, _ := config.GetBool("log_flushes", true)
+		if logFlushes && !db.terminate {
 			log.Info.Printf("{transfer_ips} Flushing %d\n", count)
 		}
 
@@ -393,7 +397,8 @@ func (db *Database) flushSnatches() {
 			}
 		}
 
-		if config.GetBool("log_flushes", true) && !db.terminate {
+		logFlushes, _ := config.GetBool("log_flushes", true)
+		if logFlushes && !db.terminate {
 			log.Info.Printf("{snatches} Flushing %d\n", count)
 		}
 

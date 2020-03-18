@@ -66,8 +66,9 @@ func metrics(auth string, db *database.Database, buf *bytes.Buffer) {
 	}
 
 	n := len(bearerPrefix)
-	if len(auth) > n && auth[:n] == bearerPrefix && auth[n:] != "" { // empty string means admin metrics disabled
-		if auth[n:] == config.Get("admin_token", "") {
+	if len(auth) > n && auth[:n] == bearerPrefix {
+		adminToken, exists := config.Get("admin_token", "")
+		if exists && auth[n:] == adminToken {
 			mfs, _ := prometheus.DefaultGatherer.Gather()
 
 			for _, mf := range mfs {

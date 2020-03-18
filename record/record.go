@@ -34,7 +34,8 @@ func openEventFile(t time.Time) (*os.File, error) {
 }
 
 func Init() {
-	if !config.GetBool("record", enabledByDefault) {
+	enabledByDefault, _ := config.GetBool("record", enabledByDefault)
+	if !enabledByDefault {
 		return
 	}
 
@@ -77,7 +78,8 @@ func Init() {
 }
 
 func Record(tid, uid uint32, up, down int64, absup uint64, event string, ip string, port uint16) {
-	if !config.GetBool("record", enabledByDefault) {
+	enabledByDefault, _ := config.GetBool("record", enabledByDefault)
+	if !enabledByDefault {
 		return
 	}
 

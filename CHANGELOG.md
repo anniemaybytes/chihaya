@@ -3,6 +3,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v2.5.0-rc1
+### Added
+- Ability to enable or disable strict port checking in `config.json`
+- Add bencode utility for converting between bencode and JSON
+
+### Changed
+- Have `Get` functions in `config` return `bool` indicating whether default was used
+- Rename `cache-dump` to `cc`
+- Do not use `chihaya/log` inside `cc` utility
+- Split types from `database` into `types` sub-package
+
+### Fixed
+- Cal to `panic()` with wrong argument in `failure()` (`server.go`)
+
 ## v2.4.0
 ### Added
 - Ability to configure logging of flushes in `config.json`
