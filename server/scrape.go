@@ -72,11 +72,11 @@ func scrape(params *queryParams, db *database.Database, buf *bytes.Buffer) {
 
 	scrapeData["files"] = fileData
 	scrapeData["flags"] = map[string]interface{}{
-		"min_request_interval": config.MinScrapeInterval / time.Second, // Assuming in seconds
+		"min_request_interval": config.ScrapeInterval / time.Second,
 	}
 	// the following are for compatibility with clients that don't implement scrape flags
-	scrapeData["interval"] = config.MinScrapeInterval / time.Second     // Assuming in seconds
-	scrapeData["min interval"] = config.MinScrapeInterval / time.Second // Assuming in seconds
+	scrapeData["interval"] = config.ScrapeInterval / time.Second
+	scrapeData["min interval"] = config.ScrapeInterval / time.Second
 
 	bufdata, err := bencode.EncodeBytes(scrapeData)
 	if err != nil {

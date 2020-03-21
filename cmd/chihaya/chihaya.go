@@ -21,6 +21,7 @@ import (
 	"chihaya/log"
 	"chihaya/server"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
@@ -28,22 +29,31 @@ import (
 	"syscall"
 )
 
-var profile bool
+var profile, help bool
 
 // provided at compile-time
 var (
-	BuildDate    = "undefined"
+	BuildDate    = "0000-00-00T00:00:00+0000"
 	BuildVersion = "development"
 )
 
 func init() {
-	flag.BoolVar(&profile, "profile", false, "Generate profiling data for pprof into chihaya.cpu")
+	flag.BoolVar(&profile, "P", false, "Generate profiling data for pprof into chihaya.cpu")
+	flag.BoolVar(&help, "h", false, "Shows this help dialog")
 }
 
 func main() {
-	log.Info.Printf("chihaya (kuroneko), build=%s date=%s runtime=%s\n", BuildVersion, BuildDate, runtime.Version())
+	fmt.Printf("chihaya (kuroneko), build=%s date=%s runtime=%s\n\n", BuildVersion, BuildDate, runtime.Version())
 
 	flag.Parse()
+
+	if help {
+		fmt.Printf("Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+
+		return
+	}
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	if profile {

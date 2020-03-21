@@ -33,7 +33,7 @@ var (
 
 // provided at compile-time
 var (
-	BuildDate    = "undefined"
+	BuildDate    = "0000-00-00T00:00:00+0000"
 	BuildVersion = "development"
 )
 

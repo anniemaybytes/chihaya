@@ -192,7 +192,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 
 		// check if there is proxy in header IF allowed in config
 		proxyHeaderType, exists := config.Get("proxy", "")
-		if !exists {
+		if exists {
 			ips, exists := header[proxyHeaderType]
 			if exists && len(ips) > 0 {
 				return ips[0], true
@@ -357,7 +357,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	peer.Seeding = seeding
 	deltaTime := now - peer.LastAnnounce
 
-	if deltaTime > 2*int64(config.AnnounceInterval.Seconds()) {
+	if deltaTime > int64(config.InactiveAnnounceInterval.Seconds()) {
 		deltaTime = 0
 	}
 
@@ -366,7 +366,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		deltaSeedTime = now - peer.LastAnnounce
 	}
 
-	if deltaSeedTime > 2*int64(config.AnnounceInterval.Seconds()) {
+	if deltaSeedTime > int64(config.InactiveAnnounceInterval.Seconds()) {
 		deltaSeedTime = 0
 	}
 
@@ -427,8 +427,13 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	respData["complete"] = seedCount
 	respData["incomplete"] = leechCount
 	respData["downloaded"] = snatchCount
-	respData["min interval"] = config.MinAnnounceInterval / time.Second                                                  // Assuming seconds
-	respData["interval"] = (config.AnnounceInterval + time.Duration(util.Min(600, seedCount))*time.Second) / time.Second // Assuming seconds
+	respData["min interval"] = config.MinAnnounceInterval / time.Second
+
+	/* We asks clients to announce each interval seconds. In order to spread the load on tracker,
+	we will vary the interval given to client by random number of seconds between 0 and value
+	specified in config */
+	announceDrift := util.Rand(0, int(config.AnnounceDrift.Seconds()))
+	respData["interval"] = int64(config.AnnounceInterval.Seconds()) + int64(announceDrift)
 
 	if numWant > 0 && active {
 		compactString, exists := params.get("compact")

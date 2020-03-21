@@ -19,20 +19,18 @@ package log
 
 import (
 	"log"
+	"os"
 	"runtime/debug"
 )
 
-var (
-	writer = log.Writer()
-	flags  = log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix
-)
+var flags = log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix
 
 var (
-	Info    = log.New(writer, "[I] ", flags)
-	Warning = log.New(writer, "[W] ", flags)
-	Error   = log.New(writer, "[E] ", flags)
-	Fatal   = log.New(writer, "[F] ", flags)
-	Panic   = log.New(writer, "[P] ", flags)
+	Info    = log.New(os.Stdout, "[I] ", flags)
+	Warning = log.New(os.Stderr, "[W] ", flags)
+	Error   = log.New(os.Stderr, "[E] ", flags)
+	Fatal   = log.New(os.Stderr, "[F] ", flags)
+	Panic   = log.New(os.Stderr, "[P] ", flags)
 )
 
 func WriteStack() {

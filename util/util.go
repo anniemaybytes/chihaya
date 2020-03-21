@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const alphanumBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -55,8 +55,12 @@ func Btoa(a bool) string {
 func RandStringBytes(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = alphanumBytes[rand.Intn(len(alphanumBytes))]
 	}
 
 	return string(b)
+}
+
+func Rand(min int, max int) int {
+	return rand.Intn(max-min+1) + min
 }

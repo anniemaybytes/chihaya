@@ -8,11 +8,6 @@ steps:
         commands:
             - golangci-lint run --color always
 
-trigger:
-    event:
-        exclude:
-            - promote
-
 ---
 kind: pipeline
 name: tests
@@ -26,11 +21,6 @@ steps:
         commands:
             - CGO_ENABLED=0 go test ./... -v -coverprofile=coverage.out
             - go tool cover -func=coverage.out
-
-trigger:
-    event:
-        exclude:
-            - promote
 
 ---
 kind: pipeline
@@ -58,47 +48,3 @@ steps:
 trigger:
     event:
         - promote
-
----
-kind: pipeline
-name: artifacts
-type: docker
-
-steps:
-    -   name: collect
-        image: golang:1.14-alpine
-        environment:
-            GO111MODULE: on
-        commands:
-            - go mod vendor
-    -   name: upload
-        image: plugins/s3-cache
-        settings:
-            rebuild: true
-            path: artifacts/${DRONE_REPO_NAME}/${DRONE_COMMIT}/
-            mount:
-                - vendor
-            access_key:
-                from_secret: aws_access_key_id
-            secret_key:
-                from_secret: aws_secret_access_key
-            endpoint:
-                from_secret: aws_endpoint
-    -   name: flush
-        image: plugins/s3-cache
-        settings:
-            flush: true
-            flush_age: 7
-            flush_path: artifacts/${DRONE_REPO_NAME}/
-            access_key:
-                from_secret: aws_access_key_id
-            secret_key:
-                from_secret: aws_secret_access_key
-            endpoint:
-                from_secret: aws_endpoint
-
-trigger:
-    event:
-        - promote
-    target:
-        - production

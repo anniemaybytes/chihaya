@@ -3,19 +3,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## v2.5.0-rc1
+## v2.5.0
 ### Added
 - Ability to enable or disable strict port checking in `config.json`
 - Add bencode utility for converting between bencode and JSON
+- Help screen for `chihaya`
+- Ability to configure inactive peer time and announce drift
+
+### Fixed
+- Cal to `panic()` with wrong argument in `failure()` (`server.go`)
+- `cc` utility was overwriting torrent cache file with JSON version
+- Header configured in `proxy` was not being respected
+- `@config/GetInt()` was improperly implemented using `int` instead of `json.Number`
+- `InactiveAnnounceInterval` did not account for configured announce drift properly
+- `config` Getters were failing on unexpected values (such as `nil`) instead of falling back 
+to default
+- New flush logic for users and torrents was not properly utilizing temporary table leading to 
+data loss in cases where single user or torrent was present multiple times in a flushed channel
 
 ### Changed
 - Have `Get` functions in `config` return `bool` indicating whether default was used
 - Rename `cache-dump` to `cc`
 - Do not use `chihaya/log` inside `cc` utility
 - Split types from `database` into `types` sub-package
-
-### Fixed
-- Cal to `panic()` with wrong argument in `failure()` (`server.go`)
+- Move logging of Info from stderr to stdout
+- Rename `profile` flag to `P`
+- Make announce drift random
+- Make @config/GetInt() return `int` instead of `int64`
+- `config` now reads numeric values from JSON as numbers instead of floats
 
 ## v2.4.0
 ### Added
@@ -119,6 +134,7 @@ from these tables is inserted back with default values by chihaya
 
 ### Fixed
 - Broken error handling for parseQuery in server.go
+- Explicitly Close() server itself on shutdown (https://github.com/golang/go/issues/10527)
 
 ### Changed
 - Migrate to bencode library (https://github.com/zeebo/bencode)
@@ -129,8 +145,103 @@ from these tables is inserted back with default values by chihaya
 - Export ConfigMap from config
 - Extract record into separate package
 - Synchronously populate initial data from database into memory
-- Explicitly Close() server itself on shutdown (https://github.com/golang/go/issues/10527)
 
 ## v0.6.0
 ### Added
-- Base state for CHANGELOG
+- Support for archived whitelist entries
+- Failsafe to ensure all IPs are always IPv4 only
+- Allow to build without `scrape` and `recorder` via build tags
+
+### Changed
+- Rename whitelist table from `xbt_whitelist` to `client_whitelist`
+- Update torrent's `last_action` only if announced action is seeding
+- Increase AnnounceInterval, MinAnnounceInterval and PurgeInactiveInterval
+- Update to MariaDB 10.3.3 syntax (https://mariadb.com/kb/en/library/values-value)
+- Move external modules to `go.mod`
+- Check error value from `.Encode` during serialization
+- Remove `connectable` from `transfer_history` flush
+- Code cleanup and formatting
+
+### Fixed
+- Ensure down/up multipliers are always positive
+- Make `transferHistory` wait in `purgeInactivePeers` atomic with add in `flushTransferHistory` 
+- Ensure `transferHistoryWaitGroup` is released properly on loop break when 
+`transferHistoryChannel` is empty
+- Do not break main loop in `flushTransferHistory` when channel is empty
+
+## v0.5.0
+### Added
+- Support for disabling logging of IP for user
+- Support for `no_peer_id`
+- Support for `ipv4` query string
+- Support for interval in `failure`
+
+### Changed
+- Ignore `paused` event (https://www.bittorrent.org/beps/bep_0021.html)
+- Cleanup unused code
+- Have `interval` for announce include small drift in form of `min(600, seeders)`
+- Default to compact responses unless explicitly asked for by `compact=0`
+- Bump default `numWant` from 20 to 25
+
+## v0.4.0
+### Added
+- Add LICENSE
+- Simple JSON announce recorder
+- Handle SIGTERM in addition to INT for graceful restarts
+- Support for group based freeleech
+- Allow downloading Hit and Runs even if `DisableDownload` is set for user
+
+### Fixed
+- Returning 50 peers when the client asks for 0
+- Fix peer inactivity query
+- Broken bencode on `/scrape`
+- Swapped up/down multiplier for initial torrent load
+- Ensure time delta is never higher than inactivity period
+- Wwhitelist reloading was limited to 100 entries
+
+### Changed
+- Run `go fmt`
+- Use linear falloff when handling deadlocks
+- Make some config values more sane
+- Stop disabling http/1.1 keep-alive
+- Reduce peer ID collision potential
+- Structure of `transfer_ips` was reworked to include more data
+
+### Removed
+- Support for slots
+
+## v0.3.0
+### Added
+- Add deserialization time logging
+- Handle global freeleech
+- Reactivate pruned torrents when a seeder announces
+
+### Fixed
+- Lock `mainConn` before closing it
+- Only start HTTP server after initializing the database
+- Fix database reload timeouts occurring during a slot cache verification
+- Fix race condition causing users to appear inactive but leaving them in the peer hash
+
+### Changed
+- Force `Connection: close`
+- Suppress superfluous HTTP panic logging
+- Sleep before verifying slots for the first time
+- Switch to a better used slots verification strategy
+- Only load enabled users
+- Flush the peer on every announce to update the last announce time
+
+## v0.2.0
+### Added
+- Support for reverse proxy via `X-Real-Ip` header
+- Deadlock handling
+- Use multiple database connections
+
+### Changed
+- Run `go fmt`
+- Flush torrent when a leecher becomes a seeder
+- Log when done serializing
+- Switch to `mymysql` (https://github.com/ziutek/mymysql)
+
+## v0.1.0
+### Added
+- Initial release

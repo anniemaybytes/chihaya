@@ -28,7 +28,7 @@ import (
 
 // provided at compile-time
 var (
-	BuildDate    = "undefined"
+	BuildDate    = "0000-00-00T00:00:00+0000"
 	BuildVersion = "development"
 )
 
@@ -78,7 +78,7 @@ func dumpCache() {
 		panic(err)
 	}
 
-	torrentFile, err = os.OpenFile(fmt.Sprintf("%s.gob", cdb.TorrentCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
+	torrentFile, err = os.OpenFile(fmt.Sprintf("%s.json", cdb.TorrentCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		panic(err)
 	}

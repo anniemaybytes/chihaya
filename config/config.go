@@ -30,10 +30,22 @@ var GlobalFreeleech = false
 
 // Intervals
 var (
-	AnnounceInterval    = 45 * time.Minute
-	MinAnnounceInterval = 30 * time.Minute
-	MinScrapeInterval   = 15 * time.Minute
+	// This is default announce interval we ask clients to use
+	AnnounceInterval = 45 * time.Minute
 
+	// This is absolute minimum time between each announces that clients are asked to obey
+	MinAnnounceInterval = 30 * time.Minute
+
+	// This is time interval between scrape requests we ask clients to use
+	ScrapeInterval = 15 * time.Minute
+
+	// This is a time after which peer is considered dead, it should be multiple of AnnounceInterval
+	InactiveAnnounceInterval = (AnnounceInterval + AnnounceDrift) * 2
+
+	// This is maximum time drift in announce intervals, see announce.go for details on how it's used
+	AnnounceDrift = 15 * time.Minute
+
+	// Reload times, see @Database.startReloading()
 	DatabaseReloadInterval        = 45 * time.Second
 	DatabaseSerializationInterval = 68 * time.Second
 	PurgeInactiveInterval         = 120 * time.Second
@@ -77,7 +89,7 @@ func GetBool(s string, defaultValue bool) (bool, bool) {
 }
 
 //noinspection GoUnusedExportedFunction
-func GetInt(s string, defaultValue int64) (int64, bool) {
+func GetInt(s string, defaultValue int) (int, bool) {
 	once.Do(readConfig)
 	return config.GetInt(s, defaultValue)
 }
@@ -88,24 +100,25 @@ func Section(s string) ConfigMap {
 }
 
 func (m ConfigMap) Get(s string, defaultValue string) (string, bool) {
-	if result, exists := m[s]; exists {
-		return result.(string), true
+	if result, exists := m[s].(string); exists {
+		return result, true
 	} else {
 		return defaultValue, false
 	}
 }
 
-func (m ConfigMap) GetInt(s string, defaultValue int64) (int64, bool) {
-	if result, exists := m[s]; exists {
-		return result.(int64), true
+func (m ConfigMap) GetInt(s string, defaultValue int) (int, bool) {
+	if result, exists := m[s].(json.Number); exists {
+		res, _ := result.Int64()
+		return int(res), true
 	} else {
 		return defaultValue, false
 	}
 }
 
 func (m ConfigMap) GetBool(s string, defaultValue bool) (bool, bool) {
-	if result, exists := m[s]; exists {
-		return result.(bool), true
+	if result, exists := m[s].(bool); exists {
+		return result, true
 	} else {
 		return defaultValue, false
 	}
@@ -120,14 +133,17 @@ func readConfig() {
 	f, err := os.Open(configFile)
 
 	if err != nil {
-		log.Warning.Printf("Error opening config file, defaults will be used! (%s)", err)
+		log.Warning.Printf("Unable to open config file, defaults will be used! (%s)", err)
 		return
 	}
 
-	err = json.NewDecoder(f).Decode(&config)
+	decoder := json.NewDecoder(f)
+	decoder.UseNumber()
+
+	err = decoder.Decode(&config)
 
 	if err != nil {
-		log.Warning.Printf("Error parsing config file, defaults will be used! (%s)", err)
+		log.Error.Printf("Can not parse config file, defaults will be used! (%s)", err)
 		return
 	}
 }

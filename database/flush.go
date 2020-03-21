@@ -73,20 +73,21 @@ func (db *Database) flushTorrents() {
 		length := util.Max(1, len(db.torrentChannel))
 
 		query.Reset()
-		query.WriteString("DROP TABLE IF EXISTS flush_torrents")
+		query.WriteString("DROP TEMPORARY TABLE IF EXISTS flush_torrents")
 		conn.execBuffer(&query)
 
 		query.Reset()
 		query.WriteString("CREATE TEMPORARY TABLE flush_torrents (" +
-			"ID int(10) NOT NULL, " +
-			"Snatched int(10) unsigned NOT NULL DEFAULT 0, " +
-			"Seeders int(6) NOT NULL DEFAULT 0, " +
-			"Leechers int(6) NOT NULL DEFAULT 0, " +
-			"last_action int(11) NOT NULL DEFAULT 0)")
+			"ID int unsigned NOT NULL, " +
+			"Snatched int unsigned NOT NULL DEFAULT 0, " +
+			"Seeders int unsigned NOT NULL DEFAULT 0, " +
+			"Leechers int unsigned NOT NULL DEFAULT 0, " +
+			"last_action int NOT NULL DEFAULT 0, " +
+			"PRIMARY KEY (ID))")
 		conn.execBuffer(&query)
 
 		query.Reset()
-		query.WriteString("INSERT INTO flush_torrents VALUES\n")
+		query.WriteString("INSERT INTO flush_torrents VALUES ")
 
 		for count = 0; count < length; count++ {
 			b := <-db.torrentChannel
@@ -110,6 +111,9 @@ func (db *Database) flushTorrents() {
 		if count > 0 {
 			startTime := time.Now()
 
+			query.WriteString(" ON DUPLICATE KEY UPDATE Snatched = Snatched + VALUE(Snatched), " +
+				"Seeders = VALUE(Seeders), Leechers = VALUE(Leechers), " +
+				"last_action = IF(last_action < VALUE(last_action), VALUE(last_action), last_action)")
 			conn.execBuffer(&query)
 
 			query.Reset()
@@ -153,20 +157,21 @@ func (db *Database) flushUsers() {
 		length := util.Max(1, len(db.userChannel))
 
 		query.Reset()
-		query.WriteString("DROP TABLE IF EXISTS flush_users")
+		query.WriteString("DROP TEMPORARY TABLE IF EXISTS flush_users")
 		conn.execBuffer(&query)
 
 		query.Reset()
 		query.WriteString("CREATE TEMPORARY TABLE flush_users (" +
-			"ID int(10) unsigned NOT NULL, " +
-			"Uploaded bigint(20) unsigned NOT NULL DEFAULT 0, " +
-			"Downloaded bigint(20) unsigned NOT NULL DEFAULT 0, " +
-			"rawdl bigint(20) NOT NULL, " +
-			"rawup bigint(20) NOT NULL)")
+			"ID int unsigned NOT NULL, " +
+			"Uploaded bigint unsigned NOT NULL DEFAULT 0, " +
+			"Downloaded bigint unsigned NOT NULL DEFAULT 0, " +
+			"rawdl bigint unsigned NOT NULL DEFAULT 0, " +
+			"rawup bigint unsigned NOT NULL DEFAULT 0, " +
+			"PRIMARY KEY (ID))")
 		conn.execBuffer(&query)
 
 		query.Reset()
-		query.WriteString("INSERT INTO flush_users VALUES\n")
+		query.WriteString("INSERT INTO flush_users VALUES ")
 
 		for count = 0; count < length; count++ {
 			b := <-db.userChannel
@@ -190,6 +195,8 @@ func (db *Database) flushUsers() {
 		if count > 0 {
 			startTime := time.Now()
 
+			query.WriteString(" ON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUE(Uploaded), " +
+				"Downloaded = Downloaded + VALUE(Downloaded), rawdl = rawdl + VALUE(rawdl), rawup = rawup + VALUE(rawup)")
 			conn.execBuffer(&query)
 
 			query.Reset()
@@ -435,7 +442,7 @@ func (db *Database) purgeInactivePeers() {
 		now := start.Unix()
 		count := 0
 
-		oldestActive := now - 2*int64(config.AnnounceInterval.Seconds())
+		oldestActive := now - int64(config.InactiveAnnounceInterval.Seconds())
 
 		// First, remove inactive peers from memory
 		db.TorrentsMutex.Lock()
