@@ -24,8 +24,8 @@ import (
 
 func TestMin(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		a := rand.Int()
-		b := rand.Int()
+		a := rand.Int() //nolint:gosec
+		b := rand.Int() //nolint:gosec
 		gotMin := Min(a, b)
 
 		var actualMin int
@@ -43,8 +43,8 @@ func TestMin(t *testing.T) {
 
 func TestMax(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		a := rand.Int()
-		b := rand.Int()
+		a := rand.Int() //nolint:gosec
+		b := rand.Int() //nolint:gosec
 		gotMax := Max(a, b)
 
 		var actualMax int

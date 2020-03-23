@@ -25,6 +25,17 @@ import (
 	"time"
 )
 
+var (
+	reloadInterval  int
+	GlobalFreeleech = false
+)
+
+func init() {
+	intervals := config.Section("intervals")
+
+	reloadInterval, _ = intervals.GetInt("database_reload", 45)
+}
+
 /*
  * Reloading is performed synchronously for each cache to lower database thrashing.
  *
@@ -35,7 +46,7 @@ import (
  */
 func (db *Database) startReloading() {
 	go func() {
-		time.Sleep(config.DatabaseReloadInterval)
+		time.Sleep(time.Duration(reloadInterval) * time.Second)
 
 		count := 0
 
@@ -52,7 +63,7 @@ func (db *Database) startReloading() {
 			count++
 
 			db.waitGroup.Done()
-			time.Sleep(config.DatabaseReloadInterval)
+			time.Sleep(time.Duration(reloadInterval) * time.Second)
 		}
 	}()
 }
@@ -90,7 +101,7 @@ func (db *Database) loadUsers() {
 
 		old, exists := db.Users[torrentPass]
 		if exists && old != nil {
-			old.Id = id
+			old.ID = id
 			old.DownMultiplier = downMultiplier
 			old.UpMultiplier = upMultiplier
 			old.DisableDownload = disableDownload
@@ -98,7 +109,7 @@ func (db *Database) loadUsers() {
 			newUsers[torrentPass] = old
 		} else {
 			newUsers[torrentPass] = &types.User{
-				Id:              id,
+				ID:              id,
 				UpMultiplier:    downMultiplier,
 				DownMultiplier:  upMultiplier,
 				DisableDownload: disableDownload,
@@ -114,7 +125,7 @@ func (db *Database) loadUsers() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("users", elapsedTime)
-	log.Info.Printf("User load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("User load complete (%d rows, %s)", count, elapsedTime.String())
 }
 
 func (db *Database) loadHitAndRuns() {
@@ -142,8 +153,8 @@ func (db *Database) loadHitAndRuns() {
 		}
 
 		hnr := types.UserTorrentPair{
-			UserId:    uid,
-			TorrentId: fid,
+			UserID:    uid,
+			TorrentID: fid,
 		}
 		newHnr[hnr] = struct{}{}
 
@@ -155,7 +166,7 @@ func (db *Database) loadHitAndRuns() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
-	log.Info.Printf("Hit and run load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Hit and run load complete (%d rows, %s)", count, elapsedTime.String())
 }
 
 func (db *Database) loadTorrents() {
@@ -191,7 +202,7 @@ func (db *Database) loadTorrents() {
 
 		old, exists := db.Torrents[infoHash]
 		if exists && old != nil {
-			old.Id = id
+			old.ID = id
 			old.DownMultiplier = downMultiplier
 			old.UpMultiplier = upMultiplier
 			old.Snatched = snatched
@@ -199,7 +210,7 @@ func (db *Database) loadTorrents() {
 			newTorrents[infoHash] = old
 		} else {
 			newTorrents[infoHash] = &types.Torrent{
-				Id:             id,
+				ID:             id,
 				UpMultiplier:   upMultiplier,
 				DownMultiplier: downMultiplier,
 				Snatched:       snatched,
@@ -218,7 +229,7 @@ func (db *Database) loadTorrents() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("torrents", elapsedTime)
-	log.Info.Printf("Torrent load complete (%d rows, %dms)", count, elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Torrent load complete (%d rows, %s)", count, elapsedTime.String())
 }
 
 func (db *Database) loadConfig() {
@@ -238,7 +249,7 @@ func (db *Database) loadConfig() {
 			log.WriteStack()
 		}
 
-		config.GlobalFreeleech = globalFreelech
+		GlobalFreeleech = globalFreelech
 	}
 	db.mainConn.mutex.Unlock()
 }
@@ -259,16 +270,16 @@ func (db *Database) loadWhitelist() {
 	for rows.Next() {
 		var (
 			id     uint16
-			peerId string
+			peerID string
 		)
 
-		err := rows.Scan(&id, &peerId)
+		err := rows.Scan(&id, &peerID)
 		if err != nil {
 			log.Error.Printf("Error scanning whitelist rows: %s", err)
 			log.WriteStack()
 		}
 
-		db.Whitelist[id] = peerId
+		db.Whitelist[id] = peerID
 	}
 
 	db.mainConn.mutex.Unlock()
@@ -276,5 +287,5 @@ func (db *Database) loadWhitelist() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("whitelist", elapsedTime)
-	log.Info.Printf("Whitelist load complete (%d rows, %dms)", len(db.Whitelist), elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Whitelist load complete (%d rows, %s)", len(db.Whitelist), elapsedTime.String())
 }

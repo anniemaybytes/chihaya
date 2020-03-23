@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var configTest ConfigMap
+var configTest Map
 
 func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	configTest = make(ConfigMap)
+	configTest = make(Map)
 	dbConfig := map[string]interface{}{
 		"username": "chihaya",
 		"password": "",

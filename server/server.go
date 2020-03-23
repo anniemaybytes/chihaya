@@ -18,7 +18,6 @@
 package server
 
 import (
-	"bytes"
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/database"
@@ -26,6 +25,7 @@ import (
 	"chihaya/record"
 	"chihaya/util"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -93,7 +93,7 @@ func (p *queryParams) getUint16(which string) (ret uint16, exists bool) {
 	return
 }
 
-func failure(err string, buf *bytes.Buffer, interval time.Duration) {
+func failure(err string, buf io.Writer, interval time.Duration) {
 	failureData := make(map[string]interface{})
 	failureData["failure reason"] = err
 	failureData["interval"] = interval / time.Second     // Assuming in seconds
@@ -104,7 +104,10 @@ func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 		panic(errz)
 	}
 
-	buf.Write(data)
+	_, errz = buf.Write(data)
+	if errz != nil {
+		panic(errz)
+	}
 }
 
 /*
@@ -183,7 +186,7 @@ func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err erro
 	return
 }
 
-func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) {
+func (handler *httpHandler) respond(r *http.Request, buf io.Writer) {
 	dir, action := path.Split(r.URL.Path)
 	if len(dir) != 34 {
 		failure("Malformed request - missing passkey", buf, 1*time.Hour)
@@ -231,14 +234,18 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer w.(http.Flusher).Flush()
+
 	handler.waitGroup.Add(1)
 	defer handler.waitGroup.Done()
 
 	defer func() {
 		err := recover()
 		if err != nil {
-			log.Error.Printf("ServeHTTP panic - %v", err)
+			log.Error.Printf("ServeHTTP panic - %v\nURL was: %s", err, r.URL)
 			log.WriteStack()
+
+			w.WriteHeader(500)
 		}
 	}()
 
@@ -254,14 +261,10 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 
 	atomic.AddUint64(&handler.requests, 1)
-
-	w.(http.Flusher).Flush()
 }
 
 func Start() {
 	var err error
-
-	InitPrivateIPBlocks()
 
 	handler = &httpHandler{db: &database.Database{}, startTime: time.Now()}
 

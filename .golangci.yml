@@ -1,5 +1,16 @@
 linters:
+  disable-all: true
   enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - structcheck
+    - varcheck
+    - ineffassign
+    - deadcode
+    - typecheck
     - megacheck
     - whitespace
     - wsl
@@ -7,3 +18,14 @@ linters:
     - goconst
     - unconvert
     - bodyclose
+    - golint
+    - gosec
+    - interfacer
+    - unconvert
+    - goconst
+    - dupl
+    - misspell
+    - lll
+    - unparam
+    - dogsled
+    - prealloc

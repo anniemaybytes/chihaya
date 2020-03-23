@@ -28,10 +28,18 @@ import (
 	"time"
 )
 
+var serializeInterval int
+
+func init() {
+	intervals := config.Section("intervals")
+
+	serializeInterval, _ = intervals.GetInt("database_serialize", 68)
+}
+
 func (db *Database) startSerializing() {
 	go func() {
 		for !db.terminate {
-			time.Sleep(config.DatabaseSerializationInterval)
+			time.Sleep(time.Duration(serializeInterval) * time.Second)
 			db.serialize()
 		}
 	}()
@@ -96,7 +104,7 @@ func (db *Database) serialize() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateSerializationTime(elapsedTime)
-	log.Info.Printf("Done serializing (%dms)\n", elapsedTime.Nanoseconds()/1000000)
+	log.Info.Printf("Done serializing (%s)\n", elapsedTime.String())
 }
 
 func (db *Database) deserialize() {
@@ -163,5 +171,6 @@ func (db *Database) deserialize() {
 	users := len(db.Users)
 	db.UsersMutex.RUnlock()
 
-	log.Info.Printf("Loaded %d users, %d torrents, %d peers (%dms)\n", users, torrents, peers, time.Since(start).Nanoseconds()/1000000)
+	log.Info.Printf("Loaded %d users, %d torrents, %d peers (%s)\n",
+		users, torrents, peers, time.Since(start).String())
 }

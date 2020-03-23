@@ -32,7 +32,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-type DatabaseConnection struct {
+type Connection struct {
 	sqlDb *sql.DB
 	mutex sync.Mutex
 }
@@ -61,7 +61,7 @@ type Database struct {
 
 	Whitelist map[uint16]string
 
-	mainConn *DatabaseConnection // Used for reloading and misc queries
+	mainConn *Connection // Used for reloading and misc queries
 
 	torrentChannel chan *bytes.Buffer
 	userChannel    chan *bytes.Buffer
@@ -80,6 +80,11 @@ type Database struct {
 	terminate bool
 }
 
+var (
+	deadlockWaitTime   int
+	maxDeadlockRetries int
+)
+
 var defaultDsn = map[string]string{
 	"username": "chihaya",
 	"password": "",
@@ -93,21 +98,38 @@ func (db *Database) Init() {
 
 	log.Info.Printf("Opening database connection...")
 
-	db.mainConn = OpenDatabaseConnection()
+	db.mainConn = Open()
 
-	maxBuffers := config.TorrentFlushBufferSize + config.UserFlushBufferSize + config.TransferHistoryFlushBufferSize +
-		config.TransferIpsFlushBufferSize + config.SnatchFlushBufferSize
+	maxBuffers := torrentFlushBufferSize +
+		userFlushBufferSize +
+		transferHistoryFlushBufferSize +
+		transferIpsFlushBufferSize +
+		snatchFlushBufferSize
 
 	// Used for recording updates, so the max required size should be < 128 bytes. See record.go for details
 	db.bufferPool = util.NewBufferPool(maxBuffers, 128)
 
-	db.loadUsersStmt = db.mainConn.prepareStatement("SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide FROM users_main WHERE Enabled = '1'")
-	db.loadHnrStmt = db.mainConn.prepareStatement("SELECT h.uid, h.fid FROM transfer_history AS h JOIN users_main AS u ON u.ID = h.uid WHERE h.hnr = '1' AND u.Enabled = '1'")
-	db.loadTorrentsStmt = db.mainConn.prepareStatement("SELECT t.ID ID, t.info_hash info_hash, (IFNULL(tg.DownMultiplier, 1) * t.DownMultiplier) DownMultiplier, (IFNULL(tg.UpMultiplier, 1) * t.UpMultiplier) UpMultiplier, t.Snatched Snatched, t.Status Status FROM torrents AS t LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID = t.GroupID AND tg.Type = t.TorrentType")
-	db.loadWhitelistStmt = db.mainConn.prepareStatement("SELECT id, peer_id FROM client_whitelist WHERE archived = 0")
-	db.loadFreeleechStmt = db.mainConn.prepareStatement("SELECT mod_setting FROM mod_core WHERE mod_option = 'global_freeleech'")
-	db.cleanStalePeersStmt = db.mainConn.prepareStatement("UPDATE transfer_history SET active = '0' WHERE last_announce < ? AND active = '1'")
-	db.unPruneTorrentStmt = db.mainConn.prepareStatement("UPDATE torrents SET Status = 0 WHERE ID = ?")
+	db.loadUsersStmt, _ = db.mainConn.sqlDb.Prepare(
+		"SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide " +
+			"FROM users_main " +
+			"WHERE Enabled = '1'")
+	db.loadHnrStmt, _ = db.mainConn.sqlDb.Prepare(
+		"SELECT h.uid, h.fid FROM transfer_history AS h " +
+			"JOIN users_main AS u ON u.ID = h.uid " +
+			"WHERE h.hnr = '1' AND u.Enabled = '1'")
+	db.loadTorrentsStmt, _ = db.mainConn.sqlDb.Prepare(
+		"SELECT t.ID ID, t.info_hash info_hash, (IFNULL(tg.DownMultiplier, 1) * t.DownMultiplier) DownMultiplier, " +
+			"(IFNULL(tg.UpMultiplier, 1) * t.UpMultiplier) UpMultiplier, t.Snatched Snatched, t.Status Status " +
+			"FROM torrents AS t " +
+			"LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID = t.GroupID AND tg.Type = t.TorrentType")
+	db.loadWhitelistStmt, _ = db.mainConn.sqlDb.Prepare(
+		"SELECT id, peer_id FROM client_whitelist WHERE archived = 0")
+	db.loadFreeleechStmt, _ = db.mainConn.sqlDb.Prepare(
+		"SELECT mod_setting FROM mod_core WHERE mod_option = 'global_freeleech'")
+	db.cleanStalePeersStmt, _ = db.mainConn.sqlDb.Prepare(
+		"UPDATE transfer_history SET active = '0' WHERE last_announce < ? AND active = '1'")
+	db.unPruneTorrentStmt, _ = db.mainConn.sqlDb.Prepare(
+		"UPDATE torrents SET Status = 0 WHERE ID = ?")
 
 	db.Users = make(map[string]*types.User)
 	db.HitAndRuns = make(map[types.UserTorrentPair]struct{})
@@ -151,15 +173,22 @@ func (db *Database) Terminate() {
 	db.serialize()
 }
 
-func OpenDatabaseConnection() (db *DatabaseConnection) {
-	db = &DatabaseConnection{}
-
+func Open() *Connection {
 	databaseConfig := config.Section("database")
 	dbUsername, _ := databaseConfig.Get("username", defaultDsn["username"])
 	dbPassword, _ := databaseConfig.Get("password", defaultDsn["password"])
 	dbProto, _ := databaseConfig.Get("proto", defaultDsn["proto"])
 	dbAddr, _ := databaseConfig.Get("addr", defaultDsn["addr"])
 	dbDatabase, _ := databaseConfig.Get("database", defaultDsn["database"])
+	deadlockWaitTime, _ = databaseConfig.GetInt("deadlock_pause", 1)
+	maxDeadlockRetries, _ = databaseConfig.GetInt("deadlock_retries", 5)
+
+	channelsConfig := config.Section("channels")
+	torrentFlushBufferSize, _ = channelsConfig.GetInt("torrent", 5000)
+	userFlushBufferSize, _ = channelsConfig.GetInt("user", 5000)
+	transferHistoryFlushBufferSize, _ = channelsConfig.GetInt("transfer_history", 5000)
+	transferIpsFlushBufferSize, _ = channelsConfig.GetInt("transfer_ips", 5000)
+	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatch", 25)
 
 	databaseDsn := fmt.Sprintf("%s:%s@%s(%s)/%s",
 		dbUsername,
@@ -189,66 +218,60 @@ func OpenDatabaseConnection() (db *DatabaseConnection) {
 			err)
 	}
 
-	db.sqlDb = sqlDb
-
-	return
+	return &Connection{
+		sqlDb: sqlDb,
+	}
 }
 
-func (db *DatabaseConnection) Close() error {
+func (db *Connection) Close() error {
 	return db.sqlDb.Close()
 }
 
-func (db *DatabaseConnection) prepareStatement(sql string) *sql.Stmt {
-	stmt, err := db.sqlDb.Prepare(sql)
-	if err != nil {
-		log.Panic.Printf("%s for SQL: %s", err, sql)
-		panic(err)
-	}
-
-	return stmt
-}
-
-func (db *DatabaseConnection) query(stmt *sql.Stmt, args ...interface{}) *sql.Rows {
-	rows, _ := doPerform(func() (interface{}, error) {
+func (db *Connection) query(stmt *sql.Stmt, args ...interface{}) *sql.Rows { //nolint:unparam
+	rows, _ := perform(func() (interface{}, error) {
 		return stmt.Query(args...)
 	}).(*sql.Rows)
 
 	return rows
 }
 
-func (db *DatabaseConnection) exec(stmt *sql.Stmt, args ...interface{}) sql.Result {
-	result, _ := doPerform(func() (interface{}, error) {
+func (db *Connection) execute(stmt *sql.Stmt, args ...interface{}) sql.Result {
+	result, _ := perform(func() (interface{}, error) {
 		return stmt.Exec(args...)
 	}).(sql.Result)
 
 	return result
 }
 
-func (db *DatabaseConnection) execBuffer(query *bytes.Buffer, args ...interface{}) sql.Result {
-	result, _ := doPerform(func() (interface{}, error) {
+func (db *Connection) exec(query *bytes.Buffer, args ...interface{}) sql.Result { //nolint:unparam,interfacer
+	result, _ := perform(func() (interface{}, error) {
 		return db.sqlDb.Exec(query.String(), args...)
 	}).(sql.Result)
 
 	return result
 }
 
-func doPerform(execFunc func() (interface{}, error)) (result interface{}) {
+func perform(exec func() (interface{}, error)) (result interface{}) {
 	var (
 		err   error
 		tries int
-		wait  int64
+		wait  time.Duration
 	)
 
-	for tries = 0; tries < config.MaxDeadlockRetries; tries++ {
-		result, err = execFunc()
+	for tries = 1; tries <= maxDeadlockRetries; tries++ {
+		result, err = exec()
 		if err != nil {
 			if merr, isMysqlError := err.(*mysql.MySQLError); isMysqlError {
 				if merr.Number == 1213 || merr.Number == 1205 {
-					wait = config.DeadlockWaitTime.Nanoseconds() * int64(tries+1)
-					log.Warning.Printf("Deadlock found! Retrying in %dms (%d/20)", wait/1000000, tries)
-					collectors.IncrementDeadlockCount()
-					collectors.IncrementDeadlockTime(time.Duration(wait))
-					time.Sleep(time.Duration(wait))
+					wait = time.Duration(deadlockWaitTime*tries) * time.Second
+					log.Warning.Printf("Deadlock found! Retrying in %s (%d/20)", wait.String(), tries)
+
+					if tries == 1 {
+						collectors.IncrementDeadlockCount()
+					}
+
+					collectors.IncrementDeadlockTime(wait)
+					time.Sleep(wait)
 
 					continue
 				} else {

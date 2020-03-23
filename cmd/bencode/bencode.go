@@ -43,7 +43,8 @@ func init() {
 }
 
 func main() {
-	fmt.Printf("bencode for chihaya (kuroneko), build=%s date=%s runtime=%s\n\n", BuildVersion, BuildDate, runtime.Version())
+	fmt.Printf("bencode for chihaya (kuroneko), build=%s date=%s runtime=%s\n\n",
+		BuildVersion, BuildDate, runtime.Version())
 
 	flag.Parse()
 

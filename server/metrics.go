@@ -18,11 +18,11 @@
 package server
 
 import (
-	"bytes"
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/database"
 	"chihaya/log"
+	"io"
 	"sync/atomic"
 	"time"
 
@@ -32,7 +32,7 @@ import (
 
 var bearerPrefix = "Bearer "
 
-func metrics(auth string, db *database.Database, buf *bytes.Buffer) {
+func metrics(auth string, db *database.Database, buf io.Writer) {
 	peers := 0
 
 	db.UsersMutex.RLock()
@@ -58,10 +58,8 @@ func metrics(auth string, db *database.Database, buf *bytes.Buffer) {
 	for _, mf := range mfs {
 		_, err := expfmt.MetricFamilyToText(buf, mf)
 		if err != nil {
-			log.Error.Printf("Error in converting metrics to text")
-			log.WriteStack()
-
-			return
+			log.Panic.Printf("Error in converting metrics to text")
+			panic(err)
 		}
 	}
 
@@ -74,10 +72,8 @@ func metrics(auth string, db *database.Database, buf *bytes.Buffer) {
 			for _, mf := range mfs {
 				_, err := expfmt.MetricFamilyToText(buf, mf)
 				if err != nil {
-					log.Error.Printf("Error in converting metrics to text")
-					log.WriteStack()
-
-					return
+					log.Panic.Printf("Error in converting metrics to text")
+					panic(err)
 				}
 			}
 		}

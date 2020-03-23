@@ -49,7 +49,7 @@ func NewNormalCollector() *NormalCollector {
 		whitelistMetric:  prometheus.NewDesc("chihaya_whitelist", "Number of whitelist entries", nil, nil),
 		hitAndRunsMetric: prometheus.NewDesc("chihaya_hnrs", "Number of active hit and runs registered", nil, nil),
 		peersMetric:      prometheus.NewDesc("chihaya_peers", "Number of peers currently being tracked", nil, nil),
-		requestsMetric:   prometheus.NewDesc("chihaya_requests", "Number of succesful requests handled", nil, nil),
+		requestsMetric:   prometheus.NewDesc("chihaya_requests", "Number of successful requests handled", nil, nil),
 	}
 }
 

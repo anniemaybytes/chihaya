@@ -26,6 +26,26 @@ import (
 	"time"
 )
 
+var (
+	peerInactivityInterval     int
+	purgeInactivePeersInterval int
+	flushSleepInterval         int
+)
+
+func init() {
+	intervals := config.Section("intervals")
+
+	peerInactivityInterval, _ = intervals.GetInt("peer_inactivity", 3900)
+	purgeInactivePeersInterval, _ = intervals.GetInt("purge_inactive_peers", 120)
+
+	result, exists := intervals.GetInt("flush", 5)
+	if !exists {
+		log.Warning.Println("FlushSleepInterval is undefined, using default of 5 seconds - this WILL affect performance!")
+	}
+
+	flushSleepInterval = result
+}
+
 /*
  * Channels are used for flushing to limit throughput to a manageable level.
  * If a client causes an update that requires a flush, it writes to the channel requesting that a flush occur.
@@ -42,16 +62,24 @@ import (
  * If the channel is more than half full, it doesn't wait at all.
  */
 
+var (
+	torrentFlushBufferSize         int
+	userFlushBufferSize            int
+	transferHistoryFlushBufferSize int
+	transferIpsFlushBufferSize     int
+	snatchFlushBufferSize          int
+)
+
 func (db *Database) startFlushing() {
-	db.torrentChannel = make(chan *bytes.Buffer, config.TorrentFlushBufferSize)
-	db.userChannel = make(chan *bytes.Buffer, config.UserFlushBufferSize)
-	db.transferHistoryChannel = make(chan *bytes.Buffer, config.TransferHistoryFlushBufferSize)
-	db.transferIpsChannel = make(chan *bytes.Buffer, config.TransferIpsFlushBufferSize)
-	db.snatchChannel = make(chan *bytes.Buffer, config.SnatchFlushBufferSize)
+	db.torrentChannel = make(chan *bytes.Buffer, torrentFlushBufferSize)
+	db.userChannel = make(chan *bytes.Buffer, userFlushBufferSize)
+	db.transferHistoryChannel = make(chan *bytes.Buffer, transferHistoryFlushBufferSize)
+	db.transferIpsChannel = make(chan *bytes.Buffer, transferIpsFlushBufferSize)
+	db.snatchChannel = make(chan *bytes.Buffer, snatchFlushBufferSize)
 
 	go db.flushTorrents()
 	go db.flushUsers()
-	go db.flushTransferHistory() // this can not be blocking because it will lock purgeInactivePeers from executing when channel is empty
+	go db.flushTransferHistory() // Can not be blocking or it will lock purgeInactivePeers when chan is empty
 	go db.flushTransferIps()
 	go db.flushSnatches()
 
@@ -67,14 +95,14 @@ func (db *Database) flushTorrents() {
 		count int
 	)
 
-	conn := OpenDatabaseConnection()
+	conn := Open()
 
 	for {
 		length := util.Max(1, len(db.torrentChannel))
 
 		query.Reset()
 		query.WriteString("DROP TEMPORARY TABLE IF EXISTS flush_torrents")
-		conn.execBuffer(&query)
+		conn.exec(&query)
 
 		query.Reset()
 		query.WriteString("CREATE TEMPORARY TABLE flush_torrents (" +
@@ -84,7 +112,7 @@ func (db *Database) flushTorrents() {
 			"Leechers int unsigned NOT NULL DEFAULT 0, " +
 			"last_action int NOT NULL DEFAULT 0, " +
 			"PRIMARY KEY (ID))")
-		conn.execBuffer(&query)
+		conn.exec(&query)
 
 		query.Reset()
 		query.WriteString("INSERT INTO flush_torrents VALUES ")
@@ -114,7 +142,7 @@ func (db *Database) flushTorrents() {
 			query.WriteString(" ON DUPLICATE KEY UPDATE Snatched = Snatched + VALUE(Snatched), " +
 				"Seeders = VALUE(Seeders), Leechers = VALUE(Leechers), " +
 				"last_action = IF(last_action < VALUE(last_action), VALUE(last_action), last_action)")
-			conn.execBuffer(&query)
+			conn.exec(&query)
 
 			query.Reset()
 			query.WriteString("UPDATE torrents t, flush_torrents ft SET " +
@@ -123,14 +151,16 @@ func (db *Database) flushTorrents() {
 				"t.Leechers = ft.Leechers, " +
 				"t.last_action = IF(t.last_action < ft.last_action, ft.last_action, t.last_action)" +
 				"WHERE t.ID = ft.ID")
-			conn.execBuffer(&query)
+			conn.exec(&query)
 
-			elapsedTime := time.Since(startTime)
-			collectors.UpdateFlushTime("torrents", elapsedTime)
-			collectors.UpdateChannelsLen("torrents", count)
+			if !db.terminate {
+				elapsedTime := time.Since(startTime)
+				collectors.UpdateFlushTime("torrents", elapsedTime)
+				collectors.UpdateChannelsLen("torrents", count)
+			}
 
-			if length < (config.TorrentFlushBufferSize >> 1) {
-				time.Sleep(config.FlushSleepInterval)
+			if length < (torrentFlushBufferSize >> 1) {
+				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
 		} else if db.terminate {
 			break
@@ -151,14 +181,14 @@ func (db *Database) flushUsers() {
 		count int
 	)
 
-	conn := OpenDatabaseConnection()
+	conn := Open()
 
 	for {
 		length := util.Max(1, len(db.userChannel))
 
 		query.Reset()
 		query.WriteString("DROP TEMPORARY TABLE IF EXISTS flush_users")
-		conn.execBuffer(&query)
+		conn.exec(&query)
 
 		query.Reset()
 		query.WriteString("CREATE TEMPORARY TABLE flush_users (" +
@@ -168,7 +198,7 @@ func (db *Database) flushUsers() {
 			"rawdl bigint unsigned NOT NULL DEFAULT 0, " +
 			"rawup bigint unsigned NOT NULL DEFAULT 0, " +
 			"PRIMARY KEY (ID))")
-		conn.execBuffer(&query)
+		conn.exec(&query)
 
 		query.Reset()
 		query.WriteString("INSERT INTO flush_users VALUES ")
@@ -197,7 +227,7 @@ func (db *Database) flushUsers() {
 
 			query.WriteString(" ON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUE(Uploaded), " +
 				"Downloaded = Downloaded + VALUE(Downloaded), rawdl = rawdl + VALUE(rawdl), rawup = rawup + VALUE(rawup)")
-			conn.execBuffer(&query)
+			conn.exec(&query)
 
 			query.Reset()
 			query.WriteString("UPDATE users_main u, flush_users fu SET " +
@@ -206,14 +236,16 @@ func (db *Database) flushUsers() {
 				"u.rawdl = u.rawdl + fu.rawdl, " +
 				"u.rawup = u.rawup + fu.rawup " +
 				"WHERE u.ID = fu.ID")
-			conn.execBuffer(&query)
+			conn.exec(&query)
 
-			elapsedTime := time.Since(startTime)
-			collectors.UpdateFlushTime("users", elapsedTime)
-			collectors.UpdateChannelsLen("users", count)
+			if !db.terminate {
+				elapsedTime := time.Since(startTime)
+				collectors.UpdateFlushTime("users", elapsedTime)
+				collectors.UpdateChannelsLen("users", count)
+			}
 
-			if length < (config.UserFlushBufferSize >> 1) {
-				time.Sleep(config.FlushSleepInterval)
+			if length < (userFlushBufferSize >> 1) {
+				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
 		} else if db.terminate {
 			break
@@ -234,7 +266,7 @@ func (db *Database) flushTransferHistory() {
 		count int
 	)
 
-	conn := OpenDatabaseConnection()
+	conn := Open()
 
 main:
 	for {
@@ -289,15 +321,17 @@ main:
 				"seedtime = seedtime + VALUE(seedtime), last_announce = VALUE(last_announce), " +
 				"active = VALUE(active), snatched = snatched + VALUE(snatched);")
 
-			conn.execBuffer(&query)
+			conn.exec(&query)
 			db.transferHistoryWaitGroup.Done()
 
-			elapsedTime := time.Since(startTime)
-			collectors.UpdateFlushTime("transfer_history", elapsedTime)
-			collectors.UpdateChannelsLen("transfer_history", count)
+			if !db.terminate {
+				elapsedTime := time.Since(startTime)
+				collectors.UpdateFlushTime("transfer_history", elapsedTime)
+				collectors.UpdateChannelsLen("transfer_history", count)
+			}
 
-			if length < (config.TransferHistoryFlushBufferSize >> 1) {
-				time.Sleep(config.FlushSleepInterval)
+			if length < (transferHistoryFlushBufferSize >> 1) {
+				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
 		} else if db.terminate {
 			db.transferHistoryWaitGroup.Done()
@@ -320,7 +354,7 @@ func (db *Database) flushTransferIps() {
 		count int
 	)
 
-	conn := OpenDatabaseConnection()
+	conn := Open()
 
 	for {
 		length := util.Max(1, len(db.transferIpsChannel))
@@ -354,14 +388,16 @@ func (db *Database) flushTransferIps() {
 			// todo in future, port should be part of PK
 			query.WriteString("\nON DUPLICATE KEY UPDATE port = VALUE(port), downloaded = downloaded + VALUE(downloaded), " +
 				"uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce)")
-			conn.execBuffer(&query)
+			conn.exec(&query)
 
-			elapsedTime := time.Since(startTime)
-			collectors.UpdateFlushTime("transfer_ips", elapsedTime)
-			collectors.UpdateChannelsLen("transfer_ips", count)
+			if !db.terminate {
+				elapsedTime := time.Since(startTime)
+				collectors.UpdateFlushTime("transfer_ips", elapsedTime)
+				collectors.UpdateChannelsLen("transfer_ips", count)
+			}
 
-			if length < (config.TransferIpsFlushBufferSize >> 1) {
-				time.Sleep(config.FlushSleepInterval)
+			if length < (transferIpsFlushBufferSize >> 1) {
+				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
 		} else if db.terminate {
 			break
@@ -382,7 +418,7 @@ func (db *Database) flushSnatches() {
 		count int
 	)
 
-	conn := OpenDatabaseConnection()
+	conn := Open()
 
 	for {
 		length := util.Max(1, len(db.snatchChannel))
@@ -413,14 +449,16 @@ func (db *Database) flushSnatches() {
 			startTime := time.Now()
 
 			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time)")
-			conn.execBuffer(&query)
+			conn.exec(&query)
 
-			elapsedTime := time.Since(startTime)
-			collectors.UpdateFlushTime("snatches", elapsedTime)
-			collectors.UpdateChannelsLen("snatches", count)
+			if !db.terminate {
+				elapsedTime := time.Since(startTime)
+				collectors.UpdateFlushTime("snatches", elapsedTime)
+				collectors.UpdateChannelsLen("snatches", count)
+			}
 
-			if length < (config.SnatchFlushBufferSize >> 1) {
-				time.Sleep(config.FlushSleepInterval)
+			if length < (snatchFlushBufferSize >> 1) {
+				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
 		} else if db.terminate {
 			break
@@ -442,7 +480,7 @@ func (db *Database) purgeInactivePeers() {
 		now := start.Unix()
 		count := 0
 
-		oldestActive := now - int64(config.InactiveAnnounceInterval.Seconds())
+		oldestActive := now - int64(peerInactivityInterval)
 
 		// First, remove inactive peers from memory
 		db.TorrentsMutex.Lock()
@@ -471,16 +509,16 @@ func (db *Database) purgeInactivePeers() {
 
 		elapsedTime := time.Since(start)
 		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
-		log.Info.Printf("Purged %d inactive peers from memory (%dms)\n", count, elapsedTime.Nanoseconds()/1000000)
+		log.Info.Printf("Purged %d inactive peers from memory (%s)\n", count, elapsedTime.String())
 
-		// Wait on flushing to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
+		// Wait to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
 		db.goTransferHistoryWait()
 
 		// Then set them to inactive in the database
 		db.mainConn.mutex.Lock()
 
 		start = time.Now()
-		result := db.mainConn.exec(db.cleanStalePeersStmt, oldestActive)
+		result := db.mainConn.execute(db.cleanStalePeersStmt, oldestActive)
 
 		rows, err := result.RowsAffected()
 		if err != nil {
@@ -489,10 +527,10 @@ func (db *Database) purgeInactivePeers() {
 		}
 		db.mainConn.mutex.Unlock()
 
-		log.Info.Printf("Updated %d inactive peers in database (%dms)\n", rows, time.Since(start).Nanoseconds()/1000000)
+		log.Info.Printf("Updated %d inactive peers in database (%s)\n", rows, time.Since(start).String())
 
 		db.waitGroup.Done()
-		time.Sleep(config.PurgeInactiveInterval)
+		time.Sleep(time.Duration(purgeInactivePeersInterval) * time.Second)
 	}
 }
 

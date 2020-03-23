@@ -19,25 +19,25 @@ package types
 
 type Peer struct {
 	Seeding      bool
-	ClientId     uint16
+	ClientID     uint16
 	Port         uint16
-	UserId       uint32
-	Ip           uint32
-	TorrentId    uint32
+	UserID       uint32
+	IP           uint32
+	TorrentID    uint32
 	Uploaded     uint64
 	Downloaded   uint64
 	Left         uint64
 	StartTime    int64 // unix time
 	LastAnnounce int64
-	Id           string
-	IpAddr       string
+	ID           string
+	IPAddr       string
 	Addr         []byte
 }
 
 type Torrent struct {
 	Status         uint8
 	Snatched       uint16
-	Id             uint32
+	ID             uint32
 	LastAction     int64 // unix time
 	UpMultiplier   float64
 	DownMultiplier float64
@@ -49,14 +49,14 @@ type Torrent struct {
 type User struct {
 	DisableDownload bool
 	TrackerHide     bool
-	Id              uint32
+	ID              uint32
 	UpMultiplier    float64
 	DownMultiplier  float64
 }
 
 type UserTorrentPair struct {
-	UserId    uint32
-	TorrentId uint32
+	UserID    uint32
+	TorrentID uint32
 }
 
 var (

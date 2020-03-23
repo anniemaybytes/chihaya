@@ -3,6 +3,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v2.6.0-rc3
+### Added
+- Ability to `restore` cache dump from JSON
+
+## v2.6.0-rc2
+### Added
+- Ability to configure intervals from `config.json`
+- Ability to configure deadlock behavior from `config.json`
+- Ability to configure channels buffer length from `config.json`
+
+### Changed
+- Return HTTP 500 when panicking in `ServeHTTP`
+- Use `time.Duration.String` for time formatting across code
+- Remove `prepareStatement` from `database.go`
+- database: `OpenDatabaseConnection` -> `Open`
+- database: `exec` -> `execute`, `execBuffer` -> `exec` (follows PDO)
+- Reformat README with better explanation of config file
+- Count only unique deadlocks for `chihaya_deadlock_count`
+
+## v2.6.0-rc1
+### Added
+- Log failing URL on panic in `ServeHTTP`
+
+### Fixed
+- `successful` typo
+
+### Changed
+- Moved `InitPrivateIPBlocks` to `init` inside `server.go`
+- Panic in metrics instead of returning empty body on error
+- Golint reformat code
+- Narrow `bytes.Buffer` in server to `io.Writer`
+- Eliminate long lines
+- golangci: disable default linters and specify hard list of enabled ones
+
 ## v2.5.0
 ### Added
 - Ability to enable or disable strict port checking in `config.json`
@@ -11,7 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Ability to configure inactive peer time and announce drift
 
 ### Fixed
-- Cal to `panic()` with wrong argument in `failure()` (`server.go`)
+- Call to `panic()` with wrong argument in `failure()` (`server.go`)
 - `cc` utility was overwriting torrent cache file with JSON version
 - Header configured in `proxy` was not being respected
 - `@config/GetInt()` was improperly implemented using `int` instead of `json.Number`
@@ -40,6 +74,9 @@ data loss in cases where single user or torrent was present multiple times in a 
 during build process
 - Dump stacktrace when error is encountered
 
+### Fixed
+- README was improperly showing `null` as valid value for `admin_token` and `proxy`.
+
 ### Changed
 - Changed `users` and `torrents` flush SQL queries to use temporary table with `UPDATE` instead
 of `INSERT INTO ... ON DUPLICATE KEY ...`, this avoids rare cases where previously removed entry
@@ -47,9 +84,6 @@ from these tables is inserted back with default values by chihaya
 - Code cleanup
 - Make torrentId `uint32`
 - Moved `main.go` to `cmd/chihaya` to allow for building multiple binaries
-
-### Fixed
-- README was improperly showing `null` as valid value for `admin_token` and `proxy`.
 
 ## v2.3.0
 ### Added
@@ -152,6 +186,13 @@ from these tables is inserted back with default values by chihaya
 - Failsafe to ensure all IPs are always IPv4 only
 - Allow to build without `scrape` and `recorder` via build tags
 
+### Fixed
+- Ensure down/up multipliers are always positive
+- Make `transferHistory` wait in `purgeInactivePeers` atomic with add in `flushTransferHistory` 
+- Ensure `transferHistoryWaitGroup` is released properly on loop break when 
+`transferHistoryChannel` is empty
+- Do not break main loop in `flushTransferHistory` when channel is empty
+
 ### Changed
 - Rename whitelist table from `xbt_whitelist` to `client_whitelist`
 - Update torrent's `last_action` only if announced action is seeding
@@ -161,13 +202,6 @@ from these tables is inserted back with default values by chihaya
 - Check error value from `.Encode` during serialization
 - Remove `connectable` from `transfer_history` flush
 - Code cleanup and formatting
-
-### Fixed
-- Ensure down/up multipliers are always positive
-- Make `transferHistory` wait in `purgeInactivePeers` atomic with add in `flushTransferHistory` 
-- Ensure `transferHistoryWaitGroup` is released properly on loop break when 
-`transferHistoryChannel` is empty
-- Do not break main loop in `flushTransferHistory` when channel is empty
 
 ## v0.5.0
 ### Added

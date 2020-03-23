@@ -22,61 +22,15 @@ import (
 	"encoding/json"
 	"os"
 	"sync"
-	"time"
 )
 
-// Loaded from the database
-var GlobalFreeleech = false
-
-// Intervals
-var (
-	// This is default announce interval we ask clients to use
-	AnnounceInterval = 45 * time.Minute
-
-	// This is absolute minimum time between each announces that clients are asked to obey
-	MinAnnounceInterval = 30 * time.Minute
-
-	// This is time interval between scrape requests we ask clients to use
-	ScrapeInterval = 15 * time.Minute
-
-	// This is a time after which peer is considered dead, it should be multiple of AnnounceInterval
-	InactiveAnnounceInterval = (AnnounceInterval + AnnounceDrift) * 2
-
-	// This is maximum time drift in announce intervals, see announce.go for details on how it's used
-	AnnounceDrift = 15 * time.Minute
-
-	// Reload times, see @Database.startReloading()
-	DatabaseReloadInterval        = 45 * time.Second
-	DatabaseSerializationInterval = 68 * time.Second
-	PurgeInactiveInterval         = 120 * time.Second
-
-	// Time to sleep between flushes if the buffer is less than half full
-	FlushSleepInterval = 3000 * time.Millisecond
-
-	// Initial time to wait before retrying the query when the database deadlocks (ramps linearly)
-	DeadlockWaitTime = 1000 * time.Millisecond
-
-	// Maximum times to retry a deadlocked query before giving up
-	MaxDeadlockRetries = 20
-)
-
-// Buffer sizes, see @Database.startFlushing()
-var (
-	TorrentFlushBufferSize         = 10000
-	UserFlushBufferSize            = 10000
-	TransferHistoryFlushBufferSize = 10000
-	TransferIpsFlushBufferSize     = 10000
-	SnatchFlushBufferSize          = 100
-)
-
-// Config file stuff
 var (
 	configFile = "config.json"
-	config     ConfigMap
+	config     Map
 	once       sync.Once
 )
 
-type ConfigMap map[string]interface{}
+type Map map[string]interface{}
 
 func Get(s string, defaultValue string) (string, bool) {
 	once.Do(readConfig)
@@ -94,37 +48,37 @@ func GetInt(s string, defaultValue int) (int, bool) {
 	return config.GetInt(s, defaultValue)
 }
 
-func Section(s string) ConfigMap {
+func Section(s string) Map {
 	once.Do(readConfig)
 	return config.Section(s)
 }
 
-func (m ConfigMap) Get(s string, defaultValue string) (string, bool) {
+func (m Map) Get(s string, defaultValue string) (string, bool) {
 	if result, exists := m[s].(string); exists {
 		return result, true
-	} else {
-		return defaultValue, false
 	}
+
+	return defaultValue, false
 }
 
-func (m ConfigMap) GetInt(s string, defaultValue int) (int, bool) {
+func (m Map) GetInt(s string, defaultValue int) (int, bool) {
 	if result, exists := m[s].(json.Number); exists {
 		res, _ := result.Int64()
 		return int(res), true
-	} else {
-		return defaultValue, false
 	}
+
+	return defaultValue, false
 }
 
-func (m ConfigMap) GetBool(s string, defaultValue bool) (bool, bool) {
+func (m Map) GetBool(s string, defaultValue bool) (bool, bool) {
 	if result, exists := m[s].(bool); exists {
 		return result, true
-	} else {
-		return defaultValue, false
 	}
+
+	return defaultValue, false
 }
 
-func (m ConfigMap) Section(s string) ConfigMap {
+func (m Map) Section(s string) Map {
 	result, _ := m[s].(map[string]interface{})
 	return result
 }
@@ -138,8 +92,8 @@ func readConfig() {
 	}
 
 	decoder := json.NewDecoder(f)
-	decoder.UseNumber()
 
+	decoder.UseNumber()
 	err = decoder.Decode(&config)
 
 	if err != nil {

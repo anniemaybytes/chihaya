@@ -119,7 +119,8 @@ func TestRecord(t *testing.T) {
 	}
 
 	if len(expectedOutputs) != len(recordLines) {
-		t.Fatalf("The number of records do not match with what is expected! (expected %d, got %d)", len(expectedOutputs), len(recordLines))
+		t.Fatalf("The number of records do not match with what is expected! (expected %d, got %d)",
+			len(expectedOutputs), len(recordLines))
 	}
 
 	for index, recordLine := range recordLines { // noinspection GoNilness

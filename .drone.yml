@@ -1,3 +1,4 @@
+---
 kind: pipeline
 name: compliance
 type: docker
@@ -17,15 +18,23 @@ steps:
     -   name: test
         image: golang:1.14-alpine
         environment:
+            CGO_ENABLED: 0
             GO111MODULE: on
         commands:
-            - CGO_ENABLED=0 go test ./... -v -coverprofile=coverage.out
+            - go get -v -t -d ./...
+            - go test ./... -v -coverprofile=coverage.out
+    -   name: coverage
+        image: golang:1.14-alpine
+        commands:
             - go tool cover -func=coverage.out
 
 ---
 kind: pipeline
 name: docker
 type: docker
+
+platform:
+    arch: amd64
 
 steps:
     -   name: build
@@ -48,3 +57,7 @@ steps:
 trigger:
     event:
         - promote
+
+depends_on:
+    - compliance
+    - tests

@@ -27,6 +27,7 @@ import (
 	"chihaya/util"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -36,9 +37,23 @@ import (
 	"github.com/zeebo/bencode"
 )
 
-var privateIPBlocks []*net.IPNet
+var (
+	announceInterval       int
+	minAnnounceInterval    int
+	peerInactivityInterval int
+	maxAccounceDrift       int
 
-func InitPrivateIPBlocks() {
+	privateIPBlocks []*net.IPNet
+)
+
+func init() {
+	intervals := config.Section("intervals")
+
+	announceInterval, _ = intervals.GetInt("announce", 1800)
+	minAnnounceInterval, _ = intervals.GetInt("min_announce", 900)
+	peerInactivityInterval, _ = intervals.GetInt("peer_inactivity", 3900)
+	maxAccounceDrift, _ = intervals.GetInt("announce_drift", 300)
+
 	for _, cidr := range []string{
 		"10.0.0.0/8",     // RFC1918
 		"172.16.0.0/12",  // RFC1918
@@ -56,7 +71,7 @@ func InitPrivateIPBlocks() {
 	}
 }
 
-func getPublicIpV4(ipAddr string, exists bool) (string, bool) {
+func getPublicIPV4(ipAddr string, exists bool) (string, bool) {
 	if !exists { // Already does not exist, fail
 		return ipAddr, exists
 	}
@@ -86,7 +101,7 @@ func getPublicIpV4(ipAddr string, exists bool) (string, bool) {
 	return ipAddr, !private
 }
 
-func whitelisted(peerId string, db *database.Database) uint16 {
+func whitelisted(peerID string, db *database.Database) uint16 {
 	db.WhitelistMutex.RLock()
 	defer db.WhitelistMutex.RUnlock()
 
@@ -95,13 +110,13 @@ func whitelisted(peerId string, db *database.Database) uint16 {
 		matched   bool
 	)
 
-	for id, whitelistedId := range db.Whitelist {
-		widLen = len(whitelistedId)
-		if widLen <= len(peerId) {
+	for id, whitelistedID := range db.Whitelist {
+		widLen = len(whitelistedID)
+		if widLen <= len(peerID) {
 			matched = true
 
 			for i = 0; i < widLen; i++ {
-				if peerId[i] != whitelistedId[i] {
+				if peerID[i] != whitelistedID[i] {
 					matched = false
 					break
 				}
@@ -116,10 +131,10 @@ func whitelisted(peerId string, db *database.Database) uint16 {
 	return 0
 }
 
-func hasHitAndRun(db *database.Database, userId, torrentId uint32) bool {
+func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
 	hnr := cdb.UserTorrentPair{
-		UserId:    userId,
-		TorrentId: torrentId,
+		UserID:    userID,
+		TorrentID: torrentID,
 	}
 
 	_, exists := db.HitAndRuns[hnr]
@@ -127,12 +142,13 @@ func hasHitAndRun(db *database.Database, userId, torrentId uint32) bool {
 	return exists
 }
 
-func announce(params *queryParams, header http.Header, remoteAddr string, user *cdb.User, db *database.Database, buf *bytes.Buffer) {
+func announce(params *queryParams, header http.Header, remoteAddr string, user *cdb.User,
+	db *database.Database, buf io.Writer) {
 	var exists bool
 
 	// Mandatory parameters
 	infoHash, _ := params.get("info_hash")
-	peerId, _ := params.get("peer_id")
+	peerID, _ := params.get("peer_id")
 	port, portExists := params.getUint16("port")
 	uploaded, uploadedExists := params.getUint64("uploaded")
 	downloaded, downloadedExists := params.getUint64("downloaded")
@@ -143,7 +159,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		return
 	}
 
-	if peerId == "" {
+	if peerID == "" {
 		failure("Malformed request - missing peer_id", buf, 1*time.Hour)
 		return
 	}
@@ -175,8 +191,8 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	}
 
 	ipAddr, exists := func() (string, bool) {
-		ipV4, existsV4 := getPublicIpV4(params.get("ipv4")) // first try to get ipv4 address if client sent it
-		ip, exists := getPublicIpV4(params.get("ip"))       // then try to get public ip if sent by client
+		ipV4, existsV4 := getPublicIPV4(params.get("ipv4")) // first try to get ipv4 address if client sent it
+		ip, exists := getPublicIPV4(params.get("ip"))       // then try to get public ip if sent by client
 
 		if existsV4 && exists && ip != ipV4 { // fail if ip and ipv4 are not same, and both are provided
 			return "", false
@@ -221,9 +237,9 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		return
 	}
 
-	clientId := whitelisted(peerId, db)
-	if 0 == clientId {
-		failure(fmt.Sprintf("Your client is not approved (id: %s)", peerId), buf, 1*time.Hour)
+	clientID := whitelisted(peerID, db)
+	if 0 == clientID {
+		failure(fmt.Sprintf("Your client is not approved (id: %s)", peerID), buf, 1*time.Hour)
 		return
 	}
 
@@ -238,7 +254,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	}
 
 	if torrent.Status == 1 && left == 0 {
-		log.Info.Printf("Unpruning torrent %d", torrent.Id)
+		log.Info.Printf("Unpruning torrent %d", torrent.ID)
 		db.UnPrune(torrent)
 		torrent.Status = 0
 	} else if torrent.Status != 0 {
@@ -276,12 +292,12 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	seeding := false
 	active := true
 	completed := event == "completed"
-	peerKey := fmt.Sprintf("%d-%s", user.Id, peerId)
+	peerKey := fmt.Sprintf("%d-%s", user.ID, peerID)
 
 	if left > 0 {
 		if user.DisableDownload {
 			// only disable download if the torrent doesn't have a HnR against it
-			if !hasHitAndRun(db, user.Id, torrent.Id) {
+			if !hasHitAndRun(db, user.ID, torrent.ID) {
 				failure("Your download privileges are disabled", buf, 1*time.Hour)
 				return
 			}
@@ -324,9 +340,9 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 
 	// Update peer info/stats
 	if newPeer {
-		peer.Id = peerId
-		peer.UserId = user.Id
-		peer.TorrentId = torrent.Id
+		peer.ID = peerID
+		peer.UserID = user.ID
+		peer.TorrentID = torrent.ID
 		peer.StartTime = now
 		peer.LastAnnounce = now
 		peer.Uploaded = uploaded
@@ -346,7 +362,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	}
 
 	var deltaDownload int64
-	if !config.GlobalFreeleech {
+	if !database.GlobalFreeleech {
 		deltaDownload = int64(float64(rawDeltaDownload) * math.Abs(user.DownMultiplier) * math.Abs(torrent.DownMultiplier))
 	}
 
@@ -357,7 +373,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	peer.Seeding = seeding
 	deltaTime := now - peer.LastAnnounce
 
-	if deltaTime > int64(config.InactiveAnnounceInterval.Seconds()) {
+	if deltaTime > int64(peerInactivityInterval) {
 		deltaTime = 0
 	}
 
@@ -366,7 +382,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		deltaSeedTime = now - peer.LastAnnounce
 	}
 
-	if deltaSeedTime > int64(config.InactiveAnnounceInterval.Seconds()) {
+	if deltaSeedTime > int64(peerInactivityInterval) {
 		deltaSeedTime = 0
 	}
 
@@ -401,22 +417,22 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 
 	peer.Addr = []byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
 	peer.Port = port
-	peer.IpAddr = ipAddr
+	peer.IPAddr = ipAddr
 
 	if user.TrackerHide {
-		peer.Ip = 2130706433 // 127.0.0.1
+		peer.IP = 2130706433 // 127.0.0.1
 	} else {
-		peer.Ip = ipLong
+		peer.IP = ipLong
 	}
 
-	peer.ClientId = clientId
+	peer.ClientID = clientID
 
 	// If the channels are already full, record* blocks until a flush occurs
 	db.RecordTorrent(torrent, deltaSnatch)
 	db.RecordTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
 	db.RecordUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	record.Record(peer.TorrentId, user.Id, rawDeltaUpload, rawDeltaDownload, uploaded, event, ipAddr, port)
-	db.RecordTransferIp(peer, rawDeltaUpload, rawDeltaDownload)
+	record.Record(peer.TorrentID, user.ID, rawDeltaUpload, rawDeltaDownload, uploaded, event, ipAddr, port)
+	db.RecordTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
 
 	// Generate response
 	seedCount := len(torrent.Seeders)
@@ -427,20 +443,20 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	respData["complete"] = seedCount
 	respData["incomplete"] = leechCount
 	respData["downloaded"] = snatchCount
-	respData["min interval"] = config.MinAnnounceInterval / time.Second
+	respData["min interval"] = minAnnounceInterval
 
 	/* We asks clients to announce each interval seconds. In order to spread the load on tracker,
 	we will vary the interval given to client by random number of seconds between 0 and value
 	specified in config */
-	announceDrift := util.Rand(0, int(config.AnnounceDrift.Seconds()))
-	respData["interval"] = int64(config.AnnounceInterval.Seconds()) + int64(announceDrift)
+	announceDrift := util.Rand(0, maxAccounceDrift)
+	respData["interval"] = announceInterval + announceDrift
 
 	if numWant > 0 && active {
 		compactString, exists := params.get("compact")
 		compact := !exists || compactString != "0" // Defaults to being compact
 
-		noPeerIdString, exists := params.get("no_peer_id")
-		noPeerId := exists && noPeerIdString == "1"
+		noPeerIDString, exists := params.get("no_peer_id")
+		noPeerID := exists && noPeerIDString == "1"
 
 		var peerCount int
 		if seeding {
@@ -462,7 +478,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 					break
 				}
 
-				if leech.UserId == peer.UserId {
+				if leech.UserID == peer.UserID {
 					continue
 				}
 
@@ -478,12 +494,12 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 				if len(peersToSend) >= numWant {
 					break
 				}
-				if seed.UserId == peer.UserId {
+				if seed.UserID == peer.UserID {
 					continue
 				}
-				_, exists = uniqueSeeders[seed.UserId]
+				_, exists = uniqueSeeders[seed.UserID]
 				if !exists {
-					uniqueSeeders[seed.UserId] = seed
+					uniqueSeeders[seed.UserID] = seed
 					peersToSend = append(peersToSend, seed)
 				}
 			}
@@ -491,7 +507,7 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 				if len(peersToSend) >= numWant {
 					break
 				}
-				if leech.UserId == peer.UserId {
+				if leech.UserID == peer.UserID {
 					continue
 				}
 				peersToSend = append(peersToSend, leech)
@@ -510,10 +526,10 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 			peerList := make([]map[string]interface{}, len(peersToSend))
 			for i, other := range peersToSend {
 				peerMap := make(map[string]interface{})
-				peerMap["ip"] = other.IpAddr
+				peerMap["ip"] = other.IPAddr
 				peerMap["port"] = other.Port
-				if !noPeerId {
-					peerMap["peer id"] = other.Id
+				if !noPeerID {
+					peerMap["peer id"] = other.ID
 				}
 				peerList[i] = peerMap
 			}
@@ -526,5 +542,8 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		panic(err)
 	}
 
-	buf.Write(bufdata)
+	_, err = buf.Write(bufdata)
+	if err != nil {
+		panic(err)
+	}
 }

@@ -37,7 +37,7 @@ func (db *Database) RecordTorrent(torrent *types.Torrent, deltaSnatch uint8) {
 	tq := db.bufferPool.Take()
 
 	tq.WriteString("('")
-	tq.WriteString(strconv.FormatUint(uint64(torrent.Id), 10))
+	tq.WriteString(strconv.FormatUint(uint64(torrent.ID), 10))
 	tq.WriteString("','")
 	tq.WriteString(strconv.FormatUint(uint64(deltaSnatch), 10))
 	tq.WriteString("','")
@@ -55,7 +55,7 @@ func (db *Database) RecordUser(user *types.User, rawDeltaUpload, rawDeltaDownloa
 	uq := db.bufferPool.Take()
 
 	uq.WriteString("('")
-	uq.WriteString(strconv.FormatUint(uint64(user.Id), 10))
+	uq.WriteString(strconv.FormatUint(uint64(user.ID), 10))
 	uq.WriteString("','")
 	uq.WriteString(strconv.FormatInt(deltaUpload, 10))
 	uq.WriteString("','")
@@ -69,13 +69,14 @@ func (db *Database) RecordUser(user *types.User, rawDeltaUpload, rawDeltaDownloa
 	db.userChannel <- uq
 }
 
-func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime int64, deltaSnatch uint8, active bool) {
+func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawDeltaDownload, deltaTime,
+	deltaSeedTime int64, deltaSnatch uint8, active bool) {
 	th := db.bufferPool.Take()
 
 	th.WriteString("('")
-	th.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
+	th.WriteString(strconv.FormatUint(uint64(peer.UserID), 10))
 	th.WriteString("','")
-	th.WriteString(strconv.FormatUint(uint64(peer.TorrentId), 10))
+	th.WriteString(strconv.FormatUint(uint64(peer.TorrentID), 10))
 	th.WriteString("','")
 	th.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
 	th.WriteString("','")
@@ -101,17 +102,17 @@ func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawD
 	db.transferHistoryChannel <- th
 }
 
-func (db *Database) RecordTransferIp(peer *types.Peer, rawDeltaUpload, rawDeltaDownload int64) {
+func (db *Database) RecordTransferIP(peer *types.Peer, rawDeltaUpload, rawDeltaDownload int64) {
 	ti := db.bufferPool.Take()
 
 	ti.WriteString("('")
-	ti.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
+	ti.WriteString(strconv.FormatUint(uint64(peer.UserID), 10))
 	ti.WriteString("','")
-	ti.WriteString(strconv.FormatUint(uint64(peer.TorrentId), 10))
+	ti.WriteString(strconv.FormatUint(uint64(peer.TorrentID), 10))
 	ti.WriteString("','")
-	ti.WriteString(strconv.FormatUint(uint64(peer.ClientId), 10))
+	ti.WriteString(strconv.FormatUint(uint64(peer.ClientID), 10))
 	ti.WriteString("','")
-	ti.WriteString(strconv.FormatUint(uint64(peer.Ip), 10))
+	ti.WriteString(strconv.FormatUint(uint64(peer.IP), 10))
 	ti.WriteString("','")
 	ti.WriteString(strconv.FormatUint(uint64(peer.Port), 10))
 	ti.WriteString("','")
@@ -131,9 +132,9 @@ func (db *Database) RecordSnatch(peer *types.Peer, now int64) {
 	sn := db.bufferPool.Take()
 
 	sn.WriteString("('")
-	sn.WriteString(strconv.FormatUint(uint64(peer.UserId), 10))
+	sn.WriteString(strconv.FormatUint(uint64(peer.UserID), 10))
 	sn.WriteString("','")
-	sn.WriteString(strconv.FormatUint(uint64(peer.TorrentId), 10))
+	sn.WriteString(strconv.FormatUint(uint64(peer.TorrentID), 10))
 	sn.WriteString("','")
 	sn.WriteString(strconv.FormatInt(now, 10))
 	sn.WriteString("')")
@@ -143,6 +144,6 @@ func (db *Database) RecordSnatch(peer *types.Peer, now int64) {
 
 func (db *Database) UnPrune(torrent *types.Torrent) {
 	db.mainConn.mutex.Lock()
-	db.mainConn.exec(db.unPruneTorrentStmt, torrent.Id)
+	db.mainConn.execute(db.unPruneTorrentStmt, torrent.ID)
 	db.mainConn.mutex.Unlock()
 }

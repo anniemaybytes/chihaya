@@ -18,14 +18,21 @@
 package server
 
 import (
-	"bytes"
 	"chihaya/config"
 	"chihaya/database"
 	cdb "chihaya/database/types"
+	"io"
 	"time"
 
 	"github.com/zeebo/bencode"
 )
+
+var scrapeInterval int
+
+func init() {
+	intervals := config.Section("intervals")
+	scrapeInterval, _ = intervals.GetInt("scrape", 900)
+}
 
 func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 	ret := make(map[string]interface{})
@@ -36,7 +43,7 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 	return ret
 }
 
-func scrape(params *queryParams, db *database.Database, buf *bytes.Buffer) {
+func scrape(params *queryParams, db *database.Database, buf io.Writer) {
 	enabledByDefault, _ := config.GetBool("scrape", true)
 	if !enabledByDefault {
 		failure("Scrape convention is not supported", buf, 1*time.Hour)
@@ -72,16 +79,19 @@ func scrape(params *queryParams, db *database.Database, buf *bytes.Buffer) {
 
 	scrapeData["files"] = fileData
 	scrapeData["flags"] = map[string]interface{}{
-		"min_request_interval": config.ScrapeInterval / time.Second,
+		"min_request_interval": scrapeInterval,
 	}
 	// the following are for compatibility with clients that don't implement scrape flags
-	scrapeData["interval"] = config.ScrapeInterval / time.Second
-	scrapeData["min interval"] = config.ScrapeInterval / time.Second
+	scrapeData["interval"] = scrapeInterval
+	scrapeData["min interval"] = scrapeInterval
 
 	bufdata, err := bencode.EncodeBytes(scrapeData)
 	if err != nil {
 		panic(err)
 	}
 
-	buf.Write(bufdata)
+	_, err = buf.Write(bufdata)
+	if err != nil {
+		panic(err)
+	}
 }

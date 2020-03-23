@@ -41,7 +41,14 @@ type AdminCollector struct {
 }
 
 var (
-	// Data
+	torrentFlushBufferSize         int
+	userFlushBufferSize            int
+	transferHistoryFlushBufferSize int
+	transferIpsFlushBufferSize     int
+	snatchFlushBufferSize          int
+)
+
+var (
 	serializationTime = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "chihaya_serialization_seconds",
 		Help:    "Histogram of the time taken to serialize database",
@@ -58,40 +65,57 @@ var (
 		Buckets: []float64{.005, .01, .025, .05, .1, .25, .5, 1},
 	}, []string{"type"})
 
-	torrentFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "chihaya_torrents_channel_len",
-		Help:    "Histogram representing channel length for torrents during flush",
-		Buckets: prometheus.LinearBuckets(0, float64(config.TorrentFlushBufferSize)*0.05, int(1/0.05)),
-	})
-	userFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "chihaya_users_channel_len",
-		Help:    "Histogram representing channel length for users during flush",
-		Buckets: prometheus.LinearBuckets(0, float64(config.UserFlushBufferSize)*0.05, int(1/0.05)),
-	})
-	transferHistoryFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "chihaya_transfer_history_channel_len",
-		Help:    "Histogram representing channel length for transfer history during flush",
-		Buckets: prometheus.LinearBuckets(0, float64(config.TransferHistoryFlushBufferSize)*0.05, int(1/0.05)),
-	})
-	transferIpsFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "chihaya_transfer_ips_channel_len",
-		Help:    "Histogram representing channel length for transfer ips during flush",
-		Buckets: prometheus.LinearBuckets(0, float64(config.TransferIpsFlushBufferSize)*0.05, int(1/0.05)),
-	})
-	snatchFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "chihaya_snatches_channel_len",
-		Help:    "Histogram representing channel length for snatches during flush",
-		Buckets: prometheus.LinearBuckets(0, float64(config.SnatchFlushBufferSize)*0.05, int(1/0.05)),
-	})
+	torrentFlushBufferLength         prometheus.Histogram
+	userFlushBufferLength            prometheus.Histogram
+	transferHistoryFlushBufferLength prometheus.Histogram
+	transferIpsFlushBufferLength     prometheus.Histogram
+	snatchFlushBufferLength          prometheus.Histogram
 
 	deadlockTime  = time.Duration(0)
 	deadlockCount = 0
 )
 
+func init() {
+	channelsConfig := config.Section("channels")
+	torrentFlushBufferSize, _ = channelsConfig.GetInt("torrent", 5000)
+	userFlushBufferSize, _ = channelsConfig.GetInt("user", 5000)
+	transferHistoryFlushBufferSize, _ = channelsConfig.GetInt("transfer_history", 5000)
+	transferIpsFlushBufferSize, _ = channelsConfig.GetInt("transfer_ips", 5000)
+	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatch", 25)
+
+	torrentFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "chihaya_torrents_channel_len",
+		Help:    "Histogram representing channel length for torrents during flush",
+		Buckets: prometheus.LinearBuckets(0, float64(torrentFlushBufferSize)*0.05, 20),
+	})
+	userFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "chihaya_users_channel_len",
+		Help:    "Histogram representing channel length for users during flush",
+		Buckets: prometheus.LinearBuckets(0, float64(userFlushBufferSize)*0.05, 20),
+	})
+	transferHistoryFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "chihaya_transfer_history_channel_len",
+		Help:    "Histogram representing channel length for transfer history during flush",
+		Buckets: prometheus.LinearBuckets(0, float64(transferHistoryFlushBufferSize)*0.05, 20),
+	})
+	transferIpsFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "chihaya_transfer_ips_channel_len",
+		Help:    "Histogram representing channel length for transfer ips during flush",
+		Buckets: prometheus.LinearBuckets(0, float64(transferIpsFlushBufferSize)*0.05, 20),
+	})
+	snatchFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "chihaya_snatches_channel_len",
+		Help:    "Histogram representing channel length for snatches during flush",
+		Buckets: prometheus.LinearBuckets(0, float64(snatchFlushBufferSize)*0.05, 20),
+	})
+}
+
 func NewAdminCollector() *AdminCollector {
 	return &AdminCollector{
-		deadlockCountMetric: prometheus.NewDesc("chihaya_deadlock_count", "Number of times deadlock was encountered during flush", nil, nil),
-		deadlockTimeMetric:  prometheus.NewDesc("chihaya_deadlock_seconds_total", "Total time wasted awaiting to free deadlock", nil, nil),
+		deadlockCountMetric: prometheus.NewDesc("chihaya_deadlock_count",
+			"Number of unique database deadlocks encountered", nil, nil),
+		deadlockTimeMetric: prometheus.NewDesc("chihaya_deadlock_seconds_total",
+			"Total time wasted awaiting to free deadlock", nil, nil),
 
 		torrentFlushBufferHistogram:         &torrentFlushBufferLength,
 		userFlushBufferHistogram:            &userFlushBufferLength,
