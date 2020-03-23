@@ -17,35 +17,6 @@
 
 package types
 
-type Peer struct {
-	Seeding      bool
-	ClientID     uint16
-	Port         uint16
-	UserID       uint32
-	IP           uint32
-	TorrentID    uint32
-	Uploaded     uint64
-	Downloaded   uint64
-	Left         uint64
-	StartTime    int64 // unix time
-	LastAnnounce int64
-	ID           string
-	IPAddr       string
-	Addr         []byte
-}
-
-type Torrent struct {
-	Status         uint8
-	Snatched       uint16
-	ID             uint32
-	LastAction     int64 // unix time
-	UpMultiplier   float64
-	DownMultiplier float64
-
-	Seeders  map[string]*Peer
-	Leechers map[string]*Peer
-}
-
 type User struct {
 	DisableDownload bool
 	TrackerHide     bool
@@ -59,7 +30,4 @@ type UserTorrentPair struct {
 	TorrentID uint32
 }
 
-var (
-	TorrentCacheFile = "torrent-cache"
-	UserCacheFile    = "user-cache"
-)
+var UserCacheFile = "user-cache"

@@ -109,27 +109,56 @@ func (db *Database) Init() {
 	// Used for recording updates, so the max required size should be < 128 bytes. See record.go for details
 	db.bufferPool = util.NewBufferPool(maxBuffers, 128)
 
-	db.loadUsersStmt, _ = db.mainConn.sqlDb.Prepare(
+	var err error
+
+	db.loadUsersStmt, err = db.mainConn.sqlDb.Prepare(
 		"SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide " +
 			"FROM users_main " +
 			"WHERE Enabled = '1'")
-	db.loadHnrStmt, _ = db.mainConn.sqlDb.Prepare(
+	if err != nil {
+		panic(err)
+	}
+
+	db.loadHnrStmt, err = db.mainConn.sqlDb.Prepare(
 		"SELECT h.uid, h.fid FROM transfer_history AS h " +
 			"JOIN users_main AS u ON u.ID = h.uid " +
 			"WHERE h.hnr = '1' AND u.Enabled = '1'")
-	db.loadTorrentsStmt, _ = db.mainConn.sqlDb.Prepare(
-		"SELECT t.ID ID, t.info_hash info_hash, (IFNULL(tg.DownMultiplier, 1) * t.DownMultiplier) DownMultiplier, " +
-			"(IFNULL(tg.UpMultiplier, 1) * t.UpMultiplier) UpMultiplier, t.Snatched Snatched, t.Status Status " +
+	if err != nil {
+		panic(err)
+	}
+
+	db.loadTorrentsStmt, err = db.mainConn.sqlDb.Prepare(
+		"SELECT t.ID, t.info_hash, (IFNULL(tg.DownMultiplier, 1) * t.DownMultiplier), " +
+			"(IFNULL(tg.UpMultiplier, 1) * t.UpMultiplier), t.Snatched, t.Status " +
 			"FROM torrents AS t " +
 			"LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID = t.GroupID AND tg.Type = t.TorrentType")
-	db.loadWhitelistStmt, _ = db.mainConn.sqlDb.Prepare(
+	if err != nil {
+		panic(err)
+	}
+
+	db.loadWhitelistStmt, err = db.mainConn.sqlDb.Prepare(
 		"SELECT id, peer_id FROM client_whitelist WHERE archived = 0")
-	db.loadFreeleechStmt, _ = db.mainConn.sqlDb.Prepare(
+	if err != nil {
+		panic(err)
+	}
+
+	db.loadFreeleechStmt, err = db.mainConn.sqlDb.Prepare(
 		"SELECT mod_setting FROM mod_core WHERE mod_option = 'global_freeleech'")
-	db.cleanStalePeersStmt, _ = db.mainConn.sqlDb.Prepare(
+	if err != nil {
+		panic(err)
+	}
+
+	db.cleanStalePeersStmt, err = db.mainConn.sqlDb.Prepare(
 		"UPDATE transfer_history SET active = '0' WHERE last_announce < ? AND active = '1'")
-	db.unPruneTorrentStmt, _ = db.mainConn.sqlDb.Prepare(
+	if err != nil {
+		panic(err)
+	}
+
+	db.unPruneTorrentStmt, err = db.mainConn.sqlDb.Prepare(
 		"UPDATE torrents SET Status = 0 WHERE ID = ?")
+	if err != nil {
+		panic(err)
+	}
 
 	db.Users = make(map[string]*types.User)
 	db.HitAndRuns = make(map[types.UserTorrentPair]struct{})

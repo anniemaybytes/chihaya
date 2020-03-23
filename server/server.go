@@ -28,7 +28,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"path"
 	"strconv"
 	"sync"
@@ -56,42 +55,10 @@ type httpHandler struct {
 	startTime time.Time
 }
 
-type queryParams struct {
-	params     map[string]string
-	infoHashes []string
-}
-
-func (p *queryParams) get(which string) (ret string, exists bool) {
-	ret, exists = p.params[which]
-	return
-}
-
-func (p *queryParams) getUint(which string, bitSize int) (ret uint64, exists bool) {
-	str, exists := p.params[which]
-	if exists {
-		var err error
-
-		exists = false
-
-		ret, err = strconv.ParseUint(str, 10, bitSize)
-		if err == nil {
-			exists = true
-		}
-	}
-
-	return
-}
-
-func (p *queryParams) getUint64(which string) (ret uint64, exists bool) {
-	return p.getUint(which, 64)
-}
-
-func (p *queryParams) getUint16(which string) (ret uint16, exists bool) {
-	tmp, exists := p.getUint(which, 16)
-	ret = uint16(tmp)
-
-	return
-}
+var (
+	handler  *httpHandler
+	listener net.Listener
+)
 
 func failure(err string, buf io.Writer, interval time.Duration) {
 	failureData := make(map[string]interface{})
@@ -110,97 +77,26 @@ func failure(err string, buf io.Writer, interval time.Duration) {
 	}
 }
 
-/*
- * URL.Query() is rather slow, so I rewrote it
- * Since the only parameter that can have multiple values is info_hash for scrapes, handle this specifically
- */
-func (handler *httpHandler) parseQuery(query string) (ret *queryParams, err error) {
-	ret = &queryParams{make(map[string]string), nil}
-	queryLen := len(query)
-
-	var (
-		keyStart, keyEnd int
-		valStart, valEnd int
-		firstInfoHash    string
-	)
-
-	onKey := true
-	hasInfoHash := false
-
-	for i := 0; i < queryLen; i++ {
-		separator := query[i] == '&' || query[i] == ';'
-		if separator || i == queryLen-1 { // ';' is a valid separator as per W3C spec
-			if onKey {
-				keyStart = i + 1
-				continue
-			}
-
-			if i == queryLen-1 && !separator {
-				if query[i] == '=' {
-					continue
-				}
-
-				valEnd = i
-			}
-
-			keyStr, err1 := url.QueryUnescape(query[keyStart : keyEnd+1])
-			if err1 != nil {
-				err = err1
-				return
-			}
-
-			valStr, err1 := url.QueryUnescape(query[valStart : valEnd+1])
-			if err1 != nil {
-				err = err1
-				return
-			}
-
-			ret.params[keyStr] = valStr
-
-			if keyStr == "info_hash" {
-				if hasInfoHash {
-					// There is more than one info_hash
-					if ret.infoHashes == nil {
-						ret.infoHashes = []string{firstInfoHash}
-					}
-
-					ret.infoHashes = append(ret.infoHashes, valStr)
-				} else {
-					firstInfoHash = valStr
-					hasInfoHash = true
-				}
-			}
-
-			onKey = true
-			keyStart = i + 1
-		} else if query[i] == '=' {
-			onKey = false
-			valStart = i + 1
-		} else if onKey {
-			keyEnd = i
-		} else {
-			valEnd = i
-		}
-	}
-
-	return
-}
-
-func (handler *httpHandler) respond(r *http.Request, buf io.Writer) {
+func (handler *httpHandler) respond(r *http.Request, buf io.Writer) bool {
 	dir, action := path.Split(r.URL.Path)
-	if len(dir) != 34 {
-		failure("Malformed request - missing passkey", buf, 1*time.Hour)
-		return
+	if action == "" {
+		return false
 	}
 
-	passkey := dir[1:33]
+	// Handle public endpoints (/:action)
 
-	params, err := handler.parseQuery(r.URL.RawQuery)
+	passkey := path.Dir(dir)[1:]
+	if passkey == "" {
+		switch action {
+		case "check":
+			_, _ = io.WriteString(buf, fmt.Sprintf("%d", time.Now().Unix()))
+			return true
+		}
 
-	if err != nil {
-		failure("Error parsing query", buf, 1*time.Hour)
-		return
+		return false
 	}
+
+	// Handle private endpoints (/:passkey/:action)
 
 	handler.db.UsersMutex.RLock()
 	user, exists := handler.db.Users[passkey]
@@ -208,26 +104,29 @@ func (handler *httpHandler) respond(r *http.Request, buf io.Writer) {
 
 	if !exists {
 		failure("Your passkey is invalid", buf, 1*time.Hour)
-		return
+		return true
 	}
 
 	switch action {
 	case "announce":
-		announce(params, r.Header, r.RemoteAddr, user, handler.db, buf)
-		return
+		announce(r.URL.RawQuery, r.Header, r.RemoteAddr, user, handler.db, buf)
+		return true
 	case "scrape":
-		scrape(params, handler.db, buf)
-		return
+		enabledByDefault, _ := config.GetBool("scrape", true)
+		if !enabledByDefault {
+			return false
+		}
+
+		scrape(r.URL.RawQuery, handler.db, buf)
+
+		return true
 	case "metrics":
 		metrics(r.Header.Get("Authorization"), handler.db, buf)
-		return
+		return true
 	}
 
-	failure(fmt.Sprintf("Unknown action (%s)", action), buf, 1*time.Hour)
+	return false
 }
-
-var handler *httpHandler
-var listener net.Listener
 
 func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if handler.terminate {
@@ -246,19 +145,27 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.WriteStack()
 
 			w.WriteHeader(500)
+
+			collectors.IncrementErroredRequests()
 		}
 	}()
 
 	buf := handler.bufferPool.Take()
 	defer handler.bufferPool.Give(buf)
 
-	handler.respond(r, buf)
+	exists, status := handler.respond(r, buf), 200
+	if !exists {
+		status = 404
+	}
 
 	w.Header().Add("Content-Type", "text/plain")
 	w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
+	w.WriteHeader(status)
 
-	// The response should always be 200, even on failure
-	_, _ = w.Write(buf.Bytes())
+	_, err := w.Write(buf.Bytes())
+	if err != nil {
+		panic(err)
+	}
 
 	atomic.AddUint64(&handler.requests, 1)
 }

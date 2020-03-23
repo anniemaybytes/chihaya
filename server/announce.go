@@ -24,6 +24,7 @@ import (
 	cdb "chihaya/database/types"
 	"chihaya/log"
 	"chihaya/record"
+	"chihaya/server/params"
 	"chihaya/util"
 	"encoding/binary"
 	"fmt"
@@ -142,17 +143,20 @@ func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
 	return exists
 }
 
-func announce(params *queryParams, header http.Header, remoteAddr string, user *cdb.User,
+func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	db *database.Database, buf io.Writer) {
-	var exists bool
+	qp, err := params.ParseQuery(qs)
+	if err != nil {
+		panic(err)
+	}
 
 	// Mandatory parameters
-	infoHash, _ := params.get("info_hash")
-	peerID, _ := params.get("peer_id")
-	port, portExists := params.getUint16("port")
-	uploaded, uploadedExists := params.getUint64("uploaded")
-	downloaded, downloadedExists := params.getUint64("downloaded")
-	left, leftExists := params.getUint64("left")
+	infoHash, _ := qp.Get("info_hash")
+	peerID, _ := qp.Get("peer_id")
+	port, portExists := qp.GetUint16("port")
+	uploaded, uploadedExists := qp.GetUint64("uploaded")
+	downloaded, downloadedExists := qp.GetUint64("downloaded")
+	left, leftExists := qp.GetUint64("left")
 
 	if infoHash == "" {
 		failure("Malformed request - missing info_hash", buf, 1*time.Hour)
@@ -191,8 +195,8 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	}
 
 	ipAddr, exists := func() (string, bool) {
-		ipV4, existsV4 := getPublicIPV4(params.get("ipv4")) // first try to get ipv4 address if client sent it
-		ip, exists := getPublicIPV4(params.get("ip"))       // then try to get public ip if sent by client
+		ipV4, existsV4 := getPublicIPV4(qp.Get("ipv4")) // first try to get ipv4 address if client sent it
+		ip, exists := getPublicIPV4(qp.Get("ip"))       // then try to get public ip if sent by client
 
 		if existsV4 && exists && ip != ipV4 { // fail if ip and ipv4 are not same, and both are provided
 			return "", false
@@ -243,7 +247,6 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 		return
 	}
 
-	// TODO: better synchronization strategy for announces (like per user mutexes)
 	db.TorrentsMutex.Lock()
 	defer db.TorrentsMutex.Unlock()
 
@@ -265,14 +268,14 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	now := time.Now().Unix()
 
 	// Optional parameters
-	event, _ := params.get("event")
+	event, _ := qp.Get("event")
 
 	var (
 		numWantStr string
 		numWant    int
 	)
 
-	numWantStr, exists = params.get("numwant")
+	numWantStr, exists = qp.Get("numwant")
 	if !exists {
 		numWant = 25
 	} else {
@@ -452,10 +455,10 @@ func announce(params *queryParams, header http.Header, remoteAddr string, user *
 	respData["interval"] = announceInterval + announceDrift
 
 	if numWant > 0 && active {
-		compactString, exists := params.get("compact")
+		compactString, exists := qp.Get("compact")
 		compact := !exists || compactString != "0" // Defaults to being compact
 
-		noPeerIDString, exists := params.get("no_peer_id")
+		noPeerIDString, exists := qp.Get("no_peer_id")
 		noPeerID := exists && noPeerIDString == "1"
 
 		var peerCount int

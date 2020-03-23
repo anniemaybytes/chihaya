@@ -69,9 +69,10 @@ func (db *Database) startReloading() {
 }
 
 func (db *Database) loadUsers() {
-	var err error
-
-	var count uint
+	var (
+		err   error
+		count uint
+	)
 
 	db.UsersMutex.Lock()
 	db.mainConn.mutex.Lock()
@@ -85,13 +86,12 @@ func (db *Database) loadUsers() {
 	}()
 
 	for rows.Next() {
-		var id uint32
-
-		var torrentPass string
-
-		var downMultiplier, upMultiplier float64
-
-		var disableDownload, trackerHide bool
+		var (
+			id                           uint32
+			torrentPass                  string
+			downMultiplier, upMultiplier float64
+			disableDownload, trackerHide bool
+		)
 
 		err = rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide)
 		if err != nil {
@@ -129,9 +129,10 @@ func (db *Database) loadUsers() {
 }
 
 func (db *Database) loadHitAndRuns() {
-	var err error
-
-	var count uint
+	var (
+		err   error
+		count uint
+	)
 
 	db.mainConn.mutex.Lock()
 
@@ -170,9 +171,10 @@ func (db *Database) loadHitAndRuns() {
 }
 
 func (db *Database) loadTorrents() {
-	var err error
-
-	var count uint
+	var (
+		err   error
+		count uint
+	)
 
 	db.TorrentsMutex.Lock()
 	db.mainConn.mutex.Lock()

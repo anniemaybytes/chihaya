@@ -39,7 +39,7 @@ func printHelp() {
 }
 
 func main() {
-	fmt.Printf("cache utility for chihaya (kuroneko), build=%s date=%s runtime=%s\n\n",
+	fmt.Printf("cache utility for chihaya (kuroneko), ver=%s date=%s runtime=%s\n\n",
 		BuildVersion, BuildDate, runtime.Version())
 
 	if len(os.Args) < 2 {

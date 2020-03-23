@@ -91,3 +91,15 @@ func TestRandStringBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestRand(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		min := rand.Intn(1000)
+		max := rand.Intn(1000) + min
+		randomInt := Rand(min, max)
+
+		if randomInt < min || randomInt > max {
+			t.Fatalf("Integer %d is outside specified range (%d - %d)", randomInt, min, max)
+		}
+	}
+}

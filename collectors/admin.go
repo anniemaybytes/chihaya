@@ -26,8 +26,9 @@ import (
 )
 
 type AdminCollector struct {
-	deadlockTimeMetric  *prometheus.Desc
-	deadlockCountMetric *prometheus.Desc
+	deadlockTimeMetric    *prometheus.Desc
+	deadlockCountMetric   *prometheus.Desc
+	erroredRequestsMetric *prometheus.Desc
 
 	serializationTimeSummary *prometheus.Histogram
 	reloadTimeSummary        *prometheus.HistogramVec
@@ -71,8 +72,9 @@ var (
 	transferIpsFlushBufferLength     prometheus.Histogram
 	snatchFlushBufferLength          prometheus.Histogram
 
-	deadlockTime  = time.Duration(0)
-	deadlockCount = 0
+	deadlockTime    = time.Duration(0)
+	deadlockCount   = 0
+	erroredRequests = 0
 )
 
 func init() {
@@ -116,6 +118,8 @@ func NewAdminCollector() *AdminCollector {
 			"Number of unique database deadlocks encountered", nil, nil),
 		deadlockTimeMetric: prometheus.NewDesc("chihaya_deadlock_seconds_total",
 			"Total time wasted awaiting to free deadlock", nil, nil),
+		erroredRequestsMetric: prometheus.NewDesc("chihaya_requests_fail",
+			"Number of failed requests", nil, nil),
 
 		torrentFlushBufferHistogram:         &torrentFlushBufferLength,
 		userFlushBufferHistogram:            &userFlushBufferLength,
@@ -132,6 +136,7 @@ func NewAdminCollector() *AdminCollector {
 func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.deadlockTimeMetric
 	ch <- collector.deadlockCountMetric
+	ch <- collector.erroredRequestsMetric
 
 	serializationTime.Describe(ch)
 	reloadTime.Describe(ch)
@@ -147,6 +152,7 @@ func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
 func (collector *AdminCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collector.deadlockCountMetric, prometheus.CounterValue, float64(deadlockCount))
 	ch <- prometheus.MustNewConstMetric(collector.deadlockTimeMetric, prometheus.CounterValue, deadlockTime.Seconds())
+	ch <- prometheus.MustNewConstMetric(collector.erroredRequestsMetric, prometheus.CounterValue, float64(erroredRequests))
 
 	serializationTime.Collect(ch)
 	reloadTime.Collect(ch)
@@ -165,6 +171,10 @@ func IncrementDeadlockCount() {
 
 func IncrementDeadlockTime(time time.Duration) {
 	deadlockTime += time
+}
+
+func IncrementErroredRequests() {
+	erroredRequests++
 }
 
 func UpdateSerializationTime(time time.Duration) {

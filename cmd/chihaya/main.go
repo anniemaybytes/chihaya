@@ -18,18 +18,18 @@
 package main
 
 import (
-	"encoding/json"
+	"chihaya/log"
+	"chihaya/server"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
-
-	"github.com/zeebo/bencode"
+	"runtime/pprof"
+	"syscall"
 )
 
-var (
-	decode, help bool
-)
+var profile, help bool
 
 // provided at compile-time
 var (
@@ -38,13 +38,12 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&decode, "d", false, "Decodes data instead of encoding")
-	flag.BoolVar(&help, "h", false, "Prints this help message")
+	flag.BoolVar(&profile, "P", false, "Generate profiling data for pprof into chihaya.cpu")
+	flag.BoolVar(&help, "h", false, "Shows this help dialog")
 }
 
 func main() {
-	fmt.Printf("bencode for chihaya (kuroneko), build=%s date=%s runtime=%s\n\n",
-		BuildVersion, BuildDate, runtime.Version())
+	fmt.Printf("chihaya (kuroneko), ver=%s date=%s runtime=%s\n\n", BuildVersion, BuildDate, runtime.Version())
 
 	flag.Parse()
 
@@ -55,35 +54,36 @@ func main() {
 		return
 	}
 
-	var val interface{}
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	if decode {
-		decoder := bencode.NewDecoder(os.Stdin)
+	if profile {
+		log.Info.Printf("Running with profiling enabled, found %d CPUs", runtime.NumCPU())
 
-		err := decoder.Decode(&val)
+		f, err := os.Create("chihaya.cpu")
 		if err != nil {
-			panic(err)
-		}
-
-		out, err := json.MarshalIndent(val, "", "\t")
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Print(string(out))
-	} else {
-		decoder := json.NewDecoder(os.Stdin)
-		decoder.UseNumber()
-
-		err := decoder.Decode(&val)
-		if err != nil {
-			panic(err)
-		}
-
-		encoder := bencode.NewEncoder(os.Stdout)
-		err = encoder.Encode(val)
-		if err != nil {
-			panic(err)
+			log.Fatal.Fatalf("Failed to create profile file: %s\n", err)
+		} else {
+			err = pprof.StartCPUProfile(f)
+			if err != nil {
+				log.Fatal.Fatalf("Can not start profiling session: %s\n", err)
+			}
 		}
 	}
+
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		<-c
+
+		if profile {
+			pprof.StopCPUProfile()
+		}
+
+		log.Info.Println("Caught interrupt, shutting down...")
+		server.Stop()
+		<-c
+		os.Exit(0)
+	}()
+
+	server.Start()
 }

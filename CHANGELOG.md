@@ -3,31 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## v2.6.0-rc3
+## v3.0.0
 ### Added
-- Ability to `restore` cache dump from JSON
-
-## v2.6.0-rc2
-### Added
+- Log failing URL on panic in `ServeHTTP`
+- `/check` endpoint for healt-checking
 - Ability to configure intervals from `config.json`
 - Ability to configure deadlock behavior from `config.json`
 - Ability to configure channels buffer length from `config.json`
-
-### Changed
-- Return HTTP 500 when panicking in `ServeHTTP`
-- Use `time.Duration.String` for time formatting across code
-- Remove `prepareStatement` from `database.go`
-- database: `OpenDatabaseConnection` -> `Open`
-- database: `exec` -> `execute`, `execBuffer` -> `exec` (follows PDO)
-- Reformat README with better explanation of config file
-- Count only unique deadlocks for `chihaya_deadlock_count`
-
-## v2.6.0-rc1
-### Added
-- Log failing URL on panic in `ServeHTTP`
+- Ability to `restore` cache dump from JSON
 
 ### Fixed
 - `successful` typo
+- Handle errors early for prepared statements
 
 ### Changed
 - Moved `InitPrivateIPBlocks` to `init` inside `server.go`
@@ -36,6 +23,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Narrow `bytes.Buffer` in server to `io.Writer`
 - Eliminate long lines
 - golangci: disable default linters and specify hard list of enabled ones
+- Return HTTP 500 when panicking in `ServeHTTP`
+- Use `time.Duration.String` for time formatting across code
+- Remove `prepareStatement` from `database.go`
+- database: `OpenDatabaseConnection` -> `Open`
+- database: `exec` -> `execute`, `execBuffer` -> `exec` (follows PDO)
+- Reformat README with better explanation of config file
+- Count only unique deadlocks for `chihaya_deadlock_count`
+- Move query parsing logic to separate module
+- Do not parse query string globally in server, have each action handle it separately if needed
+- Completely rework passkey and action logic allowing for non-passkey protected endpoints
+- Return 404 with empty body when request is malformed or action is not recognized
+instead of bencoded message
+- Handle errors of `w.Write()` in `ServeHTTP`
+- Various code cleanups
 
 ## v2.5.0
 ### Added
@@ -78,9 +79,9 @@ during build process
 - README was improperly showing `null` as valid value for `admin_token` and `proxy`.
 
 ### Changed
-- Changed `users` and `torrents` flush SQL queries to use temporary table with `UPDATE` instead
-of `INSERT INTO ... ON DUPLICATE KEY ...`, this avoids rare cases where previously removed entry
-from these tables is inserted back with default values by chihaya
+- Changed `users` and `torrents` flush SQL queries to use temporary table with `UPDATE` 
+instead of `INSERT INTO ... ON DUPLICATE KEY ...`, this avoids rare cases where previously 
+removed entry from these tables is inserted back with default values by chihaya
 - Code cleanup
 - Make torrentId `uint32`
 - Moved `main.go` to `cmd/chihaya` to allow for building multiple binaries
@@ -188,7 +189,8 @@ from these tables is inserted back with default values by chihaya
 
 ### Fixed
 - Ensure down/up multipliers are always positive
-- Make `transferHistory` wait in `purgeInactivePeers` atomic with add in `flushTransferHistory` 
+- Make `transferHistory` wait in `purgeInactivePeers` atomic with add in 
+`flushTransferHistory` 
 - Ensure `transferHistoryWaitGroup` is released properly on loop break when 
 `transferHistoryChannel` is empty
 - Do not break main loop in `flushTransferHistory` when channel is empty

@@ -21,8 +21,8 @@ import (
 	"chihaya/config"
 	"chihaya/database"
 	cdb "chihaya/database/types"
+	"chihaya/server/params"
 	"io"
-	"time"
 
 	"github.com/zeebo/bencode"
 )
@@ -43,20 +43,19 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 	return ret
 }
 
-func scrape(params *queryParams, db *database.Database, buf io.Writer) {
-	enabledByDefault, _ := config.GetBool("scrape", true)
-	if !enabledByDefault {
-		failure("Scrape convention is not supported", buf, 1*time.Hour)
-		return
+func scrape(qs string, db *database.Database, buf io.Writer) {
+	qp, err := params.ParseQuery(qs)
+	if err != nil {
+		panic(err)
 	}
 
 	scrapeData := make(map[string]interface{})
 	fileData := make(map[string]interface{})
 
-	if params.infoHashes != nil {
+	if qp.InfoHashes() != nil {
 		db.TorrentsMutex.RLock()
 
-		for _, infoHash := range params.infoHashes {
+		for _, infoHash := range qp.InfoHashes() {
 			torrent, exists := db.Torrents[infoHash]
 			if exists {
 				fileData[infoHash] = writeScrapeInfo(torrent)
@@ -64,7 +63,7 @@ func scrape(params *queryParams, db *database.Database, buf io.Writer) {
 		}
 
 		db.TorrentsMutex.RUnlock()
-	} else if infoHash, exists := params.get("info_hash"); exists {
+	} else if infoHash, exists := qp.Get("info_hash"); exists {
 		db.TorrentsMutex.RLock()
 
 		torrent, exists := db.Torrents[infoHash]
