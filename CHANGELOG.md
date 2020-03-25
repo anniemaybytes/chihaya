@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v3.1.0
+### Added
+- Ability to configure default/maximum `numwant` from config
+
+### Fixed
+- `ServeHTTP` panicking when query string included empty parameter followed by delimiter 
+(`?bug=&yes=`)
+
+### Changed
+- Ensure `peer_id` is always 20 bytes
+- Rewrite query string parser
+- Ignore `info_hash` if it isn't exactly 20 bytes
+
 ## v3.0.0
 ### Added
 - Log failing URL on panic in `ServeHTTP`

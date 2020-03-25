@@ -63,15 +63,6 @@ func scrape(qs string, db *database.Database, buf io.Writer) {
 		}
 
 		db.TorrentsMutex.RUnlock()
-	} else if infoHash, exists := qp.Get("info_hash"); exists {
-		db.TorrentsMutex.RLock()
-
-		torrent, exists := db.Torrents[infoHash]
-		if exists {
-			fileData[infoHash] = writeScrapeInfo(torrent)
-		}
-
-		db.TorrentsMutex.RUnlock()
 	} else {
 		scrapeData["failure reason"] = "Scrape without info_hash is not supported"
 	}

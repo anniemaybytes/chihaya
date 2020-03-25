@@ -15,18 +15,65 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// URL.Query() is rather slow, so I rewrote it
-// Since the only parameter that can have multiple values is info_hash for scrapes, handle this specifically
+// Based on https://github.com/chihaya/chihaya/blob/e6e7269/bittorrent/params.go
 package params
 
 import (
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 type QueryParam struct {
+	query      string
 	params     map[string]string
 	infoHashes []string
+}
+
+func ParseQuery(query string) (qp *QueryParam, err error) {
+	qp = &QueryParam{
+		query:      query,
+		infoHashes: nil,
+		params:     make(map[string]string),
+	}
+
+	for query != "" {
+		key := query
+		if i := strings.IndexAny(key, "&;"); i >= 0 {
+			key, query = key[:i], key[i+1:]
+		} else {
+			query = ""
+		}
+
+		if key == "" {
+			continue
+		}
+
+		value := ""
+		if i := strings.Index(key, "="); i >= 0 {
+			key, value = key[:i], key[i+1:]
+		}
+
+		key, err = url.QueryUnescape(key)
+		if err != nil {
+			panic(err)
+		}
+
+		value, err = url.QueryUnescape(value)
+		if err != nil {
+			panic(err)
+		}
+
+		if key == "info_hash" {
+			if len(value) == 20 {
+				qp.infoHashes = append(qp.infoHashes, value)
+			}
+		} else {
+			qp.params[strings.ToLower(key)] = value
+		}
+	}
+
+	return qp, nil
 }
 
 func (qp *QueryParam) getUint(which string, bitSize int) (ret uint64, exists bool) {
@@ -65,74 +112,6 @@ func (qp *QueryParam) InfoHashes() []string {
 	return qp.infoHashes
 }
 
-func ParseQuery(query string) (ret *QueryParam, err error) {
-	ret = &QueryParam{make(map[string]string), nil}
-	queryLen := len(query)
-
-	var (
-		keyStart, keyEnd int
-		valStart, valEnd int
-		firstInfoHash    string
-	)
-
-	onKey := true
-	hasInfoHash := false
-
-	for i := 0; i < queryLen; i++ {
-		separator := query[i] == '&' || query[i] == ';' // ';' is a valid separator as per W3C spec
-		if separator || i == queryLen-1 {
-			if onKey {
-				keyStart = i + 1
-				continue
-			}
-
-			if i == queryLen-1 && !separator {
-				if query[i] == '=' {
-					continue
-				}
-
-				valEnd = i
-			}
-
-			keyStr, errz := url.QueryUnescape(query[keyStart : keyEnd+1])
-			if errz != nil {
-				err = errz
-				return
-			}
-
-			valStr, errz := url.QueryUnescape(query[valStart : valEnd+1])
-			if errz != nil {
-				err = errz
-				return
-			}
-
-			ret.params[keyStr] = valStr
-
-			if keyStr == "info_hash" {
-				if hasInfoHash {
-					// There is more than one info_hash
-					if ret.infoHashes == nil {
-						ret.infoHashes = []string{firstInfoHash}
-					}
-
-					ret.infoHashes = append(ret.infoHashes, valStr)
-				} else {
-					firstInfoHash = valStr
-					hasInfoHash = true
-				}
-			}
-
-			onKey = true
-			keyStart = i + 1
-		} else if query[i] == '=' {
-			onKey = false
-			valStart = i + 1
-		} else if onKey {
-			keyEnd = i
-		} else {
-			valEnd = i
-		}
-	}
-
-	return
+func (qp *QueryParam) RawQuery() string {
+	return qp.query
 }

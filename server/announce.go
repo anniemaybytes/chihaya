@@ -32,7 +32,6 @@ import (
 	"math"
 	"net"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/zeebo/bencode"
@@ -43,6 +42,8 @@ var (
 	minAnnounceInterval    int
 	peerInactivityInterval int
 	maxAccounceDrift       int
+	defaultNumWant         int
+	maxNumWant             int
 
 	privateIPBlocks []*net.IPNet
 )
@@ -54,6 +55,8 @@ func init() {
 	minAnnounceInterval, _ = intervals.GetInt("min_announce", 900)
 	peerInactivityInterval, _ = intervals.GetInt("peer_inactivity", 3900)
 	maxAccounceDrift, _ = intervals.GetInt("announce_drift", 300)
+	defaultNumWant, _ = intervals.GetInt("numwant", 25)
+	maxNumWant, _ = intervals.GetInt("max_numwant", 50)
 
 	for _, cidr := range []string{
 		"10.0.0.0/8",     // RFC1918
@@ -151,20 +154,28 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	}
 
 	// Mandatory parameters
-	infoHash, _ := qp.Get("info_hash")
+	infoHashes := qp.InfoHashes()
 	peerID, _ := qp.Get("peer_id")
 	port, portExists := qp.GetUint16("port")
 	uploaded, uploadedExists := qp.GetUint64("uploaded")
 	downloaded, downloadedExists := qp.GetUint64("downloaded")
 	left, leftExists := qp.GetUint64("left")
 
-	if infoHash == "" {
+	if infoHashes == nil {
 		failure("Malformed request - missing info_hash", buf, 1*time.Hour)
+		return
+	} else if len(infoHashes) > 1 {
+		failure("Malformed request - multiple info_hash values provided", buf, 1*time.Hour)
 		return
 	}
 
 	if peerID == "" {
 		failure("Malformed request - missing peer_id", buf, 1*time.Hour)
+		return
+	}
+
+	if len(peerID) != 20 {
+		failure("Malformed request - invalid peer_id", buf, 1*time.Hour)
 		return
 	}
 
@@ -250,7 +261,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	db.TorrentsMutex.Lock()
 	defer db.TorrentsMutex.Unlock()
 
-	torrent, exists := db.Torrents[infoHash]
+	torrent, exists := db.Torrents[infoHashes[0]]
 	if !exists {
 		failure("This torrent does not exist", buf, 30*time.Second)
 		return
@@ -265,35 +276,22 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		return
 	}
 
-	now := time.Now().Unix()
-
-	// Optional parameters
-	event, _ := qp.Get("event")
-
-	var (
-		numWantStr string
-		numWant    int
-	)
-
-	numWantStr, exists = qp.Get("numwant")
+	numWant, exists := qp.GetUint16("numwant")
 	if !exists {
-		numWant = 25
-	} else {
-		numWant64, _ := strconv.ParseInt(numWantStr, 10, 16)
-		numWant = int(numWant64)
-		if numWant > 50 {
-			numWant = 50
-		} else if numWant < 0 {
-			numWant = 25
-		}
+		numWant = uint16(defaultNumWant)
+	} else if numWant > uint16(maxNumWant) {
+		numWant = uint16(maxNumWant)
 	}
 
-	// Match or create peer
-	var peer *cdb.Peer
+	var (
+		peer    *cdb.Peer
+		now     = time.Now().Unix()
+		newPeer = false
+		seeding = false
+		active  = true
+	)
 
-	newPeer := false
-	seeding := false
-	active := true
+	event, _ := qp.Get("event")
 	completed := event == "completed"
 	peerKey := fmt.Sprintf("%d-%s", user.ID, peerID)
 
@@ -396,7 +394,6 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		torrent.LastAction = now
 	}
 
-	// Handle events
 	var deltaSnatch uint8
 
 	if event == "stopped" {
@@ -463,9 +460,9 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 
 		var peerCount int
 		if seeding {
-			peerCount = util.Min(numWant, leechCount)
+			peerCount = util.Min(int(numWant), leechCount)
 		} else {
-			peerCount = util.Min(numWant, leechCount+seedCount-1)
+			peerCount = util.Min(int(numWant), leechCount+seedCount-1)
 		}
 
 		peersToSend := make([]*cdb.Peer, 0, peerCount)
@@ -477,7 +474,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		 */
 		if seeding {
 			for _, leech := range torrent.Leechers {
-				if len(peersToSend) >= numWant {
+				if len(peersToSend) >= int(numWant) {
 					break
 				}
 
@@ -494,7 +491,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 			 */
 			uniqueSeeders := make(map[uint32]*cdb.Peer)
 			for _, seed := range torrent.Seeders {
-				if len(peersToSend) >= numWant {
+				if len(peersToSend) >= int(numWant) {
 					break
 				}
 				if seed.UserID == peer.UserID {
@@ -507,7 +504,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 				}
 			}
 			for _, leech := range torrent.Leechers {
-				if len(peersToSend) >= numWant {
+				if len(peersToSend) >= int(numWant) {
 					break
 				}
 				if leech.UserID == peer.UserID {
