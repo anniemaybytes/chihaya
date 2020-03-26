@@ -36,17 +36,17 @@ import (
 func (db *Database) RecordTorrent(torrent *types.Torrent, deltaSnatch uint8) {
 	tq := db.bufferPool.Take()
 
-	tq.WriteString("('")
+	tq.WriteString("(")
 	tq.WriteString(strconv.FormatUint(uint64(torrent.ID), 10))
-	tq.WriteString("','")
+	tq.WriteString(",")
 	tq.WriteString(strconv.FormatUint(uint64(deltaSnatch), 10))
-	tq.WriteString("','")
+	tq.WriteString(",")
 	tq.WriteString(strconv.FormatInt(int64(len(torrent.Seeders)), 10))
-	tq.WriteString("','")
+	tq.WriteString(",")
 	tq.WriteString(strconv.FormatInt(int64(len(torrent.Leechers)), 10))
-	tq.WriteString("','")
+	tq.WriteString(",")
 	tq.WriteString(strconv.FormatInt(torrent.LastAction, 10))
-	tq.WriteString("')")
+	tq.WriteString(")")
 
 	db.torrentChannel <- tq
 }
@@ -54,17 +54,17 @@ func (db *Database) RecordTorrent(torrent *types.Torrent, deltaSnatch uint8) {
 func (db *Database) RecordUser(user *types.User, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload int64) {
 	uq := db.bufferPool.Take()
 
-	uq.WriteString("('")
+	uq.WriteString("(")
 	uq.WriteString(strconv.FormatUint(uint64(user.ID), 10))
-	uq.WriteString("','")
+	uq.WriteString(",")
 	uq.WriteString(strconv.FormatInt(deltaUpload, 10))
-	uq.WriteString("','")
+	uq.WriteString(",")
 	uq.WriteString(strconv.FormatInt(deltaDownload, 10))
-	uq.WriteString("','")
+	uq.WriteString(",")
 	uq.WriteString(strconv.FormatInt(rawDeltaDownload, 10))
-	uq.WriteString("','")
+	uq.WriteString(",")
 	uq.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
-	uq.WriteString("')")
+	uq.WriteString(")")
 
 	db.userChannel <- uq
 }
@@ -73,31 +73,31 @@ func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawD
 	deltaSeedTime int64, deltaSnatch uint8, active bool) {
 	th := db.bufferPool.Take()
 
-	th.WriteString("('")
+	th.WriteString("(")
 	th.WriteString(strconv.FormatUint(uint64(peer.UserID), 10))
-	th.WriteString("','")
+	th.WriteString(",")
 	th.WriteString(strconv.FormatUint(uint64(peer.TorrentID), 10))
-	th.WriteString("','")
+	th.WriteString(",")
 	th.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
-	th.WriteString("','")
+	th.WriteString(",")
 	th.WriteString(strconv.FormatInt(rawDeltaDownload, 10))
-	th.WriteString("','")
-	th.WriteString(util.Btoa(peer.Seeding))
-	th.WriteString("','")
+	th.WriteString(",'")
+	th.WriteString(util.Btoa(peer.Seeding)) // enum
+	th.WriteString("',")
 	th.WriteString(strconv.FormatInt(peer.StartTime, 10))
-	th.WriteString("','")
+	th.WriteString(",")
 	th.WriteString(strconv.FormatInt(peer.LastAnnounce, 10))
-	th.WriteString("','")
+	th.WriteString(",")
 	th.WriteString(strconv.FormatInt(deltaTime, 10))
-	th.WriteString("','")
+	th.WriteString(",")
 	th.WriteString(strconv.FormatInt(deltaSeedTime, 10))
-	th.WriteString("','")
-	th.WriteString(util.Btoa(active))
-	th.WriteString("','")
+	th.WriteString(",'")
+	th.WriteString(util.Btoa(active)) // enum
+	th.WriteString("',")
 	th.WriteString(strconv.FormatUint(uint64(deltaSnatch), 10))
-	th.WriteString("','")
+	th.WriteString(",")
 	th.WriteString(strconv.FormatUint(peer.Left, 10))
-	th.WriteString("')")
+	th.WriteString(")")
 
 	db.transferHistoryChannel <- th
 }
@@ -105,25 +105,25 @@ func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawD
 func (db *Database) RecordTransferIP(peer *types.Peer, rawDeltaUpload, rawDeltaDownload int64) {
 	ti := db.bufferPool.Take()
 
-	ti.WriteString("('")
+	ti.WriteString("(")
 	ti.WriteString(strconv.FormatUint(uint64(peer.UserID), 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatUint(uint64(peer.TorrentID), 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatUint(uint64(peer.ClientID), 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatUint(uint64(peer.IP), 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatUint(uint64(peer.Port), 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatInt(rawDeltaDownload, 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatInt(peer.StartTime, 10))
-	ti.WriteString("','")
+	ti.WriteString(",")
 	ti.WriteString(strconv.FormatInt(peer.LastAnnounce, 10))
-	ti.WriteString("')")
+	ti.WriteString(")")
 
 	db.transferIpsChannel <- ti
 }
@@ -131,13 +131,13 @@ func (db *Database) RecordTransferIP(peer *types.Peer, rawDeltaUpload, rawDeltaD
 func (db *Database) RecordSnatch(peer *types.Peer, now int64) {
 	sn := db.bufferPool.Take()
 
-	sn.WriteString("('")
+	sn.WriteString("(")
 	sn.WriteString(strconv.FormatUint(uint64(peer.UserID), 10))
-	sn.WriteString("','")
+	sn.WriteString(",")
 	sn.WriteString(strconv.FormatUint(uint64(peer.TorrentID), 10))
-	sn.WriteString("','")
+	sn.WriteString(",")
 	sn.WriteString(strconv.FormatInt(now, 10))
-	sn.WriteString("')")
+	sn.WriteString(")")
 
 	db.snatchChannel <- sn
 }

@@ -34,7 +34,8 @@ var (
 // provided at compile-time
 var (
 	BuildDate    = "0000-00-00T00:00:00+0000"
-	BuildVersion = "development"
+	BuildVersion = "dev"
+	GitSHA       = "local"
 )
 
 func init() {
@@ -43,8 +44,8 @@ func init() {
 }
 
 func main() {
-	fmt.Printf("bencode for chihaya (kuroneko), ver=%s date=%s runtime=%s\n\n",
-		BuildVersion, BuildDate, runtime.Version())
+	fmt.Printf("bencode for chihaya (kuroneko), ver=%s-%s date=%s runtime=%s\n\n",
+		BuildVersion, GitSHA, BuildDate, runtime.Version())
 
 	flag.Parse()
 

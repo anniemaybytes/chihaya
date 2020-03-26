@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v3.1.1
+### Fixed
+- Remove unnecessary quoting of integer columns for database queries
+
 ## v3.1.0
 ### Added
 - Ability to configure default/maximum `numwant` from config
