@@ -28,6 +28,7 @@ import (
 type AdminCollector struct {
 	deadlockTimeMetric    *prometheus.Desc
 	deadlockCountMetric   *prometheus.Desc
+	deadlockAbortedMetric *prometheus.Desc
 	erroredRequestsMetric *prometheus.Desc
 
 	serializationTimeSummary *prometheus.Histogram
@@ -74,6 +75,7 @@ var (
 
 	deadlockTime    = time.Duration(0)
 	deadlockCount   = 0
+	deadlockAborted = 0
 	erroredRequests = 0
 )
 
@@ -116,6 +118,8 @@ func NewAdminCollector() *AdminCollector {
 	return &AdminCollector{
 		deadlockCountMetric: prometheus.NewDesc("chihaya_deadlock_count",
 			"Number of unique database deadlocks encountered", nil, nil),
+		deadlockAbortedMetric: prometheus.NewDesc("chihaya_deadlock_aborted_count",
+			"Number of times deadlock retries were exceeded", nil, nil),
 		deadlockTimeMetric: prometheus.NewDesc("chihaya_deadlock_seconds_total",
 			"Total time wasted awaiting to free deadlock", nil, nil),
 		erroredRequestsMetric: prometheus.NewDesc("chihaya_requests_fail",
@@ -134,8 +138,9 @@ func NewAdminCollector() *AdminCollector {
 }
 
 func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- collector.deadlockTimeMetric
 	ch <- collector.deadlockCountMetric
+	ch <- collector.deadlockAbortedMetric
+	ch <- collector.deadlockTimeMetric
 	ch <- collector.erroredRequestsMetric
 
 	serializationTime.Describe(ch)
@@ -151,6 +156,7 @@ func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (collector *AdminCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collector.deadlockCountMetric, prometheus.CounterValue, float64(deadlockCount))
+	ch <- prometheus.MustNewConstMetric(collector.deadlockAbortedMetric, prometheus.CounterValue, float64(deadlockAborted))
 	ch <- prometheus.MustNewConstMetric(collector.deadlockTimeMetric, prometheus.CounterValue, deadlockTime.Seconds())
 	ch <- prometheus.MustNewConstMetric(collector.erroredRequestsMetric, prometheus.CounterValue, float64(erroredRequests))
 
@@ -171,6 +177,10 @@ func IncrementDeadlockCount() {
 
 func IncrementDeadlockTime(time time.Duration) {
 	deadlockTime += time
+}
+
+func IncrementDeadlockAborted() {
+	deadlockAborted++
 }
 
 func IncrementErroredRequests() {

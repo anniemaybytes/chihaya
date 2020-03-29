@@ -254,7 +254,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 
 	clientID := whitelisted(peerID, db)
 	if 0 == clientID {
-		failure(fmt.Sprintf("Your client is not approved (id: %s)", peerID), buf, 1*time.Hour)
+		failure(fmt.Sprintf("Your client is not approved (peer_id: %s)", peerID), buf, 1*time.Hour)
 		return
 	}
 

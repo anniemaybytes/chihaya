@@ -318,6 +318,7 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 
 	log.Error.Printf("Deadlocked %d times, giving up!", tries)
 	log.WriteStack()
+	collectors.IncrementDeadlockAborted()
 
 	return
 }
