@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v3.2.0
+### Added
+- Prometheus metric for tracking aborted deadlocks
+- Tests for `GetInt` and `GetBool` in `config`
+- Tests for `server/params`
+
+### Changed
+- Clarify `Your client is not approved` message by using `peer_id` instead of `id`
+
 ## v3.1.1
 ### Fixed
 - Remove unnecessary quoting of integer columns for database queries

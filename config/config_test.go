@@ -62,6 +62,8 @@ func TestMain(m *testing.M) {
 	}
 	configTest["database"] = dbConfig
 	configTest["addr"] = ":34000"
+	configTest["numwant"] = json.Number("25")
+	configTest["log_flushes"] = true
 
 	err = json.NewEncoder(f).Encode(&configTest)
 	if err != nil {
@@ -102,6 +104,41 @@ func TestGetDefault(t *testing.T) {
 
 	if got != "iamdefault" {
 		t.Fatalf("Got %s whereas expected iamdefault for \"idontexist\"!", got)
+	}
+}
+
+func TestGetBool(t *testing.T) {
+	got, _ := GetBool("log_flushes", false)
+	expected := configTest["log_flushes"]
+
+	if got != expected {
+		t.Fatalf("Got %v whereas expected %v for \"testbool\"!", got, expected)
+	}
+}
+
+func TestGetBoolDefault(t *testing.T) {
+	got, _ := GetBool("idontexist", true)
+
+	if got != true {
+		t.Fatalf("Got %v whereas expected true for \"boolnotexist\"!", got)
+	}
+}
+
+func TestGetInt(t *testing.T) {
+	got, _ := GetInt("numwant", 0)
+	expectedNumber, _ := configTest["numwant"].(json.Number).Int64()
+	expected := int(expectedNumber)
+
+	if got != expected {
+		t.Fatalf("Got %v whereas expected %v for \"testint\"!", got, expected)
+	}
+}
+
+func TestGetIntDefault(t *testing.T) {
+	got, _ := GetInt("idontexist", 64)
+
+	if got != 64 {
+		t.Fatalf("Got %v whereas expected 64 for \"intnotexist\"!", got)
 	}
 }
 
