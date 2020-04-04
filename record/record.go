@@ -20,6 +20,7 @@ package record
 import (
 	"bytes"
 	"chihaya/config"
+	"chihaya/util"
 	"os"
 	"strconv"
 	"time"
@@ -77,7 +78,18 @@ func Init() {
 	}()
 }
 
-func Record(tid, uid uint32, up, down int64, absup uint64, event string, ip string, port uint16) {
+func Record(
+	tid,
+	uid uint32,
+	ip string,
+	port uint16,
+	event string,
+	seeding bool,
+	rawUp,
+	rawDown int64,
+	up,
+	down,
+	left uint64) {
 	enabledByDefault, _ := config.GetBool("record", enabledByDefault)
 	if !enabledByDefault {
 		return
@@ -94,18 +106,24 @@ func Record(tid, uid uint32, up, down int64, absup uint64, event string, ip stri
 	buf.WriteString(strconv.FormatUint(uint64(tid), 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(uint64(uid), 10))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatInt(up, 10))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatInt(down, 10))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatUint(absup, 10))
 	buf.WriteString(",\"")
-	buf.WriteString(event)
-	buf.WriteString("\",\"")
 	buf.WriteString(ip)
 	buf.WriteString("\",")
 	buf.WriteString(strconv.FormatUint(uint64(port), 10))
+	buf.WriteString(",\"")
+	buf.WriteString(event)
+	buf.WriteString("\",")
+	buf.WriteString(util.Btoa(seeding))
+	buf.WriteString(",")
+	buf.WriteString(strconv.FormatInt(rawUp, 10))
+	buf.WriteString(",")
+	buf.WriteString(strconv.FormatInt(rawDown, 10))
+	buf.WriteString(",")
+	buf.WriteString(strconv.FormatUint(up, 10))
+	buf.WriteString(",")
+	buf.WriteString(strconv.FormatUint(down, 10))
+	buf.WriteString(",")
+	buf.WriteString(strconv.FormatUint(left, 10))
 	buf.WriteString("]\n")
 
 	recordChan <- buf.Bytes()

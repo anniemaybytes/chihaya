@@ -11,6 +11,30 @@ $ go get
 $ go build -v -o .bin/ ./cmd/...
 ```
 
+Example systemd unit file:
+```
+[Unit]
+Description=chihaya
+After=network.target mariadb.service
+
+[Service]
+WorkingDirectory=/opt/chihaya
+ExecStart=/opt/chihaya/chihaya
+RestartSec=30s
+Restart=always
+User=chihaya
+
+[Install]
+WantedBy=default.target
+```
+
+Alternatively, you can also build/use a docker container instead:
+
+```sh
+docker build . -t chihaya
+docker run -d --restart=always --user 1001:1001 --network host --log-driver local -v ${PWD}:/app chihaya
+```
+
 Usage
 -------------
 Build process outputs several binary files. Each binary has its own flags, use 
@@ -118,3 +142,53 @@ without sending announce
 by client
 - `max_numwant` - Maximum number of peers that tracker will send per single announce, even if
 client requests more
+
+Recorder
+-------------
+
+If `record` is true, chihaya will save all successful announce events to a file under 
+`events` directory. The files will have a format of `events_YYYY-MM-DDTHH.json` and are
+split every hour for easier analysis. Every line in a file should be treated as a separate
+JSON object. Below is a definition on how to read the data:
+
+```
+[torrentId, userId, ipAddr, port, event, seeding, rawUp, rawDown, up, down, left] 
+```
+
+- `torrentId` - the ID of torrent being announced
+- `userId` - the ID of user making the announce
+- `ipAddr` - IP address of peer (this might _not_ be an address from which request was sent)
+- `port` - port the peer listens on as resolved by tracker; this might be an invalid or
+closed port, the tracker performs no validation on it
+- `event` - the event as given by client; for regular announces it is empty
+- `seeding` - whether tracker recognizes peer as seeder or leecher, either `1` or `0`
+- `rawUp` - delta of uploaded between announces for this peer, in bytes
+- `rawDown` - delta of downloaded between announces for this peer, in bytes
+- `up` - number of `uploaded` bytes, as reported by client for this announce
+- `down` - number of `downloaded` bytes, as reported by client for this announce
+- `left` - number of `left` bytes, as reported by client for this announce; if this is more
+than 0 then tracker sees this peer as leecher and `seeding` should be `0`
+
+Flowcharts
+-------------
+
+#### IP resolve
+```text
+`ipv4` exists ->
+    yes -> is it public?
+        yes -> `ip` exists?
+            yes -> is it the same as `ipv4`?
+                yes -> use `ipv4`
+                no  -> failure
+            no -> use `ipv4`
+        no  -> continue
+    no  -> `ip` exists?
+        yes -> is it public?
+            yes -> use `ip`
+            no  -> continue
+        no  -> is proxy allowed?
+            yes -> is configured header present?
+                yes -> use header
+                no  -> continue
+            no  -> use socket
+```

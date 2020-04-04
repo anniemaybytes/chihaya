@@ -29,12 +29,13 @@ import (
 )
 
 type record struct {
-	port      uint16
-	uid       uint32
-	tid       uint32
-	absup     uint64
-	up, down  int64
-	event, ip string
+	seeding        bool
+	port           uint16
+	uid            uint32
+	tid            uint32
+	up, down, left uint64
+	rawUp, rawDown int64
+	event, ip      string
 }
 
 func TestMain(m *testing.M) {
@@ -67,9 +68,12 @@ func TestRecord(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		tmp := record{
+			true,
 			uint16(rand.Uint32()),
 			rand.Uint32(),
 			rand.Uint32(),
+			rand.Uint64(),
+			rand.Uint64(),
 			rand.Uint64(),
 			int64(rand.Uint64()),
 			int64(rand.Uint64()),
@@ -82,18 +86,32 @@ func TestRecord(t *testing.T) {
 			"["+
 				strconv.FormatUint(uint64(tmp.tid), 10)+","+
 				strconv.FormatUint(uint64(tmp.uid), 10)+","+
-				strconv.FormatInt(tmp.up, 10)+","+
-				strconv.FormatInt(tmp.down, 10)+","+
-				strconv.FormatUint(tmp.absup, 10)+","+
-				"\""+tmp.event+"\""+","+
 				"\""+tmp.ip+"\","+
-				strconv.FormatUint(uint64(tmp.port), 10)+
+				strconv.FormatUint(uint64(tmp.port), 10)+","+
+				"\""+tmp.event+"\""+","+
+				"1,"+
+				strconv.FormatInt(tmp.rawUp, 10)+","+
+				strconv.FormatInt(tmp.rawDown, 10)+","+
+				strconv.FormatUint(tmp.up, 10)+","+
+				strconv.FormatUint(tmp.down, 10)+","+
+				strconv.FormatUint(tmp.left, 10)+
 				"]",
 		)
 	}
 
 	for _, item := range recordValues {
-		Record(item.tid, item.uid, item.up, item.down, item.absup, item.event, item.ip, item.port)
+		Record(
+			item.tid,
+			item.uid,
+			item.ip,
+			item.port,
+			item.event,
+			item.seeding,
+			item.rawUp,
+			item.rawDown,
+			item.up,
+			item.down,
+			item.left)
 	}
 
 	time.Sleep(200 * time.Millisecond)

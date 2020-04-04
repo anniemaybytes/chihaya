@@ -431,7 +431,18 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	db.RecordTorrent(torrent, deltaSnatch)
 	db.RecordTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
 	db.RecordUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	record.Record(peer.TorrentID, user.ID, rawDeltaUpload, rawDeltaDownload, uploaded, event, ipAddr, port)
+	record.Record(
+		peer.TorrentID,
+		user.ID,
+		ipAddr,
+		port,
+		event,
+		seeding,
+		rawDeltaUpload,
+		rawDeltaDownload,
+		uploaded,
+		downloaded,
+		left)
 	db.RecordTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
 
 	// Generate response
