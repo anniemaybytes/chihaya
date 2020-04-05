@@ -6,13 +6,13 @@ Installation
 
 chihaya requires Golang >= 1.14 and MariaDB >= 10.3.3.
 
-```
-$ go get
-$ go build -v -o .bin/ ./cmd/...
+```sh
+go get
+go build -v -o .bin/ ./cmd/...
 ```
 
 Example systemd unit file:
-```
+```systemd
 [Unit]
 Description=chihaya
 After=network.target mariadb.service
@@ -151,7 +151,7 @@ If `record` is true, chihaya will save all successful announce events to a file 
 split every hour for easier analysis. Every line in a file should be treated as a separate
 JSON object. Below is a definition on how to read the data:
 
-```
+```text
 [torrentId, userId, ipAddr, port, event, seeding, rawUp, rawDown, up, down, left] 
 ```
 
