@@ -20,14 +20,15 @@ _cgo_export.*
 _testmain.go
 
 # Build artifacts
-.bin
-chihaya.cpu
-coverage.out
+/bencode
+/cc
+/chihaya
+*.exe
+*.out
 
 # Local files
 config.json
-*-cache.gob
-*-cache.json
+*-cache.*
 events
 
 # IDE
