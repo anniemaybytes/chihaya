@@ -29,3 +29,5 @@ linters:
         - unparam
         - dogsled
         - prealloc
+        - nolintlint
+        - goerr113
