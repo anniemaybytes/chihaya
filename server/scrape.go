@@ -43,7 +43,7 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 	return ret
 }
 
-func scrape(qs string, db *database.Database, buf io.Writer) {
+func scrape(qs string, user *cdb.User, db *database.Database, buf io.Writer) {
 	qp, err := params.ParseQuery(qs)
 	if err != nil {
 		panic(err)
@@ -58,7 +58,9 @@ func scrape(qs string, db *database.Database, buf io.Writer) {
 		for _, infoHash := range qp.InfoHashes() {
 			torrent, exists := db.Torrents[infoHash]
 			if exists {
-				fileData[infoHash] = writeScrapeInfo(torrent)
+				if !isDisabledDownload(db, user, torrent) {
+					fileData[infoHash] = writeScrapeInfo(torrent)
+				}
 			}
 		}
 

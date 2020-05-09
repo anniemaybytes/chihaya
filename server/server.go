@@ -117,7 +117,7 @@ func (handler *httpHandler) respond(r *http.Request, buf io.Writer) bool {
 			return false
 		}
 
-		scrape(r.URL.RawQuery, handler.db, buf)
+		scrape(r.URL.RawQuery, user, handler.db, buf)
 
 		return true
 	case "metrics":

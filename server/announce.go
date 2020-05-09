@@ -135,17 +135,6 @@ func whitelisted(peerID string, db *database.Database) uint16 {
 	return 0
 }
 
-func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
-	hnr := cdb.UserTorrentPair{
-		UserID:    userID,
-		TorrentID: torrentID,
-	}
-
-	_, exists := db.HitAndRuns[hnr]
-
-	return exists
-}
-
 func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	db *database.Database, buf io.Writer) {
 	qp, err := params.ParseQuery(qs)
@@ -296,12 +285,9 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	peerKey := fmt.Sprintf("%d-%s", user.ID, peerID)
 
 	if left > 0 {
-		if user.DisableDownload {
-			// only disable download if the torrent doesn't have a HnR against it
-			if !hasHitAndRun(db, user.ID, torrent.ID) {
-				failure("Your download privileges are disabled", buf, 1*time.Hour)
-				return
-			}
+		if isDisabledDownload(db, user, torrent) {
+			failure("Your download privileges are disabled", buf, 1*time.Hour)
+			return
 		}
 
 		peer, exists = torrent.Leechers[peerKey]

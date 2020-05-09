@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v3.4.0
+### Changed
+- Do not return scrape information for torrents that user can not download
+
 ## v3.3.0
 ### Added
 - New format for `record` including more useful data
