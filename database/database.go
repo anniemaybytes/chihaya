@@ -122,7 +122,7 @@ func (db *Database) Init() {
 	db.loadHnrStmt, err = db.mainConn.sqlDb.Prepare(
 		"SELECT h.uid, h.fid FROM transfer_history AS h " +
 			"JOIN users_main AS u ON u.ID = h.uid " +
-			"WHERE h.hnr = '1' AND u.Enabled = '1'")
+			"WHERE h.hnr = 1 AND u.Enabled = '1'")
 	if err != nil {
 		panic(err)
 	}
@@ -149,7 +149,7 @@ func (db *Database) Init() {
 	}
 
 	db.cleanStalePeersStmt, err = db.mainConn.sqlDb.Prepare(
-		"UPDATE transfer_history SET active = '0' WHERE last_announce < ? AND active = '1'")
+		"UPDATE transfer_history SET active = 0 WHERE last_announce < ? AND active = 1")
 	if err != nil {
 		panic(err)
 	}
@@ -306,6 +306,8 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 				} else {
 					log.Error.Printf("SQL error %d: %s", merr.Number, merr.Message)
 					log.WriteStack()
+
+					collectors.IncrementSQLErrorCount()
 				}
 			} else {
 				log.Panic.Printf("Error executing SQL: %s", err)

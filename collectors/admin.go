@@ -30,6 +30,7 @@ type AdminCollector struct {
 	deadlockCountMetric   *prometheus.Desc
 	deadlockAbortedMetric *prometheus.Desc
 	erroredRequestsMetric *prometheus.Desc
+	sqlErrorCountMetric   *prometheus.Desc
 
 	serializationTimeSummary *prometheus.Histogram
 	reloadTimeSummary        *prometheus.HistogramVec
@@ -77,6 +78,7 @@ var (
 	deadlockCount   = 0
 	deadlockAborted = 0
 	erroredRequests = 0
+	sqlErrorCount   = 0
 )
 
 func init() {
@@ -124,6 +126,8 @@ func NewAdminCollector() *AdminCollector {
 			"Total time wasted awaiting to free deadlock", nil, nil),
 		erroredRequestsMetric: prometheus.NewDesc("chihaya_requests_fail",
 			"Number of failed requests", nil, nil),
+		sqlErrorCountMetric: prometheus.NewDesc("chihaya_sql_errors_count",
+			"Number of SQL errors", nil, nil),
 
 		torrentFlushBufferHistogram:         &torrentFlushBufferLength,
 		userFlushBufferHistogram:            &userFlushBufferLength,
@@ -142,6 +146,7 @@ func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.deadlockAbortedMetric
 	ch <- collector.deadlockTimeMetric
 	ch <- collector.erroredRequestsMetric
+	ch <- collector.sqlErrorCountMetric
 
 	serializationTime.Describe(ch)
 	reloadTime.Describe(ch)
@@ -159,6 +164,7 @@ func (collector *AdminCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collector.deadlockAbortedMetric, prometheus.CounterValue, float64(deadlockAborted))
 	ch <- prometheus.MustNewConstMetric(collector.deadlockTimeMetric, prometheus.CounterValue, deadlockTime.Seconds())
 	ch <- prometheus.MustNewConstMetric(collector.erroredRequestsMetric, prometheus.CounterValue, float64(erroredRequests))
+	ch <- prometheus.MustNewConstMetric(collector.sqlErrorCountMetric, prometheus.CounterValue, float64(sqlErrorCount))
 
 	serializationTime.Collect(ch)
 	reloadTime.Collect(ch)
@@ -185,6 +191,10 @@ func IncrementDeadlockAborted() {
 
 func IncrementErroredRequests() {
 	erroredRequests++
+}
+
+func IncrementSQLErrorCount() {
+	sqlErrorCount++
 }
 
 func UpdateSerializationTime(time time.Duration) {

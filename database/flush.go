@@ -101,17 +101,17 @@ func (db *Database) flushTorrents() {
 		length := util.Max(1, len(db.torrentChannel))
 
 		query.Reset()
-		query.WriteString("DROP TEMPORARY TABLE IF EXISTS flush_torrents")
-		conn.exec(&query)
-
-		query.Reset()
-		query.WriteString("CREATE TEMPORARY TABLE flush_torrents (" +
+		query.WriteString("CREATE TEMPORARY TABLE IF NOT EXISTS flush_torrents (" +
 			"ID int unsigned NOT NULL, " +
 			"Snatched int unsigned NOT NULL DEFAULT 0, " +
 			"Seeders int unsigned NOT NULL DEFAULT 0, " +
 			"Leechers int unsigned NOT NULL DEFAULT 0, " +
 			"last_action int NOT NULL DEFAULT 0, " +
-			"PRIMARY KEY (ID))")
+			"PRIMARY KEY (ID)) ENGINE=MEMORY")
+		conn.exec(&query)
+
+		query.Reset()
+		query.WriteString("TRUNCATE flush_torrents")
 		conn.exec(&query)
 
 		query.Reset()
@@ -153,6 +153,18 @@ func (db *Database) flushTorrents() {
 				"WHERE t.ID = ft.ID")
 			conn.exec(&query)
 
+			query.Reset()
+			query.WriteString("UPDATE torrents_group tg, torrents t, flush_torrents ft SET " +
+				"tg.Time=UNIX_TIMESTAMP() " +
+				"WHERE tg.ID = t.GroupID AND t.TorrentType = 'anime' AND t.ID = ft.ID")
+			conn.exec(&query)
+
+			query.Reset()
+			query.WriteString("UPDATE torrents_group2 tg, torrents t, flush_torrents ft SET " +
+				"tg.Time=UNIX_TIMESTAMP() " +
+				"WHERE tg.ID = t.GroupID AND t.TorrentType = 'music' AND t.ID = ft.ID")
+			conn.exec(&query)
+
 			if !db.terminate {
 				elapsedTime := time.Since(startTime)
 				collectors.UpdateFlushTime("torrents", elapsedTime)
@@ -187,17 +199,17 @@ func (db *Database) flushUsers() {
 		length := util.Max(1, len(db.userChannel))
 
 		query.Reset()
-		query.WriteString("DROP TEMPORARY TABLE IF EXISTS flush_users")
-		conn.exec(&query)
-
-		query.Reset()
-		query.WriteString("CREATE TEMPORARY TABLE flush_users (" +
+		query.WriteString("CREATE TEMPORARY TABLE IF NOT EXISTS flush_users (" +
 			"ID int unsigned NOT NULL, " +
 			"Uploaded bigint unsigned NOT NULL DEFAULT 0, " +
 			"Downloaded bigint unsigned NOT NULL DEFAULT 0, " +
 			"rawdl bigint unsigned NOT NULL DEFAULT 0, " +
 			"rawup bigint unsigned NOT NULL DEFAULT 0, " +
-			"PRIMARY KEY (ID))")
+			"PRIMARY KEY (ID)) ENGINE=MEMORY")
+		conn.exec(&query)
+
+		query.Reset()
+		query.WriteString("TRUNCATE flush_users")
 		conn.exec(&query)
 
 		query.Reset()

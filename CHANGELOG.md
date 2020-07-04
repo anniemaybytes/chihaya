@@ -3,6 +3,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v4.1.0
+### Added
+- `chihaya_sql_errors_count` metric now tracks SQL errors
+
+### Changed
+- Temporary tables for user and torrent flushes are now used more efficiently
+
+## v4.0.0
+### Changed
+- Do not use enum for `transfer_history`
+
+## v3.5.0
+### Added
+- Update the timestamp on torrents group when flushing torrents
+
 ## v3.4.0
 ### Changed
 - Do not return scrape information for torrents that user can not download
