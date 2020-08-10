@@ -18,15 +18,11 @@
 package util
 
 import (
-	"math/rand"
-	"time"
+	"crypto/rand"
+	"encoding/binary"
 )
 
 const alphanumBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 func Min(a int, b int) int {
 	if a < b {
@@ -52,15 +48,28 @@ func Btoa(a bool) string {
 	return "0"
 }
 
+func Intn(n int) int {
+	b := make([]byte, 8)
+
+	_, err := rand.Read(b)
+	if err != nil {
+		panic(err)
+	}
+
+	i := binary.BigEndian.Uint32(b)
+
+	return int(i) % n
+}
+
 func RandStringBytes(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = alphanumBytes[rand.Intn(len(alphanumBytes))]
+		b[i] = alphanumBytes[Intn(len(alphanumBytes))]
 	}
 
 	return string(b)
 }
 
 func Rand(min int, max int) int {
-	return rand.Intn(max-min+1) + min
+	return Intn(max-min+1) + min
 }

@@ -24,8 +24,8 @@ import (
 
 func TestMin(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		a := rand.Int() //nolint:gosec
-		b := rand.Int() //nolint:gosec
+		a := rand.Int()
+		b := rand.Int()
 		gotMin := Min(a, b)
 
 		var actualMin int
@@ -43,8 +43,8 @@ func TestMin(t *testing.T) {
 
 func TestMax(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		a := rand.Int() //nolint:gosec
-		b := rand.Int() //nolint:gosec
+		a := rand.Int()
+		b := rand.Int()
 		gotMax := Max(a, b)
 
 		var actualMax int
@@ -77,6 +77,16 @@ func TestBtoa(t *testing.T) {
 		gotResult := Btoa(b)
 		if actualResult != gotResult {
 			t.Fatalf("Got wrong string (%s) for bool %t!", gotResult, b)
+		}
+	}
+}
+
+func TestIntn(t *testing.T) {
+	for i := 1; i < 2000; i++ {
+		genInt := Intn(i)
+
+		if genInt < 0 || genInt >= i {
+			t.Fatalf("Generated random integer (%d) does not fall in the range [0, %d)!", genInt, i)
 		}
 	}
 }

@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v4.2.0
+### Changed
+- Use `crypto/rand` in `util` for `RandStringBytes` and `Rand`
+
 ## v4.1.0
 ### Added
 - `chihaya_sql_errors_count` metric now tracks SQL errors

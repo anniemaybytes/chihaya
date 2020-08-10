@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.28.1-alpine
+        image: golangci/golangci-lint:v1.30.0-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.28.1-alpine
+        image: golangci/golangci-lint:v1.30.0-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -28,6 +28,7 @@ type: docker
 steps:
     -   name: test
         image: golang:1.14-alpine
+        pull: always
         environment:
             CGO_ENABLED: 0
             GO111MODULE: on
@@ -55,6 +56,7 @@ platform:
 steps:
     -   name: build
         image: plugins/docker
+        pull: always
         privileged: true
         environment:
             DOCKER_REGISTRY:

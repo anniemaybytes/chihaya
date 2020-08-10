@@ -17,7 +17,7 @@ func TestMain(m *testing.M) {
 
 	for i := 0; i < 10; i++ {
 		token = make([]byte, 20)
-		rand.Read(token) //nolint:gosec
+		rand.Read(token)
 
 		infoHashes = append(infoHashes, string(token))
 	}
