@@ -27,7 +27,7 @@ type: docker
 
 steps:
     -   name: test
-        image: golang:1.14-alpine
+        image: golang:1.15-alpine
         pull: always
         environment:
             CGO_ENABLED: 0
@@ -36,7 +36,7 @@ steps:
             - go get -v -t -d ./...
             - go test ./... -v -coverprofile=coverage.out
     -   name: coverage
-        image: golang:1.14-alpine
+        image: golang:1.15-alpine
         commands:
             - go tool cover -func=coverage.out
 

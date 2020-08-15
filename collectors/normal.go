@@ -25,7 +25,7 @@ type NormalCollector struct {
 	uptimeMetric     *prometheus.Desc
 	usersMetric      *prometheus.Desc
 	torrentsMetric   *prometheus.Desc
-	whitelistMetric  *prometheus.Desc
+	clientsMetric    *prometheus.Desc
 	hitAndRunsMetric *prometheus.Desc
 	peersMetric      *prometheus.Desc
 	requestsMetric   *prometheus.Desc
@@ -34,7 +34,7 @@ type NormalCollector struct {
 var ( // Data
 	users      int
 	torrents   int
-	whitelist  int
+	clients    int
 	hitAndRuns int
 	peers      int
 	uptime     float64
@@ -46,7 +46,7 @@ func NewNormalCollector() *NormalCollector {
 		uptimeMetric:     prometheus.NewDesc("chihaya_uptime", "System uptime in seconds", nil, nil),
 		usersMetric:      prometheus.NewDesc("chihaya_users", "Number of active users in database", nil, nil),
 		torrentsMetric:   prometheus.NewDesc("chihaya_torrents", "Number of torrents currently being tracked", nil, nil),
-		whitelistMetric:  prometheus.NewDesc("chihaya_whitelist", "Number of whitelist entries", nil, nil),
+		clientsMetric:    prometheus.NewDesc("chihaya_clients", "Number of approved clients", nil, nil),
 		hitAndRunsMetric: prometheus.NewDesc("chihaya_hnrs", "Number of active hit and runs registered", nil, nil),
 		peersMetric:      prometheus.NewDesc("chihaya_peers", "Number of peers currently being tracked", nil, nil),
 		requestsMetric:   prometheus.NewDesc("chihaya_requests", "Number of successful requests handled", nil, nil),
@@ -57,7 +57,7 @@ func (collector *NormalCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.uptimeMetric
 	ch <- collector.usersMetric
 	ch <- collector.torrentsMetric
-	ch <- collector.whitelistMetric
+	ch <- collector.clientsMetric
 	ch <- collector.hitAndRunsMetric
 	ch <- collector.peersMetric
 	ch <- collector.requestsMetric
@@ -67,7 +67,7 @@ func (collector *NormalCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collector.uptimeMetric, prometheus.CounterValue, uptime)
 	ch <- prometheus.MustNewConstMetric(collector.usersMetric, prometheus.GaugeValue, float64(users))
 	ch <- prometheus.MustNewConstMetric(collector.torrentsMetric, prometheus.GaugeValue, float64(torrents))
-	ch <- prometheus.MustNewConstMetric(collector.whitelistMetric, prometheus.GaugeValue, float64(whitelist))
+	ch <- prometheus.MustNewConstMetric(collector.clientsMetric, prometheus.GaugeValue, float64(clients))
 	ch <- prometheus.MustNewConstMetric(collector.hitAndRunsMetric, prometheus.GaugeValue, float64(hitAndRuns))
 	ch <- prometheus.MustNewConstMetric(collector.peersMetric, prometheus.GaugeValue, float64(peers))
 	ch <- prometheus.MustNewConstMetric(collector.requestsMetric, prometheus.CounterValue, float64(requests))
@@ -89,8 +89,8 @@ func UpdateTorrents(tempTorrents int) {
 	torrents = tempTorrents
 }
 
-func UpdateWhitelist(tempWhitelist int) {
-	whitelist = tempWhitelist
+func UpdateClients(tempClients int) {
+	clients = tempClients
 }
 
 func UpdateHitAndRuns(tempHitAndRuns int) {

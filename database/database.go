@@ -45,7 +45,7 @@ type Database struct {
 	transferIpsChannel     chan *bytes.Buffer
 
 	loadTorrentsStmt    *sql.Stmt
-	loadWhitelistStmt   *sql.Stmt
+	loadClientsStmt     *sql.Stmt
 	loadFreeleechStmt   *sql.Stmt
 	cleanStalePeersStmt *sql.Stmt
 	unPruneTorrentStmt  *sql.Stmt
@@ -59,7 +59,7 @@ type Database struct {
 
 	loadUsersStmt *sql.Stmt
 
-	Whitelist map[uint16]string
+	Clients map[uint16]string
 
 	mainConn *Connection // Used for reloading and misc queries
 
@@ -68,8 +68,8 @@ type Database struct {
 
 	bufferPool *util.BufferPool
 
-	WhitelistMutex sync.RWMutex
-	UsersMutex     sync.RWMutex
+	ClientsMutex sync.RWMutex
+	UsersMutex   sync.RWMutex
 
 	waitGroup sync.WaitGroup
 
@@ -136,8 +136,8 @@ func (db *Database) Init() {
 		panic(err)
 	}
 
-	db.loadWhitelistStmt, err = db.mainConn.sqlDb.Prepare(
-		"SELECT id, peer_id FROM client_whitelist WHERE archived = 0")
+	db.loadClientsStmt, err = db.mainConn.sqlDb.Prepare(
+		"SELECT id, peer_id FROM approved_clients WHERE archived = 0")
 	if err != nil {
 		panic(err)
 	}
@@ -163,7 +163,7 @@ func (db *Database) Init() {
 	db.Users = make(map[string]*types.User)
 	db.HitAndRuns = make(map[types.UserTorrentPair]struct{})
 	db.Torrents = make(map[string]*types.Torrent)
-	db.Whitelist = make(map[uint16]string)
+	db.Clients = make(map[uint16]string)
 
 	db.deserialize()
 
@@ -173,7 +173,7 @@ func (db *Database) Init() {
 	db.loadHitAndRuns()
 	db.loadTorrents()
 	db.loadConfig()
-	db.loadWhitelist()
+	db.loadClients()
 
 	log.Info.Printf("Starting goroutines...")
 	db.startReloading()

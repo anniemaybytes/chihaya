@@ -45,7 +45,7 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 	collectors.UpdateUptime(time.Since(handler.startTime).Seconds())
 	collectors.UpdateUsers(len(db.Users))
 	collectors.UpdateTorrents(len(db.Torrents))
-	collectors.UpdateWhitelist(len(db.Whitelist))
+	collectors.UpdateClients(len(db.Clients))
 	collectors.UpdateHitAndRuns(len(db.HitAndRuns))
 	collectors.UpdatePeers(peers)
 	collectors.UpdateRequests(atomic.LoadUint64(&handler.requests))

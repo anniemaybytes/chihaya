@@ -105,22 +105,22 @@ func getPublicIPV4(ipAddr string, exists bool) (string, bool) {
 	return ipAddr, !private
 }
 
-func whitelisted(peerID string, db *database.Database) uint16 {
-	db.WhitelistMutex.RLock()
-	defer db.WhitelistMutex.RUnlock()
+func clientApproved(peerID string, db *database.Database) uint16 {
+	db.ClientsMutex.RLock()
+	defer db.ClientsMutex.RUnlock()
 
 	var (
 		widLen, i int
 		matched   bool
 	)
 
-	for id, whitelistedID := range db.Whitelist {
-		widLen = len(whitelistedID)
+	for id, clientID := range db.Clients {
+		widLen = len(clientID)
 		if widLen <= len(peerID) {
 			matched = true
 
 			for i = 0; i < widLen; i++ {
-				if peerID[i] != whitelistedID[i] {
+				if peerID[i] != clientID[i] {
 					matched = false
 					break
 				}
@@ -241,7 +241,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		return
 	}
 
-	clientID := whitelisted(peerID, db)
+	clientID := clientApproved(peerID, db)
 	if 0 == clientID {
 		failure(fmt.Sprintf("Your client is not approved (peer_id: %s)", peerID), buf, 1*time.Hour)
 		return

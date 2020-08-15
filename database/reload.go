@@ -58,7 +58,7 @@ func (db *Database) startReloading() {
 			db.loadConfig()
 
 			if count%10 == 0 {
-				db.loadWhitelist()
+				db.loadClients()
 			}
 			count++
 
@@ -256,18 +256,18 @@ func (db *Database) loadConfig() {
 	db.mainConn.mutex.Unlock()
 }
 
-func (db *Database) loadWhitelist() {
-	db.WhitelistMutex.Lock()
+func (db *Database) loadClients() {
+	db.ClientsMutex.Lock()
 	db.mainConn.mutex.Lock()
 
 	start := time.Now()
-	rows := db.mainConn.query(db.loadWhitelistStmt)
+	rows := db.mainConn.query(db.loadClientsStmt)
 
 	defer func() {
 		_ = rows.Close()
 	}()
 
-	db.Whitelist = make(map[uint16]string)
+	db.Clients = make(map[uint16]string)
 
 	for rows.Next() {
 		var (
@@ -277,17 +277,17 @@ func (db *Database) loadWhitelist() {
 
 		err := rows.Scan(&id, &peerID)
 		if err != nil {
-			log.Error.Printf("Error scanning whitelist rows: %s", err)
+			log.Error.Printf("Error scanning client list rows: %s", err)
 			log.WriteStack()
 		}
 
-		db.Whitelist[id] = peerID
+		db.Clients[id] = peerID
 	}
 
 	db.mainConn.mutex.Unlock()
-	db.WhitelistMutex.Unlock()
+	db.ClientsMutex.Unlock()
 
 	elapsedTime := time.Since(start)
-	collectors.UpdateReloadTime("whitelist", elapsedTime)
-	log.Info.Printf("Whitelist load complete (%d rows, %s)", len(db.Whitelist), elapsedTime.String())
+	collectors.UpdateReloadTime("clients", elapsedTime)
+	log.Info.Printf("Client list load complete (%d rows, %s)", len(db.Clients), elapsedTime.String())
 }

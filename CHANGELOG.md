@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v5.0.0
+### Changed
+- Renamed table `client_whitelist` to `approved_clients`
+- Renamed prometheus stat `chihaya_whitelist` to `chihaya_clients`
+- Removed all references to whitelist/blacklist
+
 ## v4.2.0
 ### Changed
 - Use `crypto/rand` in `util` for `RandStringBytes` and `Rand`
@@ -286,7 +292,7 @@ removed entry from these tables is inserted back with default values by chihaya
 - Broken bencode on `/scrape`
 - Swapped up/down multiplier for initial torrent load
 - Ensure time delta is never higher than inactivity period
-- Wwhitelist reloading was limited to 100 entries
+- Whitelist reloading was limited to 100 entries
 
 ### Changed
 - Run `go fmt`
