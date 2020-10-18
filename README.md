@@ -93,6 +93,7 @@ Configuration is done in `config.json`, which you'll need to create with the fol
   "scrape": true,
   "log_flushes": true,
   "strict_port": false,
+  "flush_groups": false,
 
   "numwant": 25,
   "max_numwant": 50
@@ -138,6 +139,7 @@ without sending announce
 - `log_flushes` - whether to log all database flushes performed
 - `strict_port` - if enabled then announces where client advertises port outside range 
 `1024-65535` will be failed
+- `flush_groups` - whether to update groups timestamp whenever related torrent is flushed
 - `numwant` - Default number of peers sent on announce if otherwise not explicitly specified 
 by client
 - `max_numwant` - Maximum number of peers that tracker will send per single announce, even if

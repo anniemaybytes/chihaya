@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v5.1.0
+### Added
+- `flush_groups` config option was added to control whether groups
+should be updated whenever related torrent is flushed
+
 ## v5.0.0
 ### Changed
 - Renamed table `client_whitelist` to `approved_clients`
