@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v5.1.1
+### Fixed
+- Download and upload multiplier being switched around when loading new user
+
 ## v5.1.0
 ### Added
 - `flush_groups` config option was added to control whether groups

@@ -120,7 +120,7 @@ Configuration is done in `config.json`, which you'll need to create with the fol
     - `announce` - default announce `interval` given to clients
     - `min_announce` - minimum `min_interval` between announces that clients should respect
     - `peer_inactivity` - time after which peer is considered dead, recommended to be 
-    `(min_announce + announce_drift) * 2`
+    `(min_announce * 2) + (announce_drift * 2)`
     - `announce_drift` - maximum announce drift to incorporate in default `interval` 
     sent to client
     - `scrape` - default scrape `interval` given to clients

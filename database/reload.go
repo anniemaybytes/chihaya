@@ -110,8 +110,8 @@ func (db *Database) loadUsers() {
 		} else {
 			newUsers[torrentPass] = &types.User{
 				ID:              id,
-				UpMultiplier:    downMultiplier,
-				DownMultiplier:  upMultiplier,
+				UpMultiplier:    upMultiplier,
+				DownMultiplier:  downMultiplier,
 				DisableDownload: disableDownload,
 				TrackerHide:     trackerHide,
 			}
