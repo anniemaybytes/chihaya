@@ -26,6 +26,7 @@ import (
 	"chihaya/util"
 	"database/sql"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -204,11 +205,6 @@ func (db *Database) Terminate() {
 
 func Open() *Connection {
 	databaseConfig := config.Section("database")
-	dbUsername, _ := databaseConfig.Get("username", defaultDsn["username"])
-	dbPassword, _ := databaseConfig.Get("password", defaultDsn["password"])
-	dbProto, _ := databaseConfig.Get("proto", defaultDsn["proto"])
-	dbAddr, _ := databaseConfig.Get("addr", defaultDsn["addr"])
-	dbDatabase, _ := databaseConfig.Get("database", defaultDsn["database"])
 	deadlockWaitTime, _ = databaseConfig.GetInt("deadlock_pause", 1)
 	maxDeadlockRetries, _ = databaseConfig.GetInt("deadlock_retries", 5)
 
@@ -219,32 +215,32 @@ func Open() *Connection {
 	transferIpsFlushBufferSize, _ = channelsConfig.GetInt("transfer_ips", 5000)
 	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatch", 25)
 
-	databaseDsn := fmt.Sprintf("%s:%s@%s(%s)/%s",
-		dbUsername,
-		dbPassword,
-		dbProto,
-		dbAddr,
-		dbDatabase,
-	) // DSN Format: username:password@protocol(address)/dbname?param=value
-
-	sqlDb, err := sql.Open("mysql", databaseDsn)
-	if err != nil {
-		log.Fatal.Fatalf("Couldn't connect to database at %s:*****@%s(%s)/%s - %s",
-			dbDatabase,
+	// DSN Format: username:password@protocol(address)/dbname?param=value
+	// First try to load the DSN from environment. USeful for tests.
+	databaseDsn := os.Getenv("DB_DSN")
+	if databaseDsn == "" {
+		dbUsername, _ := databaseConfig.Get("username", defaultDsn["username"])
+		dbPassword, _ := databaseConfig.Get("password", defaultDsn["password"])
+		dbProto, _ := databaseConfig.Get("proto", defaultDsn["proto"])
+		dbAddr, _ := databaseConfig.Get("addr", defaultDsn["addr"])
+		dbDatabase, _ := databaseConfig.Get("database", defaultDsn["database"])
+		databaseDsn = fmt.Sprintf("%s:%s@%s(%s)/%s",
+			dbUsername,
+			dbPassword,
 			dbProto,
 			dbAddr,
 			dbDatabase,
-			err)
+		)
+	}
+
+	sqlDb, err := sql.Open("mysql", databaseDsn)
+	if err != nil {
+		log.Fatal.Fatalf("Couldn't connect to database - %s", err)
 	}
 
 	err = sqlDb.Ping()
 	if err != nil {
-		log.Fatal.Fatalf("Couldn't ping database at %s:*****@%s(%s)/%s - %s",
-			dbDatabase,
-			dbProto,
-			dbAddr,
-			dbDatabase,
-			err)
+		log.Fatal.Fatalf("Couldn't ping database - %s", err)
 	}
 
 	return &Connection{

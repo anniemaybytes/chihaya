@@ -1,0 +1,35 @@
+- ID: 1
+  Uploaded: 0
+  Downloaded: 0
+  Enabled: "1"
+  torrent_pass: mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ
+  rawup: 0
+  rawdl: 0
+  DownMultiplier: 1
+  UpMultiplier: 1
+  DisableDownload: 0
+  TrackerHide: 0
+
+- ID: 2
+  Uploaded: 2551
+  Downloaded: 5
+  Enabled: "1"
+  torrent_pass: tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw
+  rawup: 2551
+  rawdl: 5
+  DownMultiplier: 2
+  UpMultiplier: 0.5
+  DisableDownload: 1
+  TrackerHide: 1
+
+- ID: 3
+  Uploaded: 12
+  Downloaded: 0
+  Enabled: "0"
+  torrent_pass: sGJPs8FPzp7t8tgqd2ypVyKTpWfqqmdt
+  rawup: 12
+  rawdl: 0
+  DownMultiplier: 1
+  UpMultiplier: 1
+  DisableDownload: 0
+  TrackerHide: 0

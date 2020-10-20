@@ -247,7 +247,7 @@ func (db *Database) loadConfig() {
 
 		err := rows.Scan(&globalFreelech)
 		if err != nil {
-			log.Error.Printf("Error scanning torrent rows: %s", err)
+			log.Error.Printf("Error scanning config rows: %s", err)
 			log.WriteStack()
 		}
 

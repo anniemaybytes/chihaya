@@ -25,14 +25,34 @@ kind: pipeline
 name: tests
 type: docker
 
+services:
+    -   name: mariadb
+        image: mariadb:10.5
+        pull: always
+        environment:
+            MYSQL_RANDOM_ROOT_PASSWORD: yes
+            MYSQL_DATABASE: chihaya_test
+            MYSQL_USER: drone
+            MYSQL_PASSWORD: w33lkn0wn
+            MYSQL_INITDB_SKIP_TZINFO: yes
+
 steps:
+    -   name: await
+        image: albinodrought/drone-wait-for-it
+        pull: always
+        environment:
+            PLUGIN_HOST: mariadb
+            PLUGIN_PORT: 3306
     -   name: test
         image: golang:1.15-alpine
         pull: always
         environment:
             CGO_ENABLED: 0
             GO111MODULE: on
+            DB_DSN: "drone:w33lkn0wn@(mariadb)/chihaya_test"
         commands:
+            - apk add mariadb-client
+            - mysql -udrone -pw33lkn0wn -hmariadb chihaya_test < database/schema.sql
             - go get -v -t -d ./...
             - go test ./... -v -coverprofile=coverage.out
     -   name: coverage

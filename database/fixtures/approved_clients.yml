@@ -1,0 +1,11 @@
+- id: 1
+  peer_id: -TR2
+  archived: 0
+
+- id: 2
+  peer_id: -qB42
+  archived: 1
+
+- id: 3
+  peer_id: -DE13
+  archived: 0

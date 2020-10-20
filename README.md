@@ -171,6 +171,12 @@ closed port, the tracker performs no validation on it
 - `left` - number of `left` bytes, as reported by client for this announce; if this is more
 than 0 then tracker sees this peer as leecher and `seeding` should be `0`
 
+Database scheme
+-------------
+Supported database scheme can be located in `database/schema.sql`.
+
+Example data from fixtures can be consulted for additional help.
+
 Flowcharts
 -------------
 
