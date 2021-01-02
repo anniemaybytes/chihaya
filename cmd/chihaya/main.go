@@ -34,8 +34,8 @@ var profile, help bool
 // provided at compile-time
 var (
 	BuildDate    = "0000-00-00T00:00:00+0000"
-	BuildVersion = "dev"
-	GitSHA       = "local"
+	BuildVersion = "v0.0.0"
+	GitSHA       = "development"
 )
 
 func init() {

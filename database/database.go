@@ -289,7 +289,8 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 			if merr, isMysqlError := err.(*mysql.MySQLError); isMysqlError {
 				if merr.Number == 1213 || merr.Number == 1205 {
 					wait = time.Duration(deadlockWaitTime*tries) * time.Second
-					log.Warning.Printf("Deadlock found! Retrying in %s (%d/20)", wait.String(), tries)
+					log.Warning.Printf("Deadlock found! Retrying in %s (%d/%d)", wait.String(), tries,
+						maxDeadlockRetries)
 
 					if tries == 1 {
 						collectors.IncrementDeadlockCount()

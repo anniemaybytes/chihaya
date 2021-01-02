@@ -16,8 +16,20 @@
   info_hash: RAW=_binary 0x16A82DDD57E18CB15E22F2E1C4EADE2EBB83B19B
   Leechers: 0
   Seeders: 0
-  last_action: 0
+  last_action: 1415463675
   Snatched: 0
   DownMultiplier: 2
   UpMultiplier: 0.5
+  Status: 0
+
+- ID: 3
+  GroupID: 2
+  TorrentType: anime
+  info_hash: RAW=_binary 0x59FC5431B11C761C94CD3EB90825EA6E6DC8A5F1
+  Leechers: 0
+  Seeders: 0
+  last_action: 1609032541
+  Snatched: 0
+  DownMultiplier: 1
+  UpMultiplier: 1
   Status: 0
