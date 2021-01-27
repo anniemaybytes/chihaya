@@ -11,10 +11,20 @@
     ]
   },
   "stabilityDays": 1,
-  "semanticCommits": false,
+  "semanticCommits": "disabled",
   "ignorePaths": [],
   "ignoreDeps": [],
   "postUpdateOptions": [
     "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "packageNames": [
+        "golangci/golangci-lint"
+      ],
+      "extends": [
+        "schedule:weekends"
+      ]
+    }
   ]
 }
