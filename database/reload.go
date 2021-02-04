@@ -69,17 +69,24 @@ func (db *Database) startReloading() {
 }
 
 func (db *Database) loadUsers() {
-	var (
-		err   error
-		count uint
-	)
-
 	db.UsersMutex.Lock()
 	db.mainConn.mutex.Lock()
 
+	defer func() {
+		db.UsersMutex.Unlock()
+		db.mainConn.mutex.Unlock()
+	}()
+
 	start := time.Now()
 	newUsers := make(map[string]*types.User, len(db.Users))
+
 	rows := db.mainConn.query(db.loadUsersStmt)
+	if rows == nil {
+		log.Error.Print("Failed to load hit and runs from database")
+		log.WriteStack()
+
+		return
+	}
 
 	defer func() {
 		_ = rows.Close()
@@ -93,9 +100,9 @@ func (db *Database) loadUsers() {
 			disableDownload, trackerHide bool
 		)
 
-		err = rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide)
+		err := rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide)
 		if err != nil {
-			log.Error.Printf("Error scanning user rows: %s", err)
+			log.Error.Printf("Error scanning user row: %s", err)
 			log.WriteStack()
 		}
 
@@ -116,29 +123,32 @@ func (db *Database) loadUsers() {
 				TrackerHide:     trackerHide,
 			}
 		}
-		count++
 	}
-	db.mainConn.mutex.Unlock()
 
 	db.Users = newUsers
-	db.UsersMutex.Unlock()
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("users", elapsedTime)
-	log.Info.Printf("User load complete (%d rows, %s)", count, elapsedTime.String())
+	log.Info.Printf("User load complete (%d rows, %s)", len(db.Users), elapsedTime.String())
 }
 
 func (db *Database) loadHitAndRuns() {
-	var (
-		err   error
-		count uint
-	)
-
 	db.mainConn.mutex.Lock()
+
+	defer func() {
+		db.mainConn.mutex.Unlock()
+	}()
 
 	start := time.Now()
 	newHnr := make(map[types.UserTorrentPair]struct{})
+
 	rows := db.mainConn.query(db.loadHnrStmt)
+	if rows == nil {
+		log.Error.Print("Failed to load hit and runs from database")
+		log.WriteStack()
+
+		return
+	}
 
 	defer func() {
 		_ = rows.Close()
@@ -147,9 +157,9 @@ func (db *Database) loadHitAndRuns() {
 	for rows.Next() {
 		var uid, fid uint32
 
-		err = rows.Scan(&uid, &fid)
+		err := rows.Scan(&uid, &fid)
 		if err != nil {
-			log.Error.Printf("Error scanning hit and run rows: %s", err)
+			log.Error.Printf("Error scanning hit and run row: %s", err)
 			log.WriteStack()
 		}
 
@@ -158,30 +168,34 @@ func (db *Database) loadHitAndRuns() {
 			TorrentID: fid,
 		}
 		newHnr[hnr] = struct{}{}
-
-		count++
 	}
-	db.mainConn.mutex.Unlock()
 
 	db.HitAndRuns = newHnr
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
-	log.Info.Printf("Hit and run load complete (%d rows, %s)", count, elapsedTime.String())
+	log.Info.Printf("Hit and run load complete (%d rows, %s)", len(db.HitAndRuns), elapsedTime.String())
 }
 
 func (db *Database) loadTorrents() {
-	var (
-		err   error
-		count uint
-	)
-
 	db.TorrentsMutex.Lock()
 	db.mainConn.mutex.Lock()
 
+	defer func() {
+		db.TorrentsMutex.Unlock()
+		db.mainConn.mutex.Unlock()
+	}()
+
 	start := time.Now()
 	newTorrents := make(map[string]*types.Torrent)
+
 	rows := db.mainConn.query(db.loadTorrentsStmt)
+	if rows == nil {
+		log.Error.Print("Failed to load torrents from database")
+		log.WriteStack()
+
+		return
+	}
 
 	defer func() {
 		_ = rows.Close()
@@ -196,9 +210,9 @@ func (db *Database) loadTorrents() {
 			status                       uint8
 		)
 
-		err = rows.Scan(&id, &infoHash, &downMultiplier, &upMultiplier, &snatched, &status)
+		err := rows.Scan(&id, &infoHash, &downMultiplier, &upMultiplier, &snatched, &status)
 		if err != nil {
-			log.Error.Printf("Error scanning torrent rows: %s", err)
+			log.Error.Printf("Error scanning torrent row: %s", err)
 			log.WriteStack()
 		}
 
@@ -222,21 +236,29 @@ func (db *Database) loadTorrents() {
 				Leechers: make(map[string]*types.Peer),
 			}
 		}
-		count++
 	}
-	db.mainConn.mutex.Unlock()
 
 	db.Torrents = newTorrents
-	db.TorrentsMutex.Unlock()
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("torrents", elapsedTime)
-	log.Info.Printf("Torrent load complete (%d rows, %s)", count, elapsedTime.String())
+	log.Info.Printf("Torrent load complete (%d rows, %s)", len(db.Torrents), elapsedTime.String())
 }
 
 func (db *Database) loadConfig() {
 	db.mainConn.mutex.Lock()
+
+	defer func() {
+		db.mainConn.mutex.Unlock()
+	}()
+
 	rows := db.mainConn.query(db.loadFreeleechStmt)
+	if rows == nil {
+		log.Error.Printf("Failed to load config from database")
+		log.WriteStack()
+
+		return
+	}
 
 	defer func() {
 		_ = rows.Close()
@@ -247,27 +269,38 @@ func (db *Database) loadConfig() {
 
 		err := rows.Scan(&globalFreelech)
 		if err != nil {
-			log.Error.Printf("Error scanning config rows: %s", err)
+			log.Error.Printf("Error scanning config row: %s", err)
 			log.WriteStack()
 		}
 
 		GlobalFreeleech = globalFreelech
 	}
-	db.mainConn.mutex.Unlock()
 }
 
 func (db *Database) loadClients() {
 	db.ClientsMutex.Lock()
 	db.mainConn.mutex.Lock()
 
+	defer func() {
+		db.ClientsMutex.Unlock()
+		db.mainConn.mutex.Unlock()
+	}()
+
 	start := time.Now()
+
 	rows := db.mainConn.query(db.loadClientsStmt)
+	if rows == nil {
+		log.Error.Print("Failed to load clients from database")
+		log.WriteStack()
+
+		return
+	}
 
 	defer func() {
 		_ = rows.Close()
 	}()
 
-	db.Clients = make(map[uint16]string)
+	newClients := make(map[uint16]string)
 
 	for rows.Next() {
 		var (
@@ -277,15 +310,14 @@ func (db *Database) loadClients() {
 
 		err := rows.Scan(&id, &peerID)
 		if err != nil {
-			log.Error.Printf("Error scanning client list rows: %s", err)
+			log.Error.Printf("Error scanning client list row: %s", err)
 			log.WriteStack()
 		}
 
-		db.Clients[id] = peerID
+		newClients[id] = peerID
 	}
 
-	db.mainConn.mutex.Unlock()
-	db.ClientsMutex.Unlock()
+	db.Clients = newClients
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("clients", elapsedTime)
