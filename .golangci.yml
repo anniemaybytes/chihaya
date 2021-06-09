@@ -14,13 +14,11 @@ linters:
         - megacheck
         - whitespace
         - wsl
-        - maligned
         - goconst
         - unconvert
         - bodyclose
-        - golint
+        - revive
         - gosec
-        - interfacer
         - unconvert
         - goconst
         - dupl

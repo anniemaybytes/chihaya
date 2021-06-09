@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.38.0-alpine
+        image: golangci/golangci-lint:v1.40.1-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.38.0-alpine
+        image: golangci/golangci-lint:v1.40.1-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -74,6 +74,11 @@ platform:
     arch: amd64
 
 steps:
+    -   name: fetch
+        image: alpine/git
+        pull: always
+        commands:
+            - git fetch --tags
     -   name: build
         image: plugins/docker
         pull: always
@@ -88,15 +93,29 @@ steps:
                 from_secret: docker_password
             tags:
                 - "${DRONE_DEPLOY_TO}"
-            build_args:
-                - GIT_SHA=${DRONE_COMMIT_SHA:0:8}
         commands:
             - export PLUGIN_REPO=$DOCKER_REGISTRY/chihaya
             - /usr/local/bin/dockerd-entrypoint.sh /bin/drone-docker
+        when:
+            event:
+                - promote
+    -   name: dry-run
+        image: plugins/docker
+        pull: always
+        settings:
+            dry_run: true
+            repo: animebytes/chihaya
+            tags: latest
+        when:
+            event:
+                exclude:
+                    - promote
 
 trigger:
-    event:
-        - promote
+    ref:
+        - refs/heads/master
+        - refs/pull/**
+        - refs/tags/**
 
 depends_on:
     - compliance

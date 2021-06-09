@@ -26,7 +26,7 @@ import (
 var flags = log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix
 
 var (
-	Info    = log.New(os.Stdout, "[I] ", flags)
+	Info    = log.New(os.Stdout, "[I] ", flags) //nolint:revive
 	Warning = log.New(os.Stderr, "[W] ", flags)
 	Error   = log.New(os.Stderr, "[E] ", flags)
 	Fatal   = log.New(os.Stderr, "[F] ", flags)

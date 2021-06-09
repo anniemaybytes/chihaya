@@ -15,7 +15,7 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Based on https://github.com/chihaya/chihaya/blob/e6e7269/bittorrent/params.go
+// Package params is based on https://github.com/chihaya/chihaya/blob/e6e7269/bittorrent/params.go
 package params
 
 import (

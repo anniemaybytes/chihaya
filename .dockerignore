@@ -1,8 +1,0 @@
-Dockerfile
-.drone.yml
-.editorconfig
-.gitignore
-.git
-LICENSE
-README.md
-renovate.json

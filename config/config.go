@@ -42,7 +42,6 @@ func GetBool(s string, defaultValue bool) (bool, bool) {
 	return config.GetBool(s, defaultValue)
 }
 
-//noinspection GoUnusedExportedFunction
 func GetInt(s string, defaultValue int) (int, bool) {
 	once.Do(readConfig)
 	return config.GetInt(s, defaultValue)

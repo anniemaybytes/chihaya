@@ -268,7 +268,7 @@ func (db *Connection) execute(stmt *sql.Stmt, args ...interface{}) sql.Result {
 	return result
 }
 
-func (db *Connection) exec(query *bytes.Buffer, args ...interface{}) sql.Result { //nolint:unparam,interfacer
+func (db *Connection) exec(query *bytes.Buffer, args ...interface{}) sql.Result { //nolint:unparam
 	result, _ := perform(func() (interface{}, error) {
 		return db.sqlDb.Exec(query.String(), args...)
 	}).(sql.Result)

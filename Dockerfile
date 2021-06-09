@@ -1,12 +1,12 @@
 FROM golang:1.16-alpine AS builder
-WORKDIR /src
+WORKDIR /opt/chihaya
 
 ARG CGO_ENABLED=0
 ARG GOOS=linux
 ARG GOARCH=amd64
-ARG GIT_SHA=development
+ARG VERSION
 
-RUN apk add binutils
+RUN apk add binutils git make
 
 COPY go.mod .
 COPY go.sum .
@@ -15,15 +15,12 @@ RUN go mod download
 
 COPY . .
 
-RUN export VERSION=$(cat ./VERSION) && export DATE=$(date -Iseconds) && \
-    echo $VERSION-$GIT_SHA@$DATE && mkdir /out && \
-    go build -o /out -v -ldflags="-X 'main.GitSHA=$GIT_SHA' -X 'main.BuildDate=$DATE' -X 'main.BuildVersion=$VERSION'" ./cmd/... && \
-    strip /out/*
+RUN make all
 
 FROM scratch AS release
 WORKDIR /app
 
-COPY --from=builder /out /
+COPY --from=builder /opt/chihaya/bin /
 
 USER 1000:1000
 

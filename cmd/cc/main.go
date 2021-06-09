@@ -29,8 +29,7 @@ import (
 // provided at compile-time
 var (
 	BuildDate    = "0000-00-00T00:00:00+0000"
-	BuildVersion = "v0.0.0"
-	GitSHA       = "development"
+	BuildVersion = "development"
 )
 
 func printHelp() {
@@ -40,8 +39,8 @@ func printHelp() {
 }
 
 func main() {
-	fmt.Printf("cache utility for chihaya (kuroneko), ver=%s-%s date=%s runtime=%s\n\n",
-		BuildVersion, GitSHA, BuildDate, runtime.Version())
+	fmt.Printf("cache utility for chihaya (kuroneko), ver=%s date=%s runtime=%s\n\n",
+		BuildVersion, BuildDate, runtime.Version())
 
 	if len(os.Args) < 2 {
 		printHelp()

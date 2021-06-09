@@ -30,4 +30,5 @@ type UserTorrentPair struct {
 	TorrentID uint32
 }
 
+// UserCacheFile holds filename used by serializer for this type
 var UserCacheFile = "user-cache"

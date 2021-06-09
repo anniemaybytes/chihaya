@@ -29,4 +29,5 @@ type Torrent struct {
 	Leechers map[string]*Peer
 }
 
+// TorrentCacheFile holds filename used by serializer for this type
 var TorrentCacheFile = "torrent-cache"

@@ -1,6 +1,7 @@
 {
   "extends": [
-    "config:base"
+    "config:base",
+    "docker:disableMajor"
   ],
   "labels": [
     "kind/deps"
@@ -19,7 +20,7 @@
   ],
   "packageRules": [
     {
-      "packageNames": [
+      "matchPackageNames": [
         "golangci/golangci-lint"
       ],
       "extends": [

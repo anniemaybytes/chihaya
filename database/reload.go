@@ -26,7 +26,8 @@ import (
 )
 
 var (
-	reloadInterval  int
+	reloadInterval int
+	// GlobalFreeleech indicates whether site is now in freeleech mode (takes precedence over torrent-specific multipliers)
 	GlobalFreeleech = false
 )
 
