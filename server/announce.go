@@ -348,12 +348,22 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		rawDeltaDownload = 0
 	}
 
-	var deltaDownload int64
-	if !database.GlobalFreeleech {
-		deltaDownload = int64(float64(rawDeltaDownload) * math.Abs(user.DownMultiplier) * math.Abs(torrent.DownMultiplier))
+	torrentGroupDownMultiplier := 1.0
+	torrentGroupUpMultiplier := 1.0
+
+	if torrentGroupFreeleech, exists := db.TorrentGroupFreeleech[torrent.Group]; exists {
+		torrentGroupDownMultiplier = torrentGroupFreeleech.DownMultiplier
+		torrentGroupUpMultiplier = torrentGroupFreeleech.UpMultiplier
 	}
 
-	deltaUpload := int64(float64(rawDeltaUpload) * math.Abs(user.UpMultiplier) * math.Abs(torrent.UpMultiplier))
+	var deltaDownload int64
+	if !database.GlobalFreeleech {
+		deltaDownload = int64(float64(rawDeltaDownload) * math.Abs(user.DownMultiplier) *
+			math.Abs(torrentGroupDownMultiplier) * math.Abs(torrent.DownMultiplier))
+	}
+
+	deltaUpload := int64(float64(rawDeltaUpload) * math.Abs(user.UpMultiplier) *
+		math.Abs(torrentGroupUpMultiplier) * math.Abs(torrent.UpMultiplier))
 	peer.Uploaded = uploaded
 	peer.Downloaded = downloaded
 	peer.Left = left

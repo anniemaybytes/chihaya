@@ -128,6 +128,7 @@ func TestLoadTorrents(t *testing.T) {
 	prepareTestDatabase()
 
 	db.Torrents = make(map[string]*types.Torrent)
+	db.TorrentGroupFreeleech = make(map[types.TorrentGroup]*types.TorrentGroupFreeleech)
 
 	torrents := map[string]*types.Torrent{
 		string([]byte{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}): {
@@ -138,6 +139,10 @@ func TestLoadTorrents(t *testing.T) {
 			UpMultiplier:   1,
 			Seeders:        map[string]*types.Peer{},
 			Leechers:       map[string]*types.Peer{},
+			Group: types.TorrentGroup{
+				GroupID:     1,
+				TorrentType: "anime",
+			},
 		},
 		string([]byte{22, 168, 45, 221, 87, 225, 140, 177, 94, 34, 242, 225, 196, 234, 222, 46, 187, 131, 177, 155}): {
 			ID:             2,
@@ -147,15 +152,33 @@ func TestLoadTorrents(t *testing.T) {
 			UpMultiplier:   0.5,
 			Seeders:        map[string]*types.Peer{},
 			Leechers:       map[string]*types.Peer{},
+			Group: types.TorrentGroup{
+				GroupID:     1,
+				TorrentType: "music",
+			},
 		},
 		string([]byte{89, 252, 84, 49, 177, 28, 118, 28, 148, 205, 62, 185, 8, 37, 234, 110, 109, 200, 165, 241}): {
 			ID:             3,
 			Status:         0,
 			Snatched:       0,
-			DownMultiplier: 0, // implicitly set in torrent_group_freeleech
-			UpMultiplier:   2, // implicitly set in torrent_group_freeleech
+			DownMultiplier: 1,
+			UpMultiplier:   1,
 			Seeders:        map[string]*types.Peer{},
 			Leechers:       map[string]*types.Peer{},
+			Group: types.TorrentGroup{
+				GroupID:     2,
+				TorrentType: "anime",
+			},
+		},
+	}
+
+	torrentGroupFreeleech := map[types.TorrentGroup]*types.TorrentGroupFreeleech{
+		{
+			GroupID:     2,
+			TorrentType: "anime",
+		}: {
+			DownMultiplier: 0,
+			UpMultiplier:   2,
 		},
 	}
 
@@ -168,6 +191,12 @@ func TestLoadTorrents(t *testing.T) {
 			len(db.Torrents)))
 	}
 
+	if len(db.TorrentGroupFreeleech) != len(torrentGroupFreeleech) {
+		t.Fatal(fixtureFailure("Did not load all torrent group freeleech data as expected from fixture file",
+			len(torrentGroupFreeleech),
+			len(db.TorrentGroupFreeleech)))
+	}
+
 	for hash, torrent := range torrents {
 		if !reflect.DeepEqual(torrent, db.Torrents[hash]) {
 			t.Fatal(fixtureFailure(
@@ -177,13 +206,30 @@ func TestLoadTorrents(t *testing.T) {
 		}
 	}
 
+	for group, freeleech := range torrentGroupFreeleech {
+		if !reflect.DeepEqual(freeleech, db.TorrentGroupFreeleech[group]) {
+			t.Fatal(fixtureFailure(
+				fmt.Sprintf("Did not load torrent group freeleech data (%v) as expected from fixture file", group),
+				freeleech,
+				db.TorrentGroupFreeleech[group]))
+		}
+	}
+
 	// Now test load on top of existing data
 	oldTorrents := db.Torrents
+	oldTorrentGroupFreeleech := db.TorrentGroupFreeleech
 
 	db.loadTorrents()
 
 	if !reflect.DeepEqual(oldTorrents, db.Torrents) {
 		t.Fatal(fixtureFailure("Did not reload torrents as expected from fixture file", oldTorrents, db.Torrents))
+	}
+
+	if !reflect.DeepEqual(oldTorrentGroupFreeleech, db.TorrentGroupFreeleech) {
+		t.Fatal(fixtureFailure(
+			"Did not reload torrent group freeleech data as expected from fixture file",
+			oldTorrentGroupFreeleech,
+			db.TorrentGroupFreeleech))
 	}
 }
 

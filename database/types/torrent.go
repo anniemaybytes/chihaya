@@ -25,8 +25,20 @@ type Torrent struct {
 	UpMultiplier   float64
 	DownMultiplier float64
 
+	Group TorrentGroup
+
 	Seeders  map[string]*Peer
 	Leechers map[string]*Peer
+}
+
+type TorrentGroupFreeleech struct {
+	UpMultiplier   float64
+	DownMultiplier float64
+}
+
+type TorrentGroup struct {
+	GroupID     uint32
+	TorrentType string
 }
 
 // TorrentCacheFile holds filename used by serializer for this type

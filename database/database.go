@@ -45,18 +45,20 @@ type Database struct {
 	transferHistoryChannel chan *bytes.Buffer
 	transferIpsChannel     chan *bytes.Buffer
 
-	loadTorrentsStmt    *sql.Stmt
-	loadClientsStmt     *sql.Stmt
-	loadFreeleechStmt   *sql.Stmt
-	cleanStalePeersStmt *sql.Stmt
-	unPruneTorrentStmt  *sql.Stmt
+	loadTorrentsStmt              *sql.Stmt
+	loadTorrentGroupFreeleechStmt *sql.Stmt
+	loadClientsStmt               *sql.Stmt
+	loadFreeleechStmt             *sql.Stmt
+	cleanStalePeersStmt           *sql.Stmt
+	unPruneTorrentStmt            *sql.Stmt
 
 	Users map[string]*types.User
 
 	loadHnrStmt *sql.Stmt
 
-	HitAndRuns map[types.UserTorrentPair]struct{}
-	Torrents   map[string]*types.Torrent // SHA-1 hash (20 bytes)
+	HitAndRuns            map[types.UserTorrentPair]struct{}
+	Torrents              map[string]*types.Torrent // SHA-1 hash (20 bytes)
+	TorrentGroupFreeleech map[types.TorrentGroup]*types.TorrentGroupFreeleech
 
 	loadUsersStmt *sql.Stmt
 
@@ -114,25 +116,26 @@ func (db *Database) Init() {
 
 	db.loadUsersStmt, err = db.mainConn.sqlDb.Prepare(
 		"SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide " +
-			"FROM users_main " +
-			"WHERE Enabled = '1'")
+			"FROM users_main WHERE Enabled = '1'")
 	if err != nil {
 		panic(err)
 	}
 
 	db.loadHnrStmt, err = db.mainConn.sqlDb.Prepare(
 		"SELECT h.uid, h.fid FROM transfer_history AS h " +
-			"JOIN users_main AS u ON u.ID = h.uid " +
-			"WHERE h.hnr = 1 AND u.Enabled = '1'")
+			"JOIN users_main AS u ON u.ID = h.uid WHERE h.hnr = 1 AND u.Enabled = '1'")
 	if err != nil {
 		panic(err)
 	}
 
 	db.loadTorrentsStmt, err = db.mainConn.sqlDb.Prepare(
-		"SELECT t.ID, t.info_hash, (IFNULL(tg.DownMultiplier, 1) * t.DownMultiplier), " +
-			"(IFNULL(tg.UpMultiplier, 1) * t.UpMultiplier), t.Snatched, t.Status " +
-			"FROM torrents AS t " +
-			"LEFT JOIN torrent_group_freeleech AS tg ON tg.GroupID = t.GroupID AND tg.Type = t.TorrentType")
+		"SELECT ID, info_hash, DownMultiplier, UpMultiplier, Snatched, Status, GroupID, TorrentType FROM torrents")
+	if err != nil {
+		panic(err)
+	}
+
+	db.loadTorrentGroupFreeleechStmt, err = db.mainConn.sqlDb.Prepare(
+		"SELECT GroupID, `Type`, DownMultiplier, UpMultiplier FROM torrent_group_freeleech")
 	if err != nil {
 		panic(err)
 	}

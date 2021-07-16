@@ -189,6 +189,7 @@ func (db *Database) loadTorrents() {
 
 	start := time.Now()
 	newTorrents := make(map[string]*types.Torrent)
+	newTorrentGroupFreeleech := make(map[types.TorrentGroup]*types.TorrentGroupFreeleech)
 
 	rows := db.mainConn.query(db.loadTorrentsStmt)
 	if rows == nil {
@@ -209,9 +210,18 @@ func (db *Database) loadTorrents() {
 			downMultiplier, upMultiplier float64
 			snatched                     uint16
 			status                       uint8
+			group                        types.TorrentGroup
 		)
 
-		err := rows.Scan(&id, &infoHash, &downMultiplier, &upMultiplier, &snatched, &status)
+		err := rows.Scan(&id,
+			&infoHash,
+			&downMultiplier,
+			&upMultiplier,
+			&snatched,
+			&status,
+			&group.GroupID,
+			&group.TorrentType,
+		)
 		if err != nil {
 			log.Error.Printf("Error scanning torrent row: %s", err)
 			log.WriteStack()
@@ -224,6 +234,7 @@ func (db *Database) loadTorrents() {
 			old.UpMultiplier = upMultiplier
 			old.Snatched = snatched
 			old.Status = status
+			old.Group = group
 			newTorrents[infoHash] = old
 		} else {
 			newTorrents[infoHash] = &types.Torrent{
@@ -232,6 +243,7 @@ func (db *Database) loadTorrents() {
 				DownMultiplier: downMultiplier,
 				Snatched:       snatched,
 				Status:         status,
+				Group:          group,
 
 				Seeders:  make(map[string]*types.Peer),
 				Leechers: make(map[string]*types.Peer),
@@ -240,6 +252,41 @@ func (db *Database) loadTorrents() {
 	}
 
 	db.Torrents = newTorrents
+
+	rows = db.mainConn.query(db.loadTorrentGroupFreeleechStmt)
+	if rows == nil {
+		log.Error.Print("Failed to load torrent group freeleech data from database")
+		log.WriteStack()
+
+		return
+	}
+
+	for rows.Next() {
+		var (
+			downMultiplier, upMultiplier float64
+			group                        types.TorrentGroup
+		)
+
+		err := rows.Scan(&group.GroupID, &group.TorrentType, &downMultiplier, &upMultiplier)
+		if err != nil {
+			log.Error.Printf("Error scanning torrent row: %s", err)
+			log.WriteStack()
+		}
+
+		old, exists := db.TorrentGroupFreeleech[group]
+		if exists && old != nil {
+			old.DownMultiplier = downMultiplier
+			old.UpMultiplier = upMultiplier
+			newTorrentGroupFreeleech[group] = old
+		} else {
+			newTorrentGroupFreeleech[group] = &types.TorrentGroupFreeleech{
+				UpMultiplier:   upMultiplier,
+				DownMultiplier: downMultiplier,
+			}
+		}
+	}
+
+	db.TorrentGroupFreeleech = newTorrentGroupFreeleech
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("torrents", elapsedTime)

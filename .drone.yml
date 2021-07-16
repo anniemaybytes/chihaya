@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.41.1-alpine
+        image: golangci/golangci-lint:v1.41.1
         commands:
             - golangci-lint run --color always --no-config --disable-all -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.41.1-alpine
+        image: golangci/golangci-lint:v1.41.1
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -27,7 +27,7 @@ type: docker
 
 services:
     -   name: mariadb
-        image: mariadb:10.5
+        image: mariadb:10.6
         pull: always
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: yes
@@ -38,13 +38,12 @@ services:
 
 steps:
     -   name: await
-        image: albinodrought/drone-wait-for-it
-        pull: always
+        image: albinodrought/drone-wait-for-it@sha256:3bf668201c6f997b630adbd04289f8d3a9119a6b83204b8dff2da2796b681ae1
         environment:
             PLUGIN_HOST: mariadb
             PLUGIN_PORT: 3306
     -   name: test
-        image: golang:1.16-alpine
+        image: golang:1.16-alpine3.13
         pull: always
         environment:
             CGO_ENABLED: 0
@@ -56,7 +55,7 @@ steps:
             - go get -v -t -d ./...
             - go test ./... -v -coverprofile=coverage.out
     -   name: coverage
-        image: golang:1.16-alpine
+        image: golang:1.16-alpine3.13
         commands:
             - go tool cover -func=coverage.out
 
@@ -75,8 +74,7 @@ platform:
 
 steps:
     -   name: fetch
-        image: alpine/git
-        pull: always
+        image: alpine/git@sha256:0590372ee83d4d0ff4f08f8d2a98b0ba413d911a2e89c1d3418a1fed9a66337c
         commands:
             - git fetch --tags
     -   name: build
