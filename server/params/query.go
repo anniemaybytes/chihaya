@@ -39,7 +39,7 @@ func ParseQuery(query string) (qp *QueryParam, err error) {
 
 	for query != "" {
 		key := query
-		if i := strings.IndexAny(key, "&;"); i >= 0 {
+		if i := strings.Index(key, "&"); i >= 0 {
 			key, query = key[:i], key[i+1:]
 		} else {
 			query = ""

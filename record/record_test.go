@@ -29,13 +29,13 @@ import (
 )
 
 type record struct {
-	seeding        bool
-	port           uint16
-	uid            uint32
-	tid            uint32
-	up, down, left uint64
-	rawUp, rawDown int64
-	event, ip      string
+	seeding            bool
+	port               uint16
+	uid                uint32
+	tid                uint32
+	up, down, left     uint64
+	deltaUp, deltaDown int64
+	event, ip          string
 }
 
 func TestMain(m *testing.M) {
@@ -90,8 +90,8 @@ func TestRecord(t *testing.T) {
 				strconv.FormatUint(uint64(tmp.port), 10)+","+
 				"\""+tmp.event+"\""+","+
 				"1,"+
-				strconv.FormatInt(tmp.rawUp, 10)+","+
-				strconv.FormatInt(tmp.rawDown, 10)+","+
+				strconv.FormatInt(tmp.deltaUp, 10)+","+
+				strconv.FormatInt(tmp.deltaDown, 10)+","+
 				strconv.FormatUint(tmp.up, 10)+","+
 				strconv.FormatUint(tmp.down, 10)+","+
 				strconv.FormatUint(tmp.left, 10)+
@@ -107,8 +107,8 @@ func TestRecord(t *testing.T) {
 			item.port,
 			item.event,
 			item.seeding,
-			item.rawUp,
-			item.rawDown,
+			item.deltaUp,
+			item.deltaDown,
 			item.up,
 			item.down,
 			item.left)

@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.41.1
+        image: golangci/golangci-lint:v1.42.0
         commands:
             - golangci-lint run --color always --no-config --disable-all -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.41.1
+        image: golangci/golangci-lint:v1.42.0
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -43,7 +43,7 @@ steps:
             PLUGIN_HOST: mariadb
             PLUGIN_PORT: 3306
     -   name: test
-        image: golang:1.16-alpine3.13
+        image: golang:1.17-alpine3.13
         pull: always
         environment:
             CGO_ENABLED: 0
@@ -55,7 +55,7 @@ steps:
             - go get -v -t -d ./...
             - go test ./... -v -coverprofile=coverage.out
     -   name: coverage
-        image: golang:1.16-alpine3.13
+        image: golang:1.17-alpine3.13
         commands:
             - go tool cover -func=coverage.out
 

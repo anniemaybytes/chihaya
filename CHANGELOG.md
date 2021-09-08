@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v7.0.0
+### Removed
+- Support for semicolons in query parameters (https://golang.org/doc/go1.17#semicolons)
+
+### Changed
+- Due to above change, bump minimum Go version to 1.17
+
 ## v6.1.0
 ### Changed
 - Load freeleech data for torrent groups separately from torrents themselves

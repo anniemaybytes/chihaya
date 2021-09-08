@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine3.13 AS builder
+FROM golang:1.17-alpine3.13 AS builder
 WORKDIR /opt/chihaya
 
 ARG CGO_ENABLED=0

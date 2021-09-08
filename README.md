@@ -164,8 +164,8 @@ JSON object. Below is a definition on how to read the data:
 closed port, the tracker performs no validation on it
 - `event` - the event as given by client; for regular announces it is empty
 - `seeding` - whether tracker recognizes peer as seeder or leecher, either `1` or `0`
-- `rawUp` - delta of uploaded between announces for this peer, in bytes
-- `rawDown` - delta of downloaded between announces for this peer, in bytes
+- `deltaUp` - delta of uploaded between announces for this peer, in bytes
+- `deltaDown` - delta of downloaded between announces for this peer, in bytes
 - `up` - number of `uploaded` bytes, as reported by client for this announce
 - `down` - number of `downloaded` bytes, as reported by client for this announce
 - `left` - number of `left` bytes, as reported by client for this announce; if this is more

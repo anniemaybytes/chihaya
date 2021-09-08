@@ -85,8 +85,8 @@ func Record(
 	port uint16,
 	event string,
 	seeding bool,
-	rawUp,
-	rawDown int64,
+	deltaUp,
+	deltaDown int64,
 	up,
 	down,
 	left uint64) {
@@ -115,9 +115,9 @@ func Record(
 	buf.WriteString("\",")
 	buf.WriteString(util.Btoa(seeding))
 	buf.WriteString(",")
-	buf.WriteString(strconv.FormatInt(rawUp, 10))
+	buf.WriteString(strconv.FormatInt(deltaUp, 10))
 	buf.WriteString(",")
-	buf.WriteString(strconv.FormatInt(rawDown, 10))
+	buf.WriteString(strconv.FormatInt(deltaDown, 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(up, 10))
 	buf.WriteString(",")
