@@ -32,6 +32,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/zeebo/bencode"
@@ -220,13 +221,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		}
 
 		// check for IP in socket
-		portIndex := len(remoteAddr) - 1
-		for ; portIndex >= 0; portIndex-- {
-			if remoteAddr[portIndex] == ':' {
-				break
-			}
-		}
-
+		portIndex := strings.LastIndex(remoteAddr, ":")
 		if portIndex != -1 {
 			return remoteAddr[0:portIndex], true
 		}

@@ -4,7 +4,7 @@ chihaya (kuroneko)
 Installation
 -------------
 
-chihaya requires Golang >= 1.14 and MariaDB >= 10.3.3.
+chihaya requires Golang >= 1.17 and MariaDB >= 10.3.3.
 
 ```sh
 go get
@@ -154,7 +154,7 @@ split every hour for easier analysis. Every line in a file should be treated as 
 JSON object. Below is a definition on how to read the data:
 
 ```text
-[torrentId, userId, ipAddr, port, event, seeding, rawUp, rawDown, up, down, left] 
+[torrentId, userId, ipAddr, port, event, seeding, deltaUp, deltaDown, up, down, left] 
 ```
 
 - `torrentId` - the ID of torrent being announced
@@ -181,22 +181,4 @@ Flowcharts
 -------------
 
 #### IP resolve
-```text
-`ipv4` exists ->
-    yes -> is it public?
-        yes -> `ip` exists?
-            yes -> is it the same as `ipv4`?
-                yes -> use `ipv4`
-                no  -> failure
-            no -> use `ipv4`
-        no  -> continue
-    no  -> `ip` exists?
-        yes -> is it public?
-            yes -> use `ip`
-            no  -> continue
-        no  -> is proxy allowed?
-            yes -> is configured header present?
-                yes -> use header
-                no  -> continue
-            no  -> use socket
-```
+![IP resolve flowchart](.gitea/images/flowcharts/ip.png)
