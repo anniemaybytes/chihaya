@@ -44,6 +44,12 @@ Build process outputs several binary files. Each binary has its own flags, use
 - `cc` - utility for manipulation of cache data
 - `bencode` - utility for encoding and decoding between JSON and Bencode
 
+Chihaya does not support keep-alive or TLS and is designed to be used behind reverse proxy (such as `nginx`) that can
+provide all of these features.
+
+Usage of compression (such as `gzip`) is dicouraged as responses are usually quite small (especially when `compact` 
+is requested), resulting in unnecessary overhead for zero gain.
+
 Configuration
 -------------
 

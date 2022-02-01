@@ -179,8 +179,9 @@ func Start() {
 	handler.bufferPool = bufferPool
 
 	server := &http.Server{
-		Handler:     handler,
-		ReadTimeout: 20 * time.Second,
+		Handler:      handler,
+		ReadTimeout:  2 * time.Second,
+		WriteTimeout: 2 * time.Second,
 	}
 
 	handler.db.Init()
