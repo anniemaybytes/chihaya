@@ -65,7 +65,7 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 
 	n := len(bearerPrefix)
 	if len(auth) > n && auth[:n] == bearerPrefix {
-		adminToken, exists := config.Get("admin_token", "")
+		adminToken, exists := config.Section("http").Get("admin_token", "")
 		if exists && auth[n:] == adminToken {
 			mfs, _ := prometheus.DefaultGatherer.Gather()
 

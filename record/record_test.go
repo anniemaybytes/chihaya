@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	enabledByDefault = true // force-enable for tests
+	enabled = true // force-enable for tests
 
 	Init()
 

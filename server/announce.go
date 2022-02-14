@@ -46,18 +46,23 @@ var (
 	defaultNumWant         int
 	maxNumWant             int
 
+	strictPort bool
+
 	privateIPBlocks []*net.IPNet
 )
 
 func init() {
-	intervals := config.Section("intervals")
+	intervalsConfig := config.Section("intervals")
+	announceConfig := config.Section("announce")
 
-	announceInterval, _ = intervals.GetInt("announce", 1800)
-	minAnnounceInterval, _ = intervals.GetInt("min_announce", 900)
-	peerInactivityInterval, _ = intervals.GetInt("peer_inactivity", 3900)
-	maxAccounceDrift, _ = intervals.GetInt("announce_drift", 300)
-	defaultNumWant, _ = intervals.GetInt("numwant", 25)
-	maxNumWant, _ = intervals.GetInt("max_numwant", 50)
+	announceInterval, _ = intervalsConfig.GetInt("announce", 1800)
+	minAnnounceInterval, _ = intervalsConfig.GetInt("min_announce", 900)
+	peerInactivityInterval, _ = intervalsConfig.GetInt("peer_inactivity", 3900)
+	maxAccounceDrift, _ = intervalsConfig.GetInt("announce_drift", 300)
+
+	strictPort, _ = announceConfig.GetBool("strict_port", false)
+	defaultNumWant, _ = announceConfig.GetInt("numwant", 25)
+	maxNumWant, _ = announceConfig.GetInt("max_numwant", 50)
 
 	for _, cidr := range []string{
 		"10.0.0.0/8",     // RFC1918
@@ -174,7 +179,6 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		return
 	}
 
-	strictPort, _ := config.GetBool("strict_port", false)
 	if strictPort && port < 1024 || port > 65535 {
 		failure(fmt.Sprintf("Malformed request - port outside of acceptable range (port: %d)", port), buf, 1*time.Hour)
 		return
@@ -212,9 +216,9 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		}
 
 		// check if there is proxy in header IF allowed in config
-		proxyHeaderType, exists := config.Get("proxy", "")
+		proxyHeader, exists := config.Section("http").Get("proxy_header", "")
 		if exists {
-			ips, exists := header[proxyHeaderType]
+			ips, exists := header[proxyHeader]
 			if exists && len(ips) > 0 {
 				return ips[0], true
 			}

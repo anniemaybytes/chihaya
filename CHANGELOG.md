@@ -3,6 +3,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v8.0.0
+### Added
+- Ability to control HTTP timeouts via `read_timeout` and `write_timeout`
+(in new `http` config section)
+
+### Changed
+- Refactor config file structure:
+    - Move `strict_port`, `numwant` and `maxnumwant` to new `announce` section
+    - Move `addr`, `admin_token` to new `http` section
+    - Rename `proxy` to `proxy_header` and move it to `http` section
+
+### Removed
+- `flush_groups` configuration option and related code
+
 ## v7.1.0
 ### Changed
 - Modify HTTP read/write timeouts

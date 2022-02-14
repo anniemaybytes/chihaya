@@ -153,21 +153,6 @@ func (db *Database) flushTorrents() {
 				"WHERE t.ID = ft.ID")
 			conn.exec(&query)
 
-			flushGroups, _ := config.GetBool("flush_groups", false)
-			if flushGroups {
-				query.Reset()
-				query.WriteString("UPDATE torrents_group tg, torrents t, flush_torrents ft SET " +
-					"tg.Time=UNIX_TIMESTAMP() " +
-					"WHERE tg.ID = t.GroupID AND t.TorrentType = 'anime' AND t.ID = ft.ID")
-				conn.exec(&query)
-
-				query.Reset()
-				query.WriteString("UPDATE torrents_group2 tg, torrents t, flush_torrents ft SET " +
-					"tg.Time=UNIX_TIMESTAMP() " +
-					"WHERE tg.ID = t.GroupID AND t.TorrentType = 'music' AND t.ID = ft.ID")
-				conn.exec(&query)
-			}
-
 			if !db.terminate {
 				elapsedTime := time.Since(startTime)
 				collectors.UpdateFlushTime("torrents", elapsedTime)

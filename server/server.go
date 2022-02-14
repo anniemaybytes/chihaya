@@ -178,10 +178,14 @@ func Start() {
 	bufferPool := util.NewBufferPool(500, 500)
 	handler.bufferPool = bufferPool
 
+	addr, _ := config.Section("http").Get("addr", ":34000")
+	readTimeout, _ := config.Section("http").GetInt("read_timeout", 2)
+	writeTimeout, _ := config.Section("http").GetInt("write_timeout", 2)
+
 	server := &http.Server{
 		Handler:      handler,
-		ReadTimeout:  2 * time.Second,
-		WriteTimeout: 2 * time.Second,
+		ReadTimeout:  time.Duration(readTimeout) * time.Second,
+		WriteTimeout: time.Duration(writeTimeout) * time.Second,
 	}
 
 	handler.db.Init()
@@ -194,8 +198,6 @@ func Start() {
 	// Register additional metrics for DefaultGatherer
 	handler.adminCollector = collectors.NewAdminCollector()
 	prometheus.MustRegister(handler.adminCollector)
-
-	addr, _ := config.Get("addr", ":34000")
 
 	listener, err = net.Listen("tcp", addr)
 	if err != nil {

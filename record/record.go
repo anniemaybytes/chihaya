@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-var enabledByDefault = false
+var enabled = false
 
 var recordChan chan []byte
 
@@ -35,8 +35,8 @@ func openEventFile(t time.Time) (*os.File, error) {
 }
 
 func Init() {
-	enabledByDefault, _ := config.GetBool("record", enabledByDefault)
-	if !enabledByDefault {
+	enabled, _ := config.GetBool("record", enabled)
+	if !enabled {
 		return
 	}
 
@@ -90,8 +90,8 @@ func Record(
 	up,
 	down,
 	left uint64) {
-	enabledByDefault, _ := config.GetBool("record", enabledByDefault)
-	if !enabledByDefault {
+	enabled, _ := config.GetBool("record", enabled)
+	if !enabled {
 		return
 	}
 

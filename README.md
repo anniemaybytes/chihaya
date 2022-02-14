@@ -90,19 +90,23 @@ Configuration is done in `config.json`, which you'll need to create with the fol
     "flush": 3
   },
 
-  "addr": ":34000",
-
-  "admin_token": "",
-  "proxy": "",
-
+  "http": {
+    "addr": ":34000",
+    "read_timeout": 2,
+    "write_timeout": 2,
+    "admin_token": "",
+    "proxy_header": ""
+  },
+  
+  "announce": {
+    "strict_port": false,
+    "numwant": 25,
+    "max_numwant": 50
+  },
+  
   "record": false,
   "scrape": true,
-  "log_flushes": true,
-  "strict_port": false,
-  "flush_groups": false,
-
-  "numwant": 25,
-  "max_numwant": 50
+  "log_flushes": true
 }
 ```
 
@@ -111,10 +115,8 @@ Configuration is done in `config.json`, which you'll need to create with the fol
     - `password` - password for user specified
     - `database` - database name
     - `proto` - protocol to use when connecting to database, can be `unix` or `tcp`
-    - `addr` - address to find database at, either absolute path for `unix` or 
-    `ip:port` for `tcp`
-    - `deadlock_pause` - time in seconds to wait between retries on deadlock, ramps up 
-    linearly with each attempt from this value
+    - `addr` - address to find database at, either absolute path for `unix` or `ip:port` for `tcp`
+    - `deadlock_pause` - time in seconds to wait between retries on deadlock, ramps up linearly with each attempt from this value
     - `deadlock_retries` - how many times should we retry on deadlock
 - `channels` - channel holds raw data for injection to SQL statement on flush
     - `torrent` - maximum size of channel holding changes to `torrents` table
@@ -125,31 +127,26 @@ Configuration is done in `config.json`, which you'll need to create with the fol
 - `intervals` - all values are in seconds
     - `announce` - default announce `interval` given to clients
     - `min_announce` - minimum `min_interval` between announces that clients should respect
-    - `peer_inactivity` - time after which peer is considered dead, recommended to be 
-    `(min_announce * 2) + (announce_drift * 2)`
-    - `announce_drift` - maximum announce drift to incorporate in default `interval` 
-    sent to client
+    - `peer_inactivity` - time after which peer is considered dead, recommended to be `(min_announce * 2) + (announce_drift * 2)`
+    - `announce_drift` - maximum announce drift to incorporate in default `interval` sent to client
     - `scrape` - default scrape `interval` given to clients
     - `database_reload` - time between reloads of user and torrent data from database
     - `database_serialize` - time between database serializations to cache
-    - `purge_inactive_peers` - time between peers older than `peer_inactivity` are flushed 
-    from database and memory
+    - `purge_inactive_peers` - time between peers older than `peer_inactivity` are flushed from database and memory
     - `flush` - time between database flushes when channel is used in less than 50%
-- `addr` - address to which we should listen for HTTP requests
-- `admin_token` - administrative token used in `Authorization` header to access advanced 
-prometheus statistics
-- `proxy` - header name to look for user's real IP address, for example `X-Real-Ip`
+- `http` - HTTP server configuration
+    - `addr` - address on which we should listen for requests
+    - `read_timeout` - timeout in seconds for reading request (total time spent)
+    - `write_timeout` - timeout in seconds for writing response (total time spent)
+    - `admin_token` - administrative token used in `Authorization` header to access advanced prometheus statistics
+    - `proxy_header` - header name to look for user's real IP address, for example `X-Real-Ip`
+- `announce`
+    - `strict_port` - if enabled then announces where client advertises port outside range `1024-65535` will be failed
+    - `numwant` - Default number of peers sent on announce if otherwise not explicitly specified by client
+    - `max_numwant` - Maximum number of peers that tracker will send per single announce, even if client requests more
 - `record` - enables or disables JSON recorder of announces
-- `scrape` - enables or disables `/scrape` endpoint which allows clients to get peers count 
-without sending announce
+- `scrape` - enables or disables `/scrape` endpoint which allows clients to get peers count without sending announce
 - `log_flushes` - whether to log all database flushes performed
-- `strict_port` - if enabled then announces where client advertises port outside range 
-`1024-65535` will be failed
-- `flush_groups` - whether to update groups timestamp whenever related torrent is flushed
-- `numwant` - Default number of peers sent on announce if otherwise not explicitly specified 
-by client
-- `max_numwant` - Maximum number of peers that tracker will send per single announce, even if
-client requests more
 
 Recorder
 -------------
