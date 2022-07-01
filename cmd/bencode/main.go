@@ -59,9 +59,7 @@ func main() {
 
 	if decode {
 		decoder := bencode.NewDecoder(os.Stdin)
-
-		err := decoder.Decode(&val)
-		if err != nil {
+		if err := decoder.Decode(&val); err != nil {
 			panic(err)
 		}
 
@@ -75,14 +73,12 @@ func main() {
 		decoder := json.NewDecoder(os.Stdin)
 		decoder.UseNumber()
 
-		err := decoder.Decode(&val)
-		if err != nil {
+		if err := decoder.Decode(&val); err != nil {
 			panic(err)
 		}
 
 		encoder := bencode.NewEncoder(os.Stdout)
-		err = encoder.Encode(val)
-		if err != nil {
+		if err := encoder.Encode(val); err != nil {
 			panic(err)
 		}
 	}

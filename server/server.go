@@ -71,8 +71,7 @@ func failure(err string, buf io.Writer, interval time.Duration) {
 		panic(errz)
 	}
 
-	_, errz = buf.Write(data)
-	if errz != nil {
+	if _, errz = buf.Write(data); errz != nil {
 		panic(errz)
 	}
 }
@@ -112,8 +111,7 @@ func (handler *httpHandler) respond(r *http.Request, buf io.Writer) bool {
 		announce(r.URL.RawQuery, r.Header, r.RemoteAddr, user, handler.db, buf)
 		return true
 	case "scrape":
-		enabledByDefault, _ := config.GetBool("scrape", true)
-		if !enabledByDefault {
+		if enabled, _ := config.GetBool("scrape", true); !enabled {
 			return false
 		}
 
@@ -133,37 +131,38 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer w.(http.Flusher).Flush()
-
 	handler.waitGroup.Add(1)
+	buf := handler.bufferPool.Take()
+
+	defer w.(http.Flusher).Flush()
 	defer handler.waitGroup.Done()
+	defer handler.bufferPool.Give(buf)
 
 	defer func() {
-		err := recover()
-		if err != nil {
+		if err := recover(); err != nil {
 			log.Error.Printf("ServeHTTP panic - %v\nURL was: %s", err, r.URL)
 			log.WriteStack()
 
-			w.WriteHeader(500)
+			// If present then writing response failed and we should not attempt to write again
+			if w.Header().Get("Content-Type") == "" {
+				buf.Reset()
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 
 			collectors.IncrementErroredRequests()
 		}
 	}()
 
-	buf := handler.bufferPool.Take()
-	defer handler.bufferPool.Give(buf)
-
-	exists, status := handler.respond(r, buf), 200
+	exists, status := handler.respond(r, buf), http.StatusOK
 	if !exists {
-		status = 404
+		status = http.StatusNotFound
 	}
 
-	w.Header().Add("Content-Type", "text/plain")
 	w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
+	w.Header().Add("Content-Type", "text/plain")
 	w.WriteHeader(status)
 
-	_, err := w.Write(buf.Bytes())
-	if err != nil {
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		panic(err)
 	}
 

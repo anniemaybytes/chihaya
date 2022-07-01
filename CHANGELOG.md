@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v8.1.0
+### Fixed
+- Avoid 'superfluous response.WriteHeader call' error when handling panic in ServeHTTP
+
+### Changed
+- Do not set GOMAXPROCS in chihaya/main as it defaults to system CPUs on new Go versions already
+
 ## v8.0.0
 ### Added
 - Ability to control HTTP timeouts via `read_timeout` and `write_timeout`

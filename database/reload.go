@@ -101,8 +101,7 @@ func (db *Database) loadUsers() {
 			disableDownload, trackerHide bool
 		)
 
-		err := rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide)
-		if err != nil {
+		if err := rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide); err != nil {
 			log.Error.Printf("Error scanning user row: %s", err)
 			log.WriteStack()
 		}
@@ -158,8 +157,7 @@ func (db *Database) loadHitAndRuns() {
 	for rows.Next() {
 		var uid, fid uint32
 
-		err := rows.Scan(&uid, &fid)
-		if err != nil {
+		if err := rows.Scan(&uid, &fid); err != nil {
 			log.Error.Printf("Error scanning hit and run row: %s", err)
 			log.WriteStack()
 		}
@@ -213,7 +211,7 @@ func (db *Database) loadTorrents() {
 			group                        types.TorrentGroup
 		)
 
-		err := rows.Scan(&id,
+		if err := rows.Scan(&id,
 			&infoHash,
 			&downMultiplier,
 			&upMultiplier,
@@ -221,8 +219,7 @@ func (db *Database) loadTorrents() {
 			&status,
 			&group.GroupID,
 			&group.TorrentType,
-		)
-		if err != nil {
+		); err != nil {
 			log.Error.Printf("Error scanning torrent row: %s", err)
 			log.WriteStack()
 		}
@@ -267,8 +264,7 @@ func (db *Database) loadTorrents() {
 			group                        types.TorrentGroup
 		)
 
-		err := rows.Scan(&group.GroupID, &group.TorrentType, &downMultiplier, &upMultiplier)
-		if err != nil {
+		if err := rows.Scan(&group.GroupID, &group.TorrentType, &downMultiplier, &upMultiplier); err != nil {
 			log.Error.Printf("Error scanning torrent row: %s", err)
 			log.WriteStack()
 		}
@@ -315,8 +311,7 @@ func (db *Database) loadConfig() {
 	for rows.Next() {
 		var globalFreelech bool
 
-		err := rows.Scan(&globalFreelech)
-		if err != nil {
+		if err := rows.Scan(&globalFreelech); err != nil {
 			log.Error.Printf("Error scanning config row: %s", err)
 			log.WriteStack()
 		}
@@ -356,8 +351,7 @@ func (db *Database) loadClients() {
 			peerID string
 		)
 
-		err := rows.Scan(&id, &peerID)
-		if err != nil {
+		if err := rows.Scan(&id, &peerID); err != nil {
 			log.Error.Printf("Error scanning client list row: %s", err)
 			log.WriteStack()
 		}

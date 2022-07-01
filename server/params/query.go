@@ -81,11 +81,9 @@ func (qp *QueryParam) getUint(which string, bitSize int) (ret uint64, exists boo
 	if exists {
 		var err error
 
-		exists = false
-
 		ret, err = strconv.ParseUint(str, 10, bitSize)
-		if err == nil {
-			exists = true
+		if err != nil {
+			exists = false
 		}
 	}
 

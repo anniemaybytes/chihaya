@@ -84,18 +84,15 @@ func (m Map) Section(s string) Map {
 
 func readConfig() {
 	f, err := os.Open(configFile)
-
 	if err != nil {
 		log.Warning.Printf("Unable to open config file, defaults will be used! (%s)", err)
 		return
 	}
 
 	decoder := json.NewDecoder(f)
-
 	decoder.UseNumber()
-	err = decoder.Decode(&config)
 
-	if err != nil {
+	if err = decoder.Decode(&config); err != nil {
 		log.Error.Printf("Can not parse config file, defaults will be used! (%s)", err)
 		return
 	}

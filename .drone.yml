@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.44.0-alpine
+        image: golangci/golangci-lint:v1.46.2-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.44.0-alpine
+        image: golangci/golangci-lint:v1.46.2-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -20,6 +20,9 @@ trigger:
         - refs/heads/master
         - refs/pull/**
         - refs/tags/**
+    event:
+        exclude:
+            - promote
 ---
 kind: pipeline
 name: tests
@@ -27,7 +30,7 @@ type: docker
 
 services:
     -   name: mariadb
-        image: mariadb:10.7
+        image: mariadb:10.8
         pull: always
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: yes
@@ -43,7 +46,7 @@ steps:
             PLUGIN_HOST: mariadb
             PLUGIN_PORT: 3306
     -   name: test
-        image: golang:1.17-alpine
+        image: golang:1.18-alpine
         pull: always
         environment:
             CGO_ENABLED: 0
@@ -53,9 +56,9 @@ steps:
             - apk add mariadb-client
             - mysql -udrone -pw33lkn0wn -hmariadb chihaya_test < database/schema.sql
             - go get -v -t -d ./...
-            - go test ./... -v -coverprofile=coverage.out
+            - go test ./... -v -buildvcs=false -coverprofile=coverage.out
     -   name: coverage
-        image: golang:1.17-alpine
+        image: golang:1.18-alpine
         commands:
             - go tool cover -func=coverage.out
 
@@ -64,6 +67,9 @@ trigger:
         - refs/heads/master
         - refs/pull/**
         - refs/tags/**
+    event:
+        exclude:
+            - promote
 ---
 kind: pipeline
 name: docker

@@ -35,19 +35,15 @@ func TestMain(m *testing.M) {
 
 	tempPath := filepath.Join(os.TempDir(), "chihaya_config-"+util.RandStringBytes(6))
 
-	err := os.Mkdir(tempPath, 0755)
-	if err != nil {
+	if err := os.Mkdir(tempPath, 0755); err != nil {
 		panic(err)
 	}
 
-	err = os.Chdir(tempPath)
-	if err != nil {
+	if err := os.Chdir(tempPath); err != nil {
 		panic(err)
 	}
 
-	configFile = "test_config.json"
-
-	f, err := os.OpenFile(configFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := os.OpenFile("config.json", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -65,8 +61,7 @@ func TestMain(m *testing.M) {
 	configTest["numwant"] = json.Number("25")
 	configTest["log_flushes"] = true
 
-	err = json.NewEncoder(f).Encode(&configTest)
-	if err != nil {
+	if err = json.NewEncoder(f).Encode(&configTest); err != nil {
 		panic(err)
 	}
 
@@ -82,8 +77,7 @@ func TestReadConfig(t *testing.T) {
 		t.Fatalf("Config is nil!")
 	}
 
-	same := reflect.DeepEqual(config, configTest)
-	if !same {
+	if same := reflect.DeepEqual(config, configTest); !same {
 		t.Fatalf("Config (%v) was not same as the config that was written (%v)!", config, configTest)
 	}
 
@@ -151,13 +145,11 @@ func TestSection(t *testing.T) {
 	}
 
 	expected := configTest["database"]
-	same := reflect.DeepEqual(gotMap, expected)
-
-	if !same {
+	if same := reflect.DeepEqual(gotMap, expected); !same {
 		t.Fatalf("Got (%v) whereas expected (%v) for \"database\"", gotMap, expected)
 	}
 }
 
 func cleanup() {
-	_ = os.Remove(configFile)
+	_ = os.Remove("config.json")
 }

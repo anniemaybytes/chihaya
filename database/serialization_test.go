@@ -69,18 +69,15 @@ func TestSerializer(t *testing.T) {
 	db.Torrents = make(map[string]*types.Torrent)
 	db.Users = make(map[string]*types.User)
 
-	err := copier.Copy(&db.Torrents, testTorrents)
-	if err != nil {
+	if err := copier.Copy(&db.Torrents, testTorrents); err != nil {
 		panic(err)
 	}
 
-	err = copier.Copy(&db.Users, testUsers)
-	if err != nil {
+	if err := copier.Copy(&db.Users, testUsers); err != nil {
 		panic(err)
 	}
 
 	db.serialize()
-
 	db.deserialize()
 
 	if !reflect.DeepEqual(db.Torrents, testTorrents) {

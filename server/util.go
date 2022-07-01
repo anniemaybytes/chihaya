@@ -34,6 +34,6 @@ func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
 }
 
 func isDisabledDownload(db *database.Database, user *cdb.User, torrent *cdb.Torrent) bool {
-	// only disable download if the torrent doesn't have a HnR against it
+	// Only disable download if the torrent doesn't have a HnR against it
 	return user.DisableDownload && !hasHitAndRun(db, user.ID, torrent.ID)
 }

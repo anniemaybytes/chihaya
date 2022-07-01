@@ -31,7 +31,7 @@ import (
 
 var profile, help bool
 
-// provided at compile-time
+// Provided at compile-time
 var (
 	BuildDate    = "0000-00-00T00:00:00+0000"
 	BuildVersion = "development"
@@ -55,17 +55,14 @@ func main() {
 		return
 	}
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	if profile {
-		log.Info.Printf("Running with profiling enabled, found %d CPUs", runtime.NumCPU())
+		log.Info.Printf("Running with profiling enabled, using %d CPUs", runtime.GOMAXPROCS(0))
 
 		f, err := os.Create("chihaya.cpu")
 		if err != nil {
 			log.Fatal.Fatalf("Failed to create profile file: %s\n", err)
 		} else {
-			err = pprof.StartCPUProfile(f)
-			if err != nil {
+			if err = pprof.StartCPUProfile(f); err != nil {
 				log.Fatal.Fatalf("Can not start profiling session: %s\n", err)
 			}
 		}

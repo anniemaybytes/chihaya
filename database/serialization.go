@@ -63,13 +63,11 @@ func (db *Database) serialize() {
 	}
 
 	defer func() {
-		err := torrentFile.Close()
-		if err != nil {
+		if err := torrentFile.Close(); err != nil {
 			panic(err)
 		}
 
-		err = userFile.Close()
-		if err != nil {
+		if err = userFile.Close(); err != nil {
 			panic(err)
 		}
 	}()
@@ -80,8 +78,7 @@ func (db *Database) serialize() {
 
 	db.TorrentsMutex.RLock()
 
-	err = gob.NewEncoder(torrentFile).Encode(db.Torrents)
-	if err != nil {
+	if err = gob.NewEncoder(torrentFile).Encode(db.Torrents); err != nil {
 		log.Error.Println("Failed to encode torrents for serialization! ", err)
 		log.WriteStack()
 		db.TorrentsMutex.RUnlock()
@@ -92,8 +89,7 @@ func (db *Database) serialize() {
 
 	db.UsersMutex.RLock()
 
-	err = gob.NewEncoder(userFile).Encode(db.Users)
-	if err != nil {
+	if err = gob.NewEncoder(userFile).Encode(db.Users); err != nil {
 		log.Error.Println("Failed to encode users for serialization! ", err)
 		log.WriteStack()
 		db.UsersMutex.RUnlock()
@@ -121,13 +117,11 @@ func (db *Database) deserialize() {
 	}
 
 	defer func() {
-		err := torrentFile.Close()
-		if err != nil {
+		if err := torrentFile.Close(); err != nil {
 			panic(err)
 		}
 
-		err = userFile.Close()
-		if err != nil {
+		if err = userFile.Close(); err != nil {
 			panic(err)
 		}
 	}()

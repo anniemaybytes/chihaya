@@ -72,13 +72,11 @@ func dumpCache() {
 
 	fmt.Println("Dumping data for torrent cache, this might take a while...")
 
-	err = gob.NewDecoder(torrentGobFile).Decode(&torrents)
-	if err != nil {
+	if err = gob.NewDecoder(torrentGobFile).Decode(&torrents); err != nil {
 		panic(err)
 	}
 
-	err = torrentGobFile.Close()
-	if err != nil {
+	if err = torrentGobFile.Close(); err != nil {
 		panic(err)
 	}
 
@@ -92,13 +90,11 @@ func dumpCache() {
 		panic(err)
 	}
 
-	_, err = torrentJSONFile.Write(res)
-	if err != nil {
+	if _, err = torrentJSONFile.Write(res); err != nil {
 		panic(err)
 	}
 
-	err = torrentJSONFile.Close()
-	if err != nil {
+	if err = torrentJSONFile.Close(); err != nil {
 		panic(err)
 	}
 
@@ -119,8 +115,7 @@ func dumpCache() {
 
 	fmt.Println("Dumping data for user cache, this might take a while...")
 
-	err = gob.NewDecoder(userGobFile).Decode(&users)
-	if err != nil {
+	if err = gob.NewDecoder(userGobFile).Decode(&users); err != nil {
 		panic(err)
 	}
 
@@ -129,8 +124,7 @@ func dumpCache() {
 		panic(err)
 	}
 
-	err = userGobFile.Close()
-	if err != nil {
+	if err = userGobFile.Close(); err != nil {
 		panic(err)
 	}
 
@@ -139,13 +133,11 @@ func dumpCache() {
 		panic(err)
 	}
 
-	_, err = userJSONFile.Write(res)
-	if err != nil {
+	if _, err = userJSONFile.Write(res); err != nil {
 		panic(err)
 	}
 
-	err = userJSONFile.Close()
-	if err != nil {
+	if err = userJSONFile.Close(); err != nil {
 		panic(err)
 	}
 
@@ -171,23 +163,19 @@ func restoreCache() {
 
 	fmt.Println("Restoring data for torrent cache, this might take a while...")
 
-	err = json.NewDecoder(torrentJSONFile).Decode(&torrents)
-	if err != nil {
+	if err = json.NewDecoder(torrentJSONFile).Decode(&torrents); err != nil {
 		panic(err)
 	}
 
-	err = torrentJSONFile.Close()
-	if err != nil {
+	if err = torrentJSONFile.Close(); err != nil {
 		panic(err)
 	}
 
-	err = gob.NewEncoder(torrentGobFile).Encode(&torrents)
-	if err != nil {
+	if err = gob.NewEncoder(torrentGobFile).Encode(&torrents); err != nil {
 		panic(err)
 	}
 
-	err = torrentGobFile.Close()
-	if err != nil {
+	if err = torrentGobFile.Close(); err != nil {
 		panic(err)
 	}
 
@@ -213,23 +201,19 @@ func restoreCache() {
 
 	fmt.Println("Restoring data for user cache, this might take a while...")
 
-	err = json.NewDecoder(userJSONFile).Decode(&users)
-	if err != nil {
+	if err = json.NewDecoder(userJSONFile).Decode(&users); err != nil {
 		panic(err)
 	}
 
-	err = userJSONFile.Close()
-	if err != nil {
+	if err = userJSONFile.Close(); err != nil {
 		panic(err)
 	}
 
-	err = gob.NewEncoder(userGobFile).Encode(&users)
-	if err != nil {
+	if err = gob.NewEncoder(userGobFile).Encode(&users); err != nil {
 		panic(err)
 	}
 
-	err = userGobFile.Close()
-	if err != nil {
+	if err = userGobFile.Close(); err != nil {
 		panic(err)
 	}
 

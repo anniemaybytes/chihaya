@@ -56,8 +56,7 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 	mfs, _ := handler.normalRegisterer.(prometheus.Gatherer).Gather()
 
 	for _, mf := range mfs {
-		_, err := expfmt.MetricFamilyToText(buf, mf)
-		if err != nil {
+		if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
 			log.Panic.Printf("Error in converting metrics to text")
 			panic(err)
 		}
@@ -70,8 +69,7 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 			mfs, _ := prometheus.DefaultGatherer.Gather()
 
 			for _, mf := range mfs {
-				_, err := expfmt.MetricFamilyToText(buf, mf)
-				if err != nil {
+				if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
 					log.Panic.Printf("Error in converting metrics to text")
 					panic(err)
 				}

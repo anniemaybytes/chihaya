@@ -241,8 +241,7 @@ func Open() *Connection {
 		log.Fatal.Fatalf("Couldn't connect to database - %s", err)
 	}
 
-	err = sqlDb.Ping()
-	if err != nil {
+	if err = sqlDb.Ping(); err != nil {
 		log.Fatal.Fatalf("Couldn't ping database - %s", err)
 	}
 

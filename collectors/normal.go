@@ -73,30 +73,30 @@ func (collector *NormalCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collector.requestsMetric, prometheus.CounterValue, float64(requests))
 }
 
-func UpdateUptime(tempUptime float64) {
-	uptime = tempUptime
+func UpdateUptime(seconds float64) {
+	uptime = seconds
 }
 
-func UpdateUsers(tempUsers int) {
-	users = tempUsers
+func UpdateUsers(count int) {
+	users = count
 }
 
-func UpdatePeers(tempPeers int) {
-	peers = tempPeers
+func UpdatePeers(count int) {
+	peers = count
 }
 
-func UpdateTorrents(tempTorrents int) {
-	torrents = tempTorrents
+func UpdateTorrents(count int) {
+	torrents = count
 }
 
-func UpdateClients(tempClients int) {
-	clients = tempClients
+func UpdateClients(count int) {
+	clients = count
 }
 
-func UpdateHitAndRuns(tempHitAndRuns int) {
-	hitAndRuns = tempHitAndRuns
+func UpdateHitAndRuns(count int) {
+	hitAndRuns = count
 }
 
-func UpdateRequests(tempRequests uint64) {
-	requests = tempRequests
+func UpdateRequests(count uint64) {
+	requests = count
 }

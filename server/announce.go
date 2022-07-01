@@ -407,9 +407,6 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		deltaSnatch = 1
 	}
 
-	// Converts in a way equivalent to PHP's ip2long
-	ipLong := binary.BigEndian.Uint32(ipBytes)
-
 	peer.Addr = []byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
 	peer.Port = port
 	peer.IPAddr = ipAddr
@@ -417,7 +414,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	if user.TrackerHide {
 		peer.IP = 2130706433 // 127.0.0.1
 	} else {
-		peer.IP = ipLong
+		peer.IP = binary.BigEndian.Uint32(ipBytes)
 	}
 
 	peer.ClientID = clientID
@@ -503,8 +500,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 				if seed.UserID == peer.UserID {
 					continue
 				}
-				_, exists = uniqueSeeders[seed.UserID]
-				if !exists {
+				if _, exists = uniqueSeeders[seed.UserID]; !exists {
 					uniqueSeeders[seed.UserID] = seed
 					peersToSend = append(peersToSend, seed)
 				}
@@ -548,8 +544,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		panic(err)
 	}
 
-	_, err = buf.Write(bufdata)
-	if err != nil {
+	if _, err = buf.Write(bufdata); err != nil {
 		panic(err)
 	}
 }

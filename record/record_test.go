@@ -43,13 +43,11 @@ func TestMain(m *testing.M) {
 
 	tempPath := filepath.Join(os.TempDir(), "chihaya_record-"+util.RandStringBytes(6))
 
-	err := os.Mkdir(tempPath, 0755)
-	if err != nil {
+	if err := os.Mkdir(tempPath, 0755); err != nil {
 		panic(err)
 	}
 
-	err = os.Chdir(tempPath)
-	if err != nil {
+	if err := os.Chdir(tempPath); err != nil {
 		panic(err)
 	}
 
@@ -118,7 +116,7 @@ func TestRecord(t *testing.T) {
 
 	// In theory, below line can fail if this line was called in a different hour than when the file was made
 	// In practice, this would never occur since the file should be made fast enough for it to be in same error.
-	recordFile, err := openEventFile(time.Now())
+	recordFile, err := getFile(time.Now())
 	if err != nil {
 		t.Fatalf("Faced error in opening file: %s", err)
 	}

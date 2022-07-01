@@ -51,8 +51,7 @@ func Btoa(a bool) string {
 func Intn(n int) int {
 	b := make([]byte, 8)
 
-	_, err := rand.Read(b)
-	if err != nil {
+	if _, err := rand.Read(b); err != nil {
 		panic(err)
 	}
 

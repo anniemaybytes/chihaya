@@ -20,6 +20,7 @@ package record
 import (
 	"bytes"
 	"chihaya/config"
+	"chihaya/log"
 	"chihaya/util"
 	"os"
 	"strconv"
@@ -27,28 +28,26 @@ import (
 )
 
 var enabled = false
-
+var initialized = false
 var recordChan chan []byte
 
-func openEventFile(t time.Time) (*os.File, error) {
+func getFile(t time.Time) (*os.File, error) {
 	return os.OpenFile("events/events_"+t.Format("2006-01-02T15")+".json", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 }
 
 func Init() {
-	enabled, _ := config.GetBool("record", enabled)
-	if !enabled {
+	if enabled, _ := config.GetBool("record", enabled); !enabled {
 		return
 	}
 
-	err := os.Mkdir("events", 0755)
-	if err != nil && !os.IsExist(err) {
+	if err := os.Mkdir("events", 0755); err != nil && !os.IsExist(err) {
 		panic(err)
 	}
 
 	start := time.Now()
 	recordChan = make(chan []byte)
 
-	recordFile, err := openEventFile(start)
+	recordFile, err := getFile(start)
 	if err != nil {
 		panic(err)
 	}
@@ -59,23 +58,23 @@ func Init() {
 			if now.Hour() != start.Hour() {
 				start = now
 
-				err := recordFile.Close()
-				if err != nil {
+				if err := recordFile.Close(); err != nil {
 					panic(err)
 				}
 
-				recordFile, err = openEventFile(start)
+				recordFile, err = getFile(start)
 				if err != nil {
 					panic(err)
 				}
 			}
 
-			_, err := recordFile.Write(buf)
-			if err != nil {
+			if _, err := recordFile.Write(buf); err != nil {
 				panic(err)
 			}
 		}
 	}()
+
+	initialized = true
 }
 
 func Record(
@@ -90,8 +89,12 @@ func Record(
 	up,
 	down,
 	left uint64) {
-	enabled, _ := config.GetBool("record", enabled)
-	if !enabled {
+	if enabled, _ := config.GetBool("record", enabled); !enabled {
+		return
+	}
+
+	if !initialized {
+		log.Panic.Printf("Can not Record without prior initialization")
 		return
 	}
 

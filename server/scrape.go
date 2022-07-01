@@ -82,8 +82,7 @@ func scrape(qs string, user *cdb.User, db *database.Database, buf io.Writer) {
 		panic(err)
 	}
 
-	_, err = buf.Write(bufdata)
-	if err != nil {
+	if _, err = buf.Write(bufdata); err != nil {
 		panic(err)
 	}
 }
