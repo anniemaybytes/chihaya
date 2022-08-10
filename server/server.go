@@ -178,13 +178,18 @@ func Start() {
 	handler.bufferPool = bufferPool
 
 	addr, _ := config.Section("http").Get("addr", ":34000")
-	readTimeout, _ := config.Section("http").GetInt("read_timeout", 2)
-	writeTimeout, _ := config.Section("http").GetInt("write_timeout", 2)
+
+	readTimeout, _ := config.Section("http").Section("timeout").GetInt("read", 1)
+	readHeaderTimeout, _ := config.Section("http").Section("timeout").GetInt("read_header", 2)
+	writeTimeout, _ := config.Section("http").Section("timeout").GetInt("write", 1)
+	idleTimeout, _ := config.Section("http").Section("timeout").GetInt("idle", 30)
 
 	server := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  time.Duration(readTimeout) * time.Second,
-		WriteTimeout: time.Duration(writeTimeout) * time.Second,
+		Handler:           handler,
+		ReadTimeout:       time.Duration(readTimeout) * time.Second,
+		ReadHeaderTimeout: time.Duration(readHeaderTimeout) * time.Second,
+		WriteTimeout:      time.Duration(writeTimeout) * time.Second,
+		IdleTimeout:       time.Duration(idleTimeout) * time.Second,
 	}
 
 	handler.db.Init()
@@ -201,6 +206,11 @@ func Start() {
 	listener, err = net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
+	}
+
+	if idleTimeout <= 0 {
+		log.Warning.Println("Setting idleTimeout <= 0 disables Keep-Alive which might negatively impact performance")
+		server.SetKeepAlivesEnabled(false)
 	}
 
 	/*

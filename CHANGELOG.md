@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v9.0.0
+### Added
+- Allow configuring ReadHeaderTimeout, IdleTimeout and SetKeepAlivesEnabled
+
+### Changed
+- Refactor config file structure:
+    - Move `read_timeout`, `write_timeout` to new `http.timeout` section and remove
+      `_timeout` suffix
+
 ## v8.1.0
 ### Fixed
 - Avoid 'superfluous response.WriteHeader call' error when handling panic in ServeHTTP
