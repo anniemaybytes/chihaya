@@ -138,6 +138,8 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer handler.waitGroup.Done()
 	defer handler.bufferPool.Give(buf)
 
+	atomic.AddUint64(&handler.requests, 1)
+
 	defer func() {
 		if err := recover(); err != nil {
 			log.Error.Printf("ServeHTTP panic - %v\nURL was: %s", err, r.URL)
@@ -165,8 +167,6 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(buf.Bytes()); err != nil {
 		panic(err)
 	}
-
-	atomic.AddUint64(&handler.requests, 1)
 }
 
 func Start() {

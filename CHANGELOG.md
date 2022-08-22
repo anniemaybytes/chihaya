@@ -3,9 +3,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v9.0.1
+### Fixed
+- Record of ID 0 in `approved_clients` table being treated as non-approved
+- Requests should be counted for Prometheus collector before handling them in `ServerHTTP`
+- Handle `TorrentsMutex`'s `RUnlock` in defer in `server/scrape.go`
+- Incorrect usage of `log.Panic` in `record/record.go`
+
 ## v9.0.0
 ### Added
-- Allow configuring ReadHeaderTimeout, IdleTimeout and SetKeepAlivesEnabled
+- Allow configuring `ReadHeaderTimeout`, `IdleTimeout` and `SetKeepAlivesEnabled`
 
 ### Changed
 - Refactor config file structure:
@@ -14,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## v8.1.0
 ### Fixed
-- Avoid 'superfluous response.WriteHeader call' error when handling panic in ServeHTTP
+- Avoid 'superfluous response.WriteHeader call' error when handling panic in `ServeHTTP`
 
 ### Changed
 - Do not set GOMAXPROCS in chihaya/main as it defaults to system CPUs on new Go versions already

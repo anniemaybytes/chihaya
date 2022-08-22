@@ -85,8 +85,8 @@ func (db *Database) serialize() {
 
 		return
 	}
-	db.TorrentsMutex.RUnlock()
 
+	db.TorrentsMutex.RUnlock()
 	db.UsersMutex.RLock()
 
 	if err = gob.NewEncoder(userFile).Encode(db.Users); err != nil {
@@ -96,6 +96,7 @@ func (db *Database) serialize() {
 
 		return
 	}
+
 	db.UsersMutex.RUnlock()
 
 	elapsedTime := time.Since(start)

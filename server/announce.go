@@ -111,7 +111,7 @@ func getPublicIPV4(ipAddr string, exists bool) (string, bool) {
 	return ipAddr, !private
 }
 
-func clientApproved(peerID string, db *database.Database) uint16 {
+func clientApproved(peerID string, db *database.Database) (uint16, bool) {
 	db.ClientsMutex.RLock()
 	defer db.ClientsMutex.RUnlock()
 
@@ -133,12 +133,12 @@ func clientApproved(peerID string, db *database.Database) uint16 {
 			}
 
 			if matched {
-				return id
+				return id, true
 			}
 		}
 	}
 
-	return 0
+	return 0, false
 }
 
 func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
@@ -199,49 +199,50 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		return
 	}
 
-	ipAddr, exists := func() (string, bool) {
-		ipV4, existsV4 := getPublicIPV4(qp.Get("ipv4")) // first try to get ipv4 address if client sent it
-		ip, exists := getPublicIPV4(qp.Get("ip"))       // then try to get public ip if sent by client
+	ipAddr := func() string {
+		ipV4, existsV4 := getPublicIPV4(qp.Get("ipv4")) // First try to get IPv4 address if client sent it
+		ip, exists := getPublicIPV4(qp.Get("ip"))       // ... then try to get public IP if sent by client
 
-		if existsV4 && exists && ip != ipV4 { // fail if ip and ipv4 are not same, and both are provided
-			return "", false
+		// Fail if ip and ipv4 are not same, and both are provided
+		if existsV4 && exists && ip != ipV4 {
+			return ""
 		}
 
 		if existsV4 {
-			return ipV4, true
+			return ipV4
 		}
 
 		if exists {
-			return ip, true
+			return ip
 		}
 
-		// check if there is proxy in header IF allowed in config
+		// Check for proxied IP header
 		proxyHeader, exists := config.Section("http").Get("proxy_header", "")
 		if exists {
 			ips, exists := header[proxyHeader]
 			if exists && len(ips) > 0 {
-				return ips[0], true
+				return ips[0]
 			}
 		}
 
-		// check for IP in socket
+		// Check for IP in socket
 		portIndex := strings.LastIndex(remoteAddr, ":")
 		if portIndex != -1 {
-			return remoteAddr[0:portIndex], true
+			return remoteAddr[0:portIndex]
 		}
 
-		return "", false // everything failed, abort request
+		// Everything else failed
+		return ""
 	}()
 
 	ipBytes := net.ParseIP(ipAddr).To4()
-
-	if !exists || nil == ipBytes {
+	if nil == ipBytes {
 		failure(fmt.Sprintf("Failed to parse IP address (ip: %s)", ipAddr), buf, 1*time.Hour)
 		return
 	}
 
-	clientID := clientApproved(peerID, db)
-	if 0 == clientID {
+	clientID, matched := clientApproved(peerID, db)
+	if !matched {
 		failure(fmt.Sprintf("Your client is not approved (peer_id: %s)", peerID), buf, 1*time.Hour)
 		return
 	}
@@ -302,12 +303,12 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 			peer = &cdb.Peer{}
 			torrent.Seeders[peerKey] = peer
 		} else {
-			// They're a seeder now
+			// Previously tracked peer is now a seeder
 			torrent.Seeders[peerKey] = peer
 			delete(torrent.Leechers, peerKey)
 		}
 		seeding = true
-	} else { // Previously completed (probably)
+	} else {
 		peer, exists = torrent.Seeders[peerKey]
 		if !exists {
 			peer, exists = torrent.Leechers[peerKey]
@@ -315,7 +316,10 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 				newPeer = true
 				peer = &cdb.Peer{}
 				torrent.Seeders[peerKey] = peer
-			} else { // They're a seeder now.. Broken client? Unreported snatch? Cross-seeding?
+			} else {
+				/* Previously tracked peer is now a seeder, however we never received their "completed" event.
+				Broken client? Unreported snatch? Cross-seeding? Let's not report it as snatch to avoid
+				over-reporting for cross-seeding */
 				torrent.Seeders[peerKey] = peer
 				delete(torrent.Leechers, peerKey)
 				// Let's not report it as snatch to avoid over-reporting for cross-seeding
@@ -383,8 +387,8 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	}
 
 	peer.LastAnnounce = now
-	/* Update torrent last_action only if announced action is seeding
-	allows dead torrents without seeder but with leecher to be proeprly pruned */
+	/* Update torrent last_action only if announced action is seeding.
+	This allows dead torrents without seeder but with leecher to be proeprly pruned */
 	if seeding {
 		torrent.LastAction = now
 	}
@@ -448,7 +452,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	respData["downloaded"] = snatchCount
 	respData["min interval"] = minAnnounceInterval
 
-	/* We asks clients to announce each interval seconds. In order to spread the load on tracker,
+	/* We ask clients to announce each interval seconds. In order to spread the load on tracker,
 	we will vary the interval given to client by random number of seconds between 0 and value
 	specified in config */
 	announceDrift := util.Rand(0, maxAccounceDrift)
@@ -472,8 +476,8 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 
 		/*
 		 * The iteration is already "random", so we don't need to randomize ourselves:
-		 * Each time an element is inserted into the map, it gets a some arbitrary position for iteration
-		 * Each time you range over the map, it starts at a random offset into the map's elements
+		 * - Each time an element is inserted into the map, it gets a some arbitrary position for iteration
+		 * - Each time you range over the map, it starts at a random offset into the map's elements
 		 */
 		if seeding {
 			for _, leech := range torrent.Leechers {
@@ -488,10 +492,8 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 				peersToSend = append(peersToSend, leech)
 			}
 		} else {
-			/*
-			 * Send 1 peer/user. This is to ensure that
-			 * users seeding at multiple locations don't exclusively act as peers.
-			 */
+			/* Send only one peer per user. This is to ensure that users seeding at multiple locations don't end up
+			exclusively acting as peers. */
 			uniqueSeeders := make(map[uint32]*cdb.Peer)
 			for _, seed := range torrent.Seeders {
 				if len(peersToSend) >= int(numWant) {

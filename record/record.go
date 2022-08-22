@@ -94,7 +94,7 @@ func Record(
 	}
 
 	if !initialized {
-		log.Panic.Printf("Can not Record without prior initialization")
+		log.Fatal.Printf("Can not Record without prior initialization")
 		return
 	}
 

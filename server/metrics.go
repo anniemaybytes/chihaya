@@ -57,7 +57,7 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 
 	for _, mf := range mfs {
 		if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
-			log.Panic.Printf("Error in converting metrics to text")
+			log.Panic.Printf("Error in converting metrics to text: %v", err)
 			panic(err)
 		}
 	}
@@ -70,7 +70,7 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 
 			for _, mf := range mfs {
 				if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
-					log.Panic.Printf("Error in converting metrics to text")
+					log.Panic.Printf("Error in converting metrics to text: %v", err)
 					panic(err)
 				}
 			}

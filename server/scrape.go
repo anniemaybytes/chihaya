@@ -54,6 +54,7 @@ func scrape(qs string, user *cdb.User, db *database.Database, buf io.Writer) {
 
 	if qp.InfoHashes() != nil {
 		db.TorrentsMutex.RLock()
+		defer db.TorrentsMutex.RUnlock()
 
 		for _, infoHash := range qp.InfoHashes() {
 			torrent, exists := db.Torrents[infoHash]
@@ -63,8 +64,6 @@ func scrape(qs string, user *cdb.User, db *database.Database, buf io.Writer) {
 				}
 			}
 		}
-
-		db.TorrentsMutex.RUnlock()
 	} else {
 		scrapeData["failure reason"] = "Scrape without info_hash is not supported"
 	}
