@@ -18,11 +18,13 @@
 package database
 
 import (
+	"time"
+
 	"chihaya/collectors"
 	"chihaya/config"
-	"chihaya/database/types"
+	cdb "chihaya/database/types"
 	"chihaya/log"
-	"time"
+	"chihaya/util"
 )
 
 var (
@@ -70,16 +72,14 @@ func (db *Database) startReloading() {
 }
 
 func (db *Database) loadUsers() {
-	db.UsersMutex.Lock()
-	db.mainConn.mutex.Lock()
+	util.TakeSemaphore(db.UsersSemaphore)
+	defer util.ReturnSemaphore(db.UsersSemaphore)
 
-	defer func() {
-		db.UsersMutex.Unlock()
-		db.mainConn.mutex.Unlock()
-	}()
+	db.mainConn.mutex.Lock()
+	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
-	newUsers := make(map[string]*types.User, len(db.Users))
+	newUsers := make(map[string]*cdb.User, len(db.Users))
 
 	rows := db.mainConn.query(db.loadUsersStmt)
 	if rows == nil {
@@ -115,7 +115,7 @@ func (db *Database) loadUsers() {
 			old.TrackerHide = trackerHide
 			newUsers[torrentPass] = old
 		} else {
-			newUsers[torrentPass] = &types.User{
+			newUsers[torrentPass] = &cdb.User{
 				ID:              id,
 				UpMultiplier:    upMultiplier,
 				DownMultiplier:  downMultiplier,
@@ -134,13 +134,10 @@ func (db *Database) loadUsers() {
 
 func (db *Database) loadHitAndRuns() {
 	db.mainConn.mutex.Lock()
-
-	defer func() {
-		db.mainConn.mutex.Unlock()
-	}()
+	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
-	newHnr := make(map[types.UserTorrentPair]struct{})
+	newHnr := make(map[cdb.UserTorrentPair]struct{})
 
 	rows := db.mainConn.query(db.loadHnrStmt)
 	if rows == nil {
@@ -162,7 +159,7 @@ func (db *Database) loadHitAndRuns() {
 			log.WriteStack()
 		}
 
-		hnr := types.UserTorrentPair{
+		hnr := cdb.UserTorrentPair{
 			UserID:    uid,
 			TorrentID: fid,
 		}
@@ -177,17 +174,15 @@ func (db *Database) loadHitAndRuns() {
 }
 
 func (db *Database) loadTorrents() {
-	db.TorrentsMutex.Lock()
-	db.mainConn.mutex.Lock()
+	util.TakeSemaphore(db.TorrentsSemaphore)
+	defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
-	defer func() {
-		db.TorrentsMutex.Unlock()
-		db.mainConn.mutex.Unlock()
-	}()
+	db.mainConn.mutex.Lock()
+	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
-	newTorrents := make(map[string]*types.Torrent)
-	newTorrentGroupFreeleech := make(map[types.TorrentGroup]*types.TorrentGroupFreeleech)
+	newTorrents := make(map[string]*cdb.Torrent)
+	newTorrentGroupFreeleech := make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
 
 	rows := db.mainConn.query(db.loadTorrentsStmt)
 	if rows == nil {
@@ -208,7 +203,7 @@ func (db *Database) loadTorrents() {
 			downMultiplier, upMultiplier float64
 			snatched                     uint16
 			status                       uint8
-			group                        types.TorrentGroup
+			group                        cdb.TorrentGroup
 		)
 
 		if err := rows.Scan(&id,
@@ -234,7 +229,7 @@ func (db *Database) loadTorrents() {
 			old.Group = group
 			newTorrents[infoHash] = old
 		} else {
-			newTorrents[infoHash] = &types.Torrent{
+			newTorrents[infoHash] = &cdb.Torrent{
 				ID:             id,
 				UpMultiplier:   upMultiplier,
 				DownMultiplier: downMultiplier,
@@ -242,8 +237,8 @@ func (db *Database) loadTorrents() {
 				Status:         status,
 				Group:          group,
 
-				Seeders:  make(map[string]*types.Peer),
-				Leechers: make(map[string]*types.Peer),
+				Seeders:  make(map[string]*cdb.Peer),
+				Leechers: make(map[string]*cdb.Peer),
 			}
 		}
 	}
@@ -261,7 +256,7 @@ func (db *Database) loadTorrents() {
 	for rows.Next() {
 		var (
 			downMultiplier, upMultiplier float64
-			group                        types.TorrentGroup
+			group                        cdb.TorrentGroup
 		)
 
 		if err := rows.Scan(&group.GroupID, &group.TorrentType, &downMultiplier, &upMultiplier); err != nil {
@@ -275,7 +270,7 @@ func (db *Database) loadTorrents() {
 			old.UpMultiplier = upMultiplier
 			newTorrentGroupFreeleech[group] = old
 		} else {
-			newTorrentGroupFreeleech[group] = &types.TorrentGroupFreeleech{
+			newTorrentGroupFreeleech[group] = &cdb.TorrentGroupFreeleech{
 				UpMultiplier:   upMultiplier,
 				DownMultiplier: downMultiplier,
 			}
@@ -291,14 +286,11 @@ func (db *Database) loadTorrents() {
 
 func (db *Database) loadConfig() {
 	db.mainConn.mutex.Lock()
-
-	defer func() {
-		db.mainConn.mutex.Unlock()
-	}()
+	defer db.mainConn.mutex.Unlock()
 
 	rows := db.mainConn.query(db.loadFreeleechStmt)
 	if rows == nil {
-		log.Error.Printf("Failed to load config from database")
+		log.Error.Print("Failed to load config from database")
 		log.WriteStack()
 
 		return
@@ -321,13 +313,11 @@ func (db *Database) loadConfig() {
 }
 
 func (db *Database) loadClients() {
-	db.ClientsMutex.Lock()
-	db.mainConn.mutex.Lock()
+	util.TakeSemaphore(db.ClientsSemaphore)
+	defer util.ReturnSemaphore(db.ClientsSemaphore)
 
-	defer func() {
-		db.ClientsMutex.Unlock()
-		db.mainConn.mutex.Unlock()
-	}()
+	db.mainConn.mutex.Lock()
+	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
 

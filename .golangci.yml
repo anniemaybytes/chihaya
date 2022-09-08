@@ -6,9 +6,7 @@ linters:
         - staticcheck
         - unused
         - gosimple
-        - varcheck
         - ineffassign
-        - deadcode
         - typecheck
         - megacheck
         - whitespace

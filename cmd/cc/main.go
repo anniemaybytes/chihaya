@@ -18,12 +18,13 @@
 package main
 
 import (
-	cdb "chihaya/database/types"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
+
+	cdb "chihaya/database/types"
 )
 
 // provided at compile-time

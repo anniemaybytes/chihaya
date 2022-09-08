@@ -18,11 +18,15 @@
 package server
 
 import (
+	"bytes"
+	"context"
+	"net/http"
+
 	"chihaya/config"
 	"chihaya/database"
 	cdb "chihaya/database/types"
 	"chihaya/server/params"
-	"io"
+	"chihaya/util"
 
 	"github.com/zeebo/bencode"
 )
@@ -43,7 +47,7 @@ func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
 	return ret
 }
 
-func scrape(qs string, user *cdb.User, db *database.Database, buf io.Writer) {
+func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Database, buf *bytes.Buffer) int {
 	qp, err := params.ParseQuery(qs)
 	if err != nil {
 		panic(err)
@@ -52,10 +56,12 @@ func scrape(qs string, user *cdb.User, db *database.Database, buf io.Writer) {
 	scrapeData := make(map[string]interface{})
 	fileData := make(map[string]interface{})
 
-	if qp.InfoHashes() != nil {
-		db.TorrentsMutex.RLock()
-		defer db.TorrentsMutex.RUnlock()
+	if !util.TryTakeSemaphore(ctx, db.TorrentsSemaphore) {
+		return http.StatusRequestTimeout
+	}
+	defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
+	if qp.InfoHashes() != nil {
 		for _, infoHash := range qp.InfoHashes() {
 			torrent, exists := db.Torrents[infoHash]
 			if exists {
@@ -84,4 +90,6 @@ func scrape(qs string, user *cdb.User, db *database.Database, buf io.Writer) {
 	if _, err = buf.Write(bufdata); err != nil {
 		panic(err)
 	}
+
+	return http.StatusOK
 }

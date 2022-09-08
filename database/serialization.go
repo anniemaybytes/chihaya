@@ -18,21 +18,22 @@
 package database
 
 import (
-	"chihaya/collectors"
-	"chihaya/config"
-	cdb "chihaya/database/types"
-	"chihaya/log"
 	"encoding/gob"
 	"fmt"
 	"os"
 	"time"
+
+	"chihaya/collectors"
+	"chihaya/config"
+	cdb "chihaya/database/types"
+	"chihaya/log"
+	"chihaya/util"
 )
 
 var serializeInterval int
 
 func init() {
 	intervals := config.Section("intervals")
-
 	serializeInterval, _ = intervals.GetInt("database_serialize", 68)
 }
 
@@ -46,126 +47,143 @@ func (db *Database) startSerializing() {
 }
 
 func (db *Database) serialize() {
-	torrentFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.TorrentCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		log.Error.Println("Couldn't open torrent cache file for writing! ", err)
-		log.WriteStack()
+	log.Info.Printf("Serializing database to cache file")
 
-		return
-	}
+	torrentGobFilename := fmt.Sprintf("%s.gob", cdb.TorrentCacheFile)
+	userGobFilename := fmt.Sprintf("%s.gob", cdb.UserCacheFile)
 
-	userFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.UserCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		log.Error.Println("Couldn't open user cache file for writing! ", err)
-		log.WriteStack()
-
-		return
-	}
-
-	defer func() {
-		if err := torrentFile.Close(); err != nil {
-			panic(err)
-		}
-
-		if err = userFile.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	torrentTmpFilename := fmt.Sprintf("%s.tmp", torrentGobFilename)
+	userTmpFilename := fmt.Sprintf("%s.tmp", userGobFilename)
 
 	start := time.Now()
 
-	log.Info.Printf("Serializing database to cache file")
+	if func() error {
+		torrentFile, err := os.OpenFile(torrentTmpFilename, os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			log.Error.Print("Couldn't open file for writing: ", err)
+			return err
+		}
 
-	db.TorrentsMutex.RLock()
+		//goland:noinspection GoUnhandledErrorResult
+		defer func() {
+			torrentFile.Sync() //nolint:errcheck
+			torrentFile.Close()
+		}()
 
-	if err = gob.NewEncoder(torrentFile).Encode(db.Torrents); err != nil {
-		log.Error.Println("Failed to encode torrents for serialization! ", err)
-		log.WriteStack()
-		db.TorrentsMutex.RUnlock()
+		util.TakeSemaphore(db.TorrentsSemaphore)
+		defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
-		return
+		if err = gob.NewEncoder(torrentFile).Encode(db.Torrents); err != nil {
+			log.Error.Print("Failed to encode torrents for serialization: ", err)
+			return err
+		}
+
+		return nil
+	}() == nil {
+		if err := os.Rename(torrentTmpFilename, torrentGobFilename); err != nil {
+			log.Error.Print("Couldn't write new torrent cache: ", err)
+		}
 	}
 
-	db.TorrentsMutex.RUnlock()
-	db.UsersMutex.RLock()
+	if func() error {
+		userFile, err := os.OpenFile(userTmpFilename, os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			log.Error.Print("Couldn't open file for writing: ", err)
+			return err
+		}
 
-	if err = gob.NewEncoder(userFile).Encode(db.Users); err != nil {
-		log.Error.Println("Failed to encode users for serialization! ", err)
-		log.WriteStack()
-		db.UsersMutex.RUnlock()
+		//goland:noinspection GoUnhandledErrorResult
+		defer func() {
+			userFile.Sync() //nolint:errcheck
+			userFile.Close()
+		}()
 
-		return
+		util.TakeSemaphore(db.UsersSemaphore)
+		defer util.ReturnSemaphore(db.UsersSemaphore)
+
+		if err = gob.NewEncoder(userFile).Encode(db.Users); err != nil {
+			log.Error.Print("Failed to encode users for serialization: ", err)
+			return err
+		}
+
+		return nil
+	}() == nil {
+		if err := os.Rename(userTmpFilename, userGobFilename); err != nil {
+			log.Error.Print("Couldn't write new user cache: ", err)
+		}
 	}
-
-	db.UsersMutex.RUnlock()
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateSerializationTime(elapsedTime)
-	log.Info.Printf("Done serializing (%s)\n", elapsedTime.String())
+	log.Info.Printf("Done serializing (%s)", elapsedTime.String())
 }
 
 func (db *Database) deserialize() {
-	torrentFile, err := os.OpenFile("torrent-cache.gob", os.O_RDONLY, 0)
-	if err != nil {
-		log.Warning.Println("Torrent cache missing, skipping deserialization")
-		return
-	}
+	log.Info.Print("Deserializing database from cache file...")
 
-	userFile, err := os.OpenFile("user-cache.gob", os.O_RDONLY, 0)
-	if err != nil {
-		log.Warning.Println("User cache missing, skipping deserialization")
-		return
-	}
-
-	defer func() {
-		if err := torrentFile.Close(); err != nil {
-			panic(err)
-		}
-
-		if err = userFile.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	torrentGobFilename := fmt.Sprintf("%s.gob", cdb.TorrentCacheFile)
+	userGobFilename := fmt.Sprintf("%s.gob", cdb.UserCacheFile)
 
 	start := time.Now()
 
-	log.Info.Printf("Deserializing database from cache file...")
+	func() {
+		torrentFile, err := os.OpenFile(torrentGobFilename, os.O_RDONLY, 0)
+		if err != nil {
+			log.Warning.Print("Torrent cache missing: ", err)
+			return
+		}
 
-	decoder := gob.NewDecoder(torrentFile)
+		//goland:noinspection GoUnhandledErrorResult
+		defer torrentFile.Close()
 
-	db.TorrentsMutex.Lock()
-	err = decoder.Decode(&db.Torrents)
-	db.TorrentsMutex.Unlock()
+		decoder := gob.NewDecoder(torrentFile)
 
-	if err != nil {
-		log.Panic.Println("Failed to deserialize torrent cache! You may need to delete it.", err)
-		panic(err)
-	}
+		util.TakeSemaphore(db.TorrentsSemaphore)
+		defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
-	decoder = gob.NewDecoder(userFile)
+		err = decoder.Decode(&db.Torrents)
+		if err != nil {
+			log.Error.Print("Failed to deserialize torrent cache: ", err)
+			return
+		}
+	}()
 
-	db.UsersMutex.Lock()
-	err = decoder.Decode(&db.Users)
-	db.UsersMutex.Unlock()
+	func() {
+		userFile, err := os.OpenFile(userGobFilename, os.O_RDONLY, 0)
+		if err != nil {
+			log.Warning.Print("User cache missing: ", err)
+			return
+		}
 
-	if err != nil {
-		log.Panic.Println("Failed to deserialize user cache! You may need to delete it.", err)
-		panic(err)
-	}
+		//goland:noinspection GoUnhandledErrorResult
+		defer userFile.Close()
 
-	db.TorrentsMutex.RLock()
-	peers := 0
+		decoder := gob.NewDecoder(userFile)
+
+		util.TakeSemaphore(db.UsersSemaphore)
+		defer util.ReturnSemaphore(db.UsersSemaphore)
+
+		err = decoder.Decode(&db.Users)
+		if err != nil {
+			log.Error.Print("Failed to deserialize user cache: ", err)
+			return
+		}
+	}()
+
+	util.TakeSemaphore(db.TorrentsSemaphore)
+	defer util.ReturnSemaphore(db.TorrentsSemaphore)
+
+	util.TakeSemaphore(db.UsersSemaphore)
+	defer util.ReturnSemaphore(db.UsersSemaphore)
+
 	torrents := len(db.Torrents)
+	users := len(db.Users)
 
+	peers := 0
 	for _, t := range db.Torrents {
 		peers += len(t.Leechers) + len(t.Seeders)
 	}
-	db.TorrentsMutex.RUnlock()
 
-	db.UsersMutex.RLock()
-	users := len(db.Users)
-	db.UsersMutex.RUnlock()
-
-	log.Info.Printf("Loaded %d users, %d torrents, %d peers (%s)\n",
+	log.Info.Printf("Loaded %d users, %d torrents and %d peers (%s)",
 		users, torrents, peers, time.Since(start).String())
 }

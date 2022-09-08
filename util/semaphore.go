@@ -18,36 +18,36 @@
 package util
 
 import (
-	"bytes"
+	"context"
 )
 
-type BufferPool struct {
-	pool    chan *bytes.Buffer
-	bufSize int
-}
+type Semaphore chan struct{}
 
-func NewBufferPool(size int, bufSize int) *BufferPool {
-	return &BufferPool{
-		make(chan *bytes.Buffer, size),
-		bufSize,
-	}
-}
-
-func (pool *BufferPool) Take() (buf *bytes.Buffer) {
-	select {
-	case buf = <-pool.pool:
-		buf.Reset()
-	default:
-		internalBuf := make([]byte, 0, pool.bufSize)
-		buf = bytes.NewBuffer(internalBuf)
-	}
+func NewSemaphore() (s Semaphore) {
+	s = make(Semaphore, 1)
+	s <- struct{}{}
 
 	return
 }
 
-func (pool *BufferPool) Give(buf *bytes.Buffer) {
+func TakeSemaphore(s Semaphore) {
+	<-s
+}
+
+func TryTakeSemaphore(ctx context.Context, s Semaphore) bool {
 	select {
-	case pool.pool <- buf:
+	case <-s:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func ReturnSemaphore(s Semaphore) {
+	select {
+	case s <- struct{}{}:
+		return
 	default:
+		panic("Attempting to return semaphore to an already full channel")
 	}
 }

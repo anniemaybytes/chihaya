@@ -18,14 +18,8 @@
 package server
 
 import (
-	"chihaya/collectors"
-	"chihaya/config"
-	"chihaya/database"
-	"chihaya/log"
-	"chihaya/record"
-	"chihaya/util"
-	"fmt"
-	"io"
+	"bytes"
+	"context"
 	"net"
 	"net/http"
 	"path"
@@ -34,25 +28,34 @@ import (
 	"sync/atomic"
 	"time"
 
+	"chihaya/collectors"
+	"chihaya/config"
+	"chihaya/database"
+	"chihaya/log"
+	"chihaya/record"
+	"chihaya/util"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/zeebo/bencode"
 )
 
 type httpHandler struct {
-	terminate bool
+	startTime time.Time
 
-	waitGroup sync.WaitGroup
-
-	// Internal stats
-	requests uint64
-
-	bufferPool       *util.BufferPool
-	db               *database.Database
 	normalRegisterer prometheus.Registerer
 	normalCollector  *collectors.NormalCollector
 	adminCollector   *collectors.AdminCollector
 
-	startTime time.Time
+	bufferPool *util.BufferPool
+
+	db *database.Database
+
+	requests atomic.Uint64
+
+	contextTimeout time.Duration
+
+	waitGroup sync.WaitGroup
+	terminate bool
 }
 
 var (
@@ -60,7 +63,7 @@ var (
 	listener net.Listener
 )
 
-func failure(err string, buf io.Writer, interval time.Duration) {
+func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 	failureData := make(map[string]interface{})
 	failureData["failure reason"] = err
 	failureData["interval"] = interval / time.Second     // Assuming in seconds
@@ -71,59 +74,63 @@ func failure(err string, buf io.Writer, interval time.Duration) {
 		panic(errz)
 	}
 
+	buf.Reset()
+
 	if _, errz = buf.Write(data); errz != nil {
 		panic(errz)
 	}
 }
 
-func (handler *httpHandler) respond(r *http.Request, buf io.Writer) bool {
+func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) int {
 	dir, action := path.Split(r.URL.Path)
 	if action == "" {
-		return false
+		return http.StatusNotFound
 	}
 
-	// Handle public endpoints (/:action)
+	/*
+	 * ===================================================
+	 * Handle public endpoints (/:action)
+	 * ===================================================
+	 */
 
 	passkey := path.Dir(dir)[1:]
 	if passkey == "" {
 		switch action {
-		case "check":
-			_, _ = io.WriteString(buf, fmt.Sprintf("%d", time.Now().Unix()))
-			return true
+		case "alive":
+			return alive(buf)
 		}
 
-		return false
+		return http.StatusNotFound
 	}
 
-	// Handle private endpoints (/:passkey/:action)
+	/*
+	 * ===================================================
+	 * Handle private endpoints (/:passkey/:action)
+	 * ===================================================
+	 */
 
-	handler.db.UsersMutex.RLock()
-	user, exists := handler.db.Users[passkey]
-	handler.db.UsersMutex.RUnlock()
-
-	if !exists {
+	user, err := isPasskeyValid(r.Context(), passkey, handler.db)
+	if err != nil {
+		return http.StatusRequestTimeout
+	} else if user == nil {
 		failure("Your passkey is invalid", buf, 1*time.Hour)
-		return true
+		return http.StatusOK
 	}
 
 	switch action {
 	case "announce":
-		announce(r.URL.RawQuery, r.Header, r.RemoteAddr, user, handler.db, buf)
-		return true
+		return announce(r.Context(), r.URL.RawQuery, r.Header, r.RemoteAddr, user, handler.db, buf)
 	case "scrape":
 		if enabled, _ := config.GetBool("scrape", true); !enabled {
-			return false
+			return http.StatusNotFound
 		}
 
-		scrape(r.URL.RawQuery, user, handler.db, buf)
-
-		return true
+		return scrape(r.Context(), r.URL.RawQuery, user, handler.db, buf)
 	case "metrics":
-		metrics(r.Header.Get("Authorization"), handler.db, buf)
-		return true
+		return metrics(r.Context(), r.Header.Get("Authorization"), handler.db, buf)
 	}
 
-	return false
+	return http.StatusNotFound
 }
 
 func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -131,59 +138,129 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Count new request (done before everything else so that failed/timeout numbers match)
+	handler.requests.Add(1)
+
+	// Mark request as being handled, so that server won't shutdown before we're done with it
 	handler.waitGroup.Add(1)
-	buf := handler.bufferPool.Take()
-
-	defer w.(http.Flusher).Flush()
 	defer handler.waitGroup.Done()
-	defer handler.bufferPool.Give(buf)
 
-	atomic.AddUint64(&handler.requests, 1)
+	// Prepare, consume and mark as being used buffer for request
+	var (
+		buf      *bytes.Buffer
+		bufInUse sync.WaitGroup
+	)
 
+	buf = handler.bufferPool.Take()
+
+	bufInUse.Add(1)
+	defer bufInUse.Done()
+
+	// Spawn new goroutine that waits for buffer to be unused before returning it back to pool for reuse
+	go func() {
+		bufInUse.Wait()
+		handler.bufferPool.Give(buf)
+	}()
+
+	// Flush buffered data to client
+	defer w.(http.Flusher).Flush()
+
+	// Gracefully handle panics so that they're confined to single request and don't crash server
 	defer func() {
 		if err := recover(); err != nil {
-			log.Error.Printf("ServeHTTP panic - %v\nURL was: %s", err, r.URL)
+			log.Error.Printf("Recovered from panicking request handler - %v\nURL was: %s", err, r.URL)
 			log.WriteStack()
 
-			// If present then writing response failed and we should not attempt to write again
+			collectors.IncrementErroredRequests()
+
 			if w.Header().Get("Content-Type") == "" {
 				buf.Reset()
 				w.WriteHeader(http.StatusInternalServerError)
 			}
-
-			collectors.IncrementErroredRequests()
 		}
 	}()
 
-	exists, status := handler.respond(r, buf), http.StatusOK
-	if !exists {
-		status = http.StatusNotFound
-	}
+	// Prepare and start new context with timeoud to abort long-running requests
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+		status int
+		done   = make(chan struct{})
+		errz   = make(chan any, 1)
+	)
 
-	w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
-	w.Header().Add("Content-Type", "text/plain")
-	w.WriteHeader(status)
+	ctx, cancel = context.WithTimeout(r.Context(), handler.contextTimeout)
+	defer cancel()
 
-	if _, err := w.Write(buf.Bytes()); err != nil {
+	/* Mark buffer as in use; we can't recycle buffer until both ServeHTTP and handler are done with it.
+	This must be done outside of goroutine itself to avoid concurrency issues where select statement below
+	finishes before our handler goroutine has a chance to start, bringing WaitGroup counter to 0 while
+	other goroutine is Waiting, which is invalid scenario and will result in panic. */
+	bufInUse.Add(1)
+
+	// Start new blocking handler in goroutine
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				errz <- err
+			}
+		}()
+
+		// Once this goroutine exits, we should free its hold on buffer
+		defer bufInUse.Done()
+
+		/* Pass flow to handler; note that handler should be responsible for actually cancelling
+		its own work based on request context cancellation */
+		status = handler.respond(r, buf)
+
+		// Close channel, marking that handler finished its work
+		close(done)
+	}()
+
+	// Await on either panic, handler to finish or context deadline to expire
+	select {
+	case err := <-errz:
 		panic(err)
+	case <-done:
+		w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
+		w.Header().Add("Content-Type", "text/plain")
+		w.WriteHeader(status)
+		_, _ = w.Write(buf.Bytes())
+	case <-ctx.Done():
+		collectors.IncrementTimeoutRequests()
+
+		switch err := ctx.Err(); err {
+		case context.DeadlineExceeded:
+			failure("Request context deadline exceeded", buf, 5*time.Minute)
+
+			w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
+			w.Header().Add("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK) // Required by torrent clients to interpret failure response
+			_, _ = w.Write(buf.Bytes())
+		default:
+			w.WriteHeader(http.StatusRequestTimeout)
+		}
 	}
 }
 
 func Start() {
-	var err error
-
 	handler = &httpHandler{db: &database.Database{}, startTime: time.Now()}
 
-	bufferPool := util.NewBufferPool(500, 500)
+	/* Initialize reusable buffer pool; this is faster than allocating new memory for every request.
+	If necessary, new memory will be allocated when pool is empty, however. */
+	bufferPool := util.NewBufferPool(500, 512)
 	handler.bufferPool = bufferPool
 
 	addr, _ := config.Section("http").Get("addr", ":34000")
-
 	readTimeout, _ := config.Section("http").Section("timeout").GetInt("read", 1)
 	readHeaderTimeout, _ := config.Section("http").Section("timeout").GetInt("read_header", 2)
-	writeTimeout, _ := config.Section("http").Section("timeout").GetInt("write", 1)
+	writeTimeout, _ := config.Section("http").Section("timeout").GetInt("write", 3)
 	idleTimeout, _ := config.Section("http").Section("timeout").GetInt("idle", 30)
 
+	// Set appropriate context timeout based on write timeout; 200ms should be enough as a wiggle room
+	handler.contextTimeout = time.Duration(writeTimeout)*time.Second - 200*time.Millisecond
+
+	// Create new server instance
 	server := &http.Server{
 		Handler:           handler,
 		ReadTimeout:       time.Duration(readTimeout) * time.Second,
@@ -192,9 +269,16 @@ func Start() {
 		IdleTimeout:       time.Duration(idleTimeout) * time.Second,
 	}
 
+	if idleTimeout <= 0 {
+		log.Warning.Print("Setting idleTimeout <= 0 disables Keep-Alive which might negatively impact performance")
+		server.SetKeepAlivesEnabled(false)
+	}
+
+	// Initialize database and recorder
 	handler.db.Init()
 	record.Init()
 
+	// Register default prometheus collector
 	handler.normalRegisterer = prometheus.NewRegistry()
 	handler.normalCollector = collectors.NewNormalCollector()
 	handler.normalRegisterer.MustRegister(handler.normalCollector)
@@ -203,34 +287,32 @@ func Start() {
 	handler.adminCollector = collectors.NewAdminCollector()
 	prometheus.MustRegister(handler.adminCollector)
 
+	// Start TCP listener
+	var err error
+
 	listener, err = net.Listen("tcp", addr)
 	if err != nil {
 		panic(err)
 	}
 
-	if idleTimeout <= 0 {
-		log.Warning.Println("Setting idleTimeout <= 0 disables Keep-Alive which might negatively impact performance")
-		server.SetKeepAlivesEnabled(false)
-	}
-
-	/*
-	 * Behind the scenes, this works by spawning a new goroutine for each client.
-	 * This is pretty fast and scalable since goroutines are nice and efficient.
-	 */
 	log.Info.Printf("Ready and accepting new connections on %s", addr)
 
+	/* Start serving new request. Behind the scenes, this works by spawning a new goroutine for each client.
+	This is pretty fast and scalable since goroutines are nice and efficient. Blocks until TCP listener is closed. */
 	_ = server.Serve(listener)
 
 	// Wait for active connections to finish processing
 	handler.waitGroup.Wait()
 
-	_ = server.Close() // close server so that it does not Accept(), https://github.com/golang/go/issues/10527
+	// Close server so that it does not Accept(), https://github.com/golang/go/issues/10527
+	_ = server.Close()
 
-	log.Info.Println("Now closed and not accepting any new connections")
+	log.Info.Print("Now closed and not accepting any new connections")
 
+	// Close database connection
 	handler.db.Terminate()
 
-	log.Info.Println("Shutdown complete")
+	log.Info.Print("Shutdown complete")
 }
 
 func Stop() {

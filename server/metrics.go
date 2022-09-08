@@ -18,13 +18,16 @@
 package server
 
 import (
+	"bytes"
+	"context"
+	"net/http"
+	"time"
+
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/database"
 	"chihaya/log"
-	"io"
-	"sync/atomic"
-	"time"
+	"chihaya/util"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
@@ -32,12 +35,18 @@ import (
 
 var bearerPrefix = "Bearer "
 
-func metrics(auth string, db *database.Database, buf io.Writer) {
+func metrics(ctx context.Context, auth string, db *database.Database, buf *bytes.Buffer) int {
+	if !util.TryTakeSemaphore(ctx, db.UsersSemaphore) {
+		return http.StatusRequestTimeout
+	}
+	defer util.ReturnSemaphore(db.UsersSemaphore)
+
+	if !util.TryTakeSemaphore(ctx, db.TorrentsSemaphore) {
+		return http.StatusRequestTimeout
+	}
+	defer util.ReturnSemaphore(db.TorrentsSemaphore)
+
 	peers := 0
-
-	db.UsersMutex.RLock()
-	db.TorrentsMutex.RLock()
-
 	for _, t := range db.Torrents {
 		peers += len(t.Leechers) + len(t.Seeders)
 	}
@@ -48,13 +57,9 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 	collectors.UpdateClients(len(db.Clients))
 	collectors.UpdateHitAndRuns(len(db.HitAndRuns))
 	collectors.UpdatePeers(peers)
-	collectors.UpdateRequests(atomic.LoadUint64(&handler.requests))
-
-	db.UsersMutex.RUnlock()
-	db.TorrentsMutex.RUnlock()
+	collectors.UpdateRequests(handler.requests.Load())
 
 	mfs, _ := handler.normalRegisterer.(prometheus.Gatherer).Gather()
-
 	for _, mf := range mfs {
 		if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
 			log.Panic.Printf("Error in converting metrics to text: %v", err)
@@ -76,4 +81,6 @@ func metrics(auth string, db *database.Database, buf io.Writer) {
 			}
 		}
 	}
+
+	return http.StatusOK
 }

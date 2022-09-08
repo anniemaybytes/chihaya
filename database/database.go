@@ -19,16 +19,17 @@ package database
 
 import (
 	"bytes"
-	"chihaya/collectors"
-	"chihaya/config"
-	"chihaya/database/types"
-	"chihaya/log"
-	"chihaya/util"
 	"database/sql"
 	"fmt"
 	"os"
 	"sync"
 	"time"
+
+	"chihaya/collectors"
+	"chihaya/config"
+	cdb "chihaya/database/types"
+	"chihaya/log"
+	"chihaya/util"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -39,48 +40,41 @@ type Connection struct {
 }
 
 type Database struct {
-	TorrentsMutex sync.RWMutex
+	TorrentsSemaphore util.Semaphore
+	ClientsSemaphore  util.Semaphore
+	UsersSemaphore    util.Semaphore
 
 	snatchChannel          chan *bytes.Buffer
 	transferHistoryChannel chan *bytes.Buffer
 	transferIpsChannel     chan *bytes.Buffer
+	torrentChannel         chan *bytes.Buffer
+	userChannel            chan *bytes.Buffer
 
 	loadTorrentsStmt              *sql.Stmt
 	loadTorrentGroupFreeleechStmt *sql.Stmt
 	loadClientsStmt               *sql.Stmt
 	loadFreeleechStmt             *sql.Stmt
+	loadHnrStmt                   *sql.Stmt
+	loadUsersStmt                 *sql.Stmt
 	cleanStalePeersStmt           *sql.Stmt
 	unPruneTorrentStmt            *sql.Stmt
 
-	Users map[string]*types.User
-
-	loadHnrStmt *sql.Stmt
-
-	HitAndRuns            map[types.UserTorrentPair]struct{}
-	Torrents              map[string]*types.Torrent // SHA-1 hash (20 bytes)
-	TorrentGroupFreeleech map[types.TorrentGroup]*types.TorrentGroupFreeleech
-
-	loadUsersStmt *sql.Stmt
-
-	Clients map[uint16]string
+	Users                 map[string]*cdb.User
+	HitAndRuns            map[cdb.UserTorrentPair]struct{}
+	Torrents              map[string]*cdb.Torrent // SHA-1 hash (20 bytes)
+	TorrentGroupFreeleech map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech
+	Clients               map[uint16]string
 
 	mainConn *Connection // Used for reloading and misc queries
 
-	torrentChannel chan *bytes.Buffer
-	userChannel    chan *bytes.Buffer
-
 	bufferPool *util.BufferPool
-
-	ClientsMutex sync.RWMutex
-	UsersMutex   sync.RWMutex
-
-	waitGroup sync.WaitGroup
 
 	transferHistoryWaitGroup   sync.WaitGroup
 	transferHistoryWaitGroupMu sync.Mutex
 	transferHistoryWaitGroupSe uint8
 
 	terminate bool
+	waitGroup sync.WaitGroup
 }
 
 var (
@@ -99,17 +93,21 @@ var defaultDsn = map[string]string{
 func (db *Database) Init() {
 	db.terminate = false
 
-	log.Info.Printf("Opening database connection...")
+	log.Info.Print("Opening database connection...")
 
 	db.mainConn = Open()
 
+	// Initializing semaphore channels
+	db.TorrentsSemaphore = util.NewSemaphore()
+	db.UsersSemaphore = util.NewSemaphore()
+	db.ClientsSemaphore = util.NewSemaphore()
+
+	// Used for recording updates, so the max required size should be < 128 bytes. See record.go for details
 	maxBuffers := torrentFlushBufferSize +
 		userFlushBufferSize +
 		transferHistoryFlushBufferSize +
 		transferIpsFlushBufferSize +
 		snatchFlushBufferSize
-
-	// Used for recording updates, so the max required size should be < 128 bytes. See record.go for details
 	db.bufferPool = util.NewBufferPool(maxBuffers, 128)
 
 	var err error
@@ -164,22 +162,22 @@ func (db *Database) Init() {
 		panic(err)
 	}
 
-	db.Users = make(map[string]*types.User)
-	db.HitAndRuns = make(map[types.UserTorrentPair]struct{})
-	db.Torrents = make(map[string]*types.Torrent)
+	db.Users = make(map[string]*cdb.User)
+	db.HitAndRuns = make(map[cdb.UserTorrentPair]struct{})
+	db.Torrents = make(map[string]*cdb.Torrent)
 	db.Clients = make(map[uint16]string)
 
 	db.deserialize()
 
 	// Run initial load to populate data in memory before we start accepting connections
-	log.Info.Printf("Populating initial data into memory, please wait...")
+	log.Info.Print("Populating initial data into memory, please wait...")
 	db.loadUsers()
 	db.loadHitAndRuns()
 	db.loadTorrents()
 	db.loadConfig()
 	db.loadClients()
 
-	log.Info.Printf("Starting goroutines...")
+	log.Info.Print("Starting goroutines...")
 	db.startReloading()
 	db.startSerializing()
 	db.startFlushing()
@@ -196,7 +194,7 @@ func (db *Database) Terminate() {
 
 	go func() {
 		time.Sleep(10 * time.Second)
-		log.Info.Printf("Waiting for database flushing to finish. This can take a few minutes, please be patient!")
+		log.Info.Print("Waiting for database flushing to finish. This can take a few minutes, please be patient!")
 	}()
 
 	db.waitGroup.Wait()

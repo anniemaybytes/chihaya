@@ -18,11 +18,14 @@
 package types
 
 type User struct {
+	ID uint32
+
 	DisableDownload bool
-	TrackerHide     bool
-	ID              uint32
-	UpMultiplier    float64
-	DownMultiplier  float64
+
+	TrackerHide bool
+
+	UpMultiplier   float64
+	DownMultiplier float64
 }
 
 type UserTorrentPair struct {

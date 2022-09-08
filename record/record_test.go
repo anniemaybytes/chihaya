@@ -19,13 +19,14 @@ package record
 
 import (
 	"bufio"
-	"chihaya/util"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
+
+	"chihaya/util"
 )
 
 type record struct {

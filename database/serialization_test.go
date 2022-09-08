@@ -18,19 +18,20 @@
 package database
 
 import (
-	"chihaya/database/types"
 	"reflect"
 	"testing"
 	"time"
+
+	cdb "chihaya/database/types"
 
 	"github.com/jinzhu/copier"
 )
 
 func TestSerializer(t *testing.T) {
-	testTorrents := make(map[string]*types.Torrent)
-	testUsers := make(map[string]*types.User)
+	testTorrents := make(map[string]*cdb.Torrent)
+	testUsers := make(map[string]*cdb.User)
 
-	testUsers["mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ"] = &types.User{
+	testUsers["mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ"] = &cdb.User{
 		DisableDownload: false,
 		TrackerHide:     false,
 		ID:              12,
@@ -38,7 +39,7 @@ func TestSerializer(t *testing.T) {
 		DownMultiplier:  1,
 	}
 
-	testPeer := &types.Peer{
+	testPeer := &cdb.Peer{
 		UserID:       12,
 		TorrentID:    10,
 		ClientID:     4,
@@ -56,18 +57,18 @@ func TestSerializer(t *testing.T) {
 	testTorrentHash := []byte{
 		114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56,
 	}
-	testTorrents[string(testTorrentHash)] = &types.Torrent{
+	testTorrents[string(testTorrentHash)] = &cdb.Torrent{
 		Status:         1,
 		Snatched:       100,
 		ID:             10,
 		LastAction:     time.Now().Unix(),
 		UpMultiplier:   1,
 		DownMultiplier: 1,
-		Seeders:        map[string]*types.Peer{"12-peer_is_twenty_chars": testPeer},
+		Seeders:        map[string]*cdb.Peer{"12-peer_is_twenty_chars": testPeer},
 	}
 
-	db.Torrents = make(map[string]*types.Torrent)
-	db.Users = make(map[string]*types.User)
+	db.Torrents = make(map[string]*cdb.Torrent)
+	db.Users = make(map[string]*cdb.User)
 
 	if err := copier.Copy(&db.Torrents, testTorrents); err != nil {
 		panic(err)

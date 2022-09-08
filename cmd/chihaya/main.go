@@ -18,8 +18,6 @@
 package main
 
 import (
-	"chihaya/log"
-	"chihaya/server"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +25,9 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"syscall"
+
+	"chihaya/log"
+	"chihaya/server"
 )
 
 var profile, help bool
@@ -77,7 +78,7 @@ func main() {
 			pprof.StopCPUProfile()
 		}
 
-		log.Info.Println("Caught interrupt, shutting down...")
+		log.Info.Print("Caught interrupt, shutting down...")
 		server.Stop()
 		<-c
 		os.Exit(0)

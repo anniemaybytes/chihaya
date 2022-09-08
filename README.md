@@ -4,7 +4,7 @@ chihaya (kuroneko)
 Installation
 -------------
 
-chihaya requires Golang >= 1.17 and MariaDB >= 10.3.3.
+chihaya requires Golang >= 1.19 and MariaDB >= 10.3.3.
 
 ```sh
 go get

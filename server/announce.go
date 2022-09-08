@@ -19,6 +19,15 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"encoding/binary"
+	"fmt"
+	"math"
+	"net"
+	"net/http"
+	"strings"
+	"time"
+
 	"chihaya/config"
 	"chihaya/database"
 	cdb "chihaya/database/types"
@@ -26,14 +35,6 @@ import (
 	"chihaya/record"
 	"chihaya/server/params"
 	"chihaya/util"
-	"encoding/binary"
-	"fmt"
-	"io"
-	"math"
-	"net"
-	"net/http"
-	"strings"
-	"time"
 
 	"github.com/zeebo/bencode"
 )
@@ -111,38 +112,8 @@ func getPublicIPV4(ipAddr string, exists bool) (string, bool) {
 	return ipAddr, !private
 }
 
-func clientApproved(peerID string, db *database.Database) (uint16, bool) {
-	db.ClientsMutex.RLock()
-	defer db.ClientsMutex.RUnlock()
-
-	var (
-		widLen, i int
-		matched   bool
-	)
-
-	for id, clientID := range db.Clients {
-		widLen = len(clientID)
-		if widLen <= len(peerID) {
-			matched = true
-
-			for i = 0; i < widLen; i++ {
-				if peerID[i] != clientID[i] {
-					matched = false
-					break
-				}
-			}
-
-			if matched {
-				return id, true
-			}
-		}
-	}
-
-	return 0, false
-}
-
-func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
-	db *database.Database, buf io.Writer) {
+func announce(ctx context.Context, qs string, header http.Header, remoteAddr string, user *cdb.User,
+	db *database.Database, buf *bytes.Buffer) int {
 	qp, err := params.ParseQuery(qs)
 	if err != nil {
 		panic(err)
@@ -158,45 +129,45 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 
 	if infoHashes == nil {
 		failure("Malformed request - missing info_hash", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	} else if len(infoHashes) > 1 {
 		failure("Malformed request - multiple info_hash values provided", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if peerID == "" {
 		failure("Malformed request - missing peer_id", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if len(peerID) != 20 {
 		failure("Malformed request - invalid peer_id", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if !portExists {
 		failure("Malformed request - missing port", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if strictPort && port < 1024 || port > 65535 {
 		failure(fmt.Sprintf("Malformed request - port outside of acceptable range (port: %d)", port), buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if !uploadedExists {
 		failure("Malformed request - missing uploaded", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if !downloadedExists {
 		failure("Malformed request - missing downloaded", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if !leftExists {
 		failure("Malformed request - missing left", buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	ipAddr := func() string {
@@ -238,31 +209,38 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	ipBytes := net.ParseIP(ipAddr).To4()
 	if nil == ipBytes {
 		failure(fmt.Sprintf("Failed to parse IP address (ip: %s)", ipAddr), buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	clientID, matched := clientApproved(peerID, db)
 	if !matched {
 		failure(fmt.Sprintf("Your client is not approved (peer_id: %s)", peerID), buf, 1*time.Hour)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	db.TorrentsMutex.Lock()
-	defer db.TorrentsMutex.Unlock()
+	if !util.TryTakeSemaphore(ctx, db.TorrentsSemaphore) {
+		return http.StatusRequestTimeout
+	}
+	defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
 	torrent, exists := db.Torrents[infoHashes[0]]
 	if !exists {
 		failure("This torrent does not exist", buf, 30*time.Second)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	if torrent.Status == 1 && left == 0 {
 		log.Info.Printf("Unpruning torrent %d", torrent.ID)
-		db.UnPrune(torrent)
+
 		torrent.Status = 0
+
+		/* It is okay to do this asynchronously as tracker's internal in-memory state has already been updated for this
+		torrent. While it is technically possible that we will do this more than once in some cases, the state is of
+		boolean type so there is no risk of data loss. */
+		go db.UnPrune(torrent)
 	} else if torrent.Status != 0 {
 		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrent.Status, left), buf, 5*time.Minute)
-		return
+		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	numWant, exists := qp.GetUint16("numwant")
@@ -287,7 +265,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	if left > 0 {
 		if isDisabledDownload(db, user, torrent) {
 			failure("Your download privileges are disabled", buf, 1*time.Hour)
-			return
+			return http.StatusOK // Required by torrent clients to interpret failure response
 		}
 
 		peer, exists = torrent.Leechers[peerKey]
@@ -322,7 +300,6 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 				over-reporting for cross-seeding */
 				torrent.Seeders[peerKey] = peer
 				delete(torrent.Leechers, peerKey)
-				// Let's not report it as snatch to avoid over-reporting for cross-seeding
 			}
 		}
 		seeding = true
@@ -407,7 +384,7 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 
 		active = false
 	} else if completed {
-		db.RecordSnatch(peer, now)
+		go db.RecordSnatch(peer, now)
 		deltaSnatch = 1
 	}
 
@@ -423,11 +400,12 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 
 	peer.ClientID = clientID
 
-	// If the channels are already full, record* blocks until a flush occurs
-	db.RecordTorrent(torrent, deltaSnatch)
-	db.RecordTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
-	db.RecordUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	record.Record(
+	// If the channels are already full, block until a flush occurs
+	go db.RecordTorrent(torrent, deltaSnatch)
+	go db.RecordTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
+	go db.RecordUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
+	go db.RecordTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
+	go record.Record(
 		peer.TorrentID,
 		user.ID,
 		ipAddr,
@@ -439,7 +417,6 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 		uploaded,
 		downloaded,
 		left)
-	db.RecordTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
 
 	// Generate response
 	seedCount := len(torrent.Seeders)
@@ -549,4 +526,6 @@ func announce(qs string, header http.Header, remoteAddr string, user *cdb.User,
 	if _, err = buf.Write(bufdata); err != nil {
 		panic(err)
 	}
+
+	return http.StatusOK
 }

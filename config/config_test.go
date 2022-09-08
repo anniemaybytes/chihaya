@@ -18,7 +18,6 @@
 package config
 
 import (
-	"chihaya/util"
 	"encoding/json"
 	"math/rand"
 	"os"
@@ -26,6 +25,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"chihaya/util"
 )
 
 var configTest Map

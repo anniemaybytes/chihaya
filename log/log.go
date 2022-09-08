@@ -26,6 +26,7 @@ import (
 var flags = log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix
 
 var (
+	Verbose = log.New(os.Stdout, "[V] ", flags)
 	Info    = log.New(os.Stdout, "[I] ", flags)
 	Warning = log.New(os.Stderr, "[W] ", flags)
 	Error   = log.New(os.Stderr, "[E] ", flags)

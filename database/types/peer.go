@@ -18,18 +18,23 @@
 package types
 
 type Peer struct {
-	Seeding      bool
-	ClientID     uint16
-	Port         uint16
-	UserID       uint32
-	IP           uint32
-	TorrentID    uint32
-	Uploaded     uint64
-	Downloaded   uint64
-	Left         uint64
+	ID string
+
+	IPAddr string
+	Addr   []byte
+	IP     uint32
+	Port   uint16
+
+	Uploaded   uint64
+	Downloaded uint64
+	Left       uint64
+
 	StartTime    int64 // unix time
 	LastAnnounce int64
-	ID           string
-	IPAddr       string
-	Addr         []byte
+
+	TorrentID uint32
+	UserID    uint32
+	ClientID  uint16
+
+	Seeding bool
 }

@@ -18,17 +18,19 @@
 package types
 
 type Torrent struct {
-	Status         uint8
-	Snatched       uint16
-	ID             uint32
-	LastAction     int64 // unix time
-	UpMultiplier   float64
-	DownMultiplier float64
-
-	Group TorrentGroup
-
 	Seeders  map[string]*Peer
 	Leechers map[string]*Peer
+
+	Group TorrentGroup
+	ID    uint32
+
+	Snatched uint16
+
+	Status     uint8
+	LastAction int64 // unix time
+
+	UpMultiplier   float64
+	DownMultiplier float64
 }
 
 type TorrentGroupFreeleech struct {
@@ -37,8 +39,8 @@ type TorrentGroupFreeleech struct {
 }
 
 type TorrentGroup struct {
-	GroupID     uint32
 	TorrentType string
+	GroupID     uint32
 }
 
 // TorrentCacheFile holds filename used by serializer for this type

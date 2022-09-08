@@ -18,9 +18,56 @@
 package server
 
 import (
+	"context"
+
 	"chihaya/database"
 	cdb "chihaya/database/types"
+	"chihaya/util"
 )
+
+func clientApproved(peerID string, db *database.Database) (uint16, bool) {
+	util.TakeSemaphore(db.ClientsSemaphore)
+	defer util.ReturnSemaphore(db.ClientsSemaphore)
+
+	var (
+		widLen, i int
+		matched   bool
+	)
+
+	for id, clientID := range db.Clients {
+		widLen = len(clientID)
+		if widLen <= len(peerID) {
+			matched = true
+
+			for i = 0; i < widLen; i++ {
+				if peerID[i] != clientID[i] {
+					matched = false
+					break
+				}
+			}
+
+			if matched {
+				return id, true
+			}
+		}
+	}
+
+	return 0, false
+}
+
+func isPasskeyValid(ctx context.Context, passkey string, db *database.Database) (*cdb.User, error) {
+	if !util.TryTakeSemaphore(ctx, db.UsersSemaphore) {
+		return nil, ctx.Err()
+	}
+	defer util.ReturnSemaphore(db.UsersSemaphore)
+
+	user, exists := db.Users[passkey]
+	if !exists {
+		return nil, nil
+	}
+
+	return user, nil
+}
 
 func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
 	hnr := cdb.UserTorrentPair{

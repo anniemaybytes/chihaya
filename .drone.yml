@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.48.0-alpine
+        image: golangci/golangci-lint:v1.49.0-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.48.0-alpine
+        image: golangci/golangci-lint:v1.49.0-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -30,7 +30,7 @@ type: docker
 
 services:
     -   name: mariadb
-        image: mariadb:10.8
+        image: mariadb:10.9
         pull: always
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: yes
@@ -46,7 +46,7 @@ steps:
             PLUGIN_HOST: mariadb
             PLUGIN_PORT: 3306
     -   name: test
-        image: golang:1.18-alpine
+        image: golang:1.19-alpine
         pull: always
         environment:
             CGO_ENABLED: 0
@@ -58,7 +58,7 @@ steps:
             - go get -v -t -d ./...
             - go test ./... -v -buildvcs=false -coverprofile=coverage.out
     -   name: coverage
-        image: golang:1.18-alpine
+        image: golang:1.19-alpine
         commands:
             - go tool cover -func=coverage.out
 

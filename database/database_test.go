@@ -18,12 +18,13 @@
 package database
 
 import (
-	"chihaya/database/types"
 	"fmt"
 	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	cdb "chihaya/database/types"
 
 	"github.com/go-testfixtures/testfixtures/v3"
 )
@@ -56,8 +57,8 @@ func TestMain(m *testing.M) {
 func TestLoadUsers(t *testing.T) {
 	prepareTestDatabase()
 
-	db.Users = make(map[string]*types.User)
-	users := map[string]*types.User{
+	db.Users = make(map[string]*cdb.User)
+	users := map[string]*cdb.User{
 		"mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ": {
 			ID:              1,
 			UpMultiplier:    1,
@@ -103,11 +104,11 @@ func TestLoadUsers(t *testing.T) {
 func TestLoadHitAndRuns(t *testing.T) {
 	prepareTestDatabase()
 
-	db.HitAndRuns = make(map[types.UserTorrentPair]struct{})
+	db.HitAndRuns = make(map[cdb.UserTorrentPair]struct{})
 
 	db.loadHitAndRuns()
 
-	hnr := types.UserTorrentPair{
+	hnr := cdb.UserTorrentPair{
 		UserID:    2,
 		TorrentID: 2,
 	}
@@ -127,19 +128,19 @@ func TestLoadHitAndRuns(t *testing.T) {
 func TestLoadTorrents(t *testing.T) {
 	prepareTestDatabase()
 
-	db.Torrents = make(map[string]*types.Torrent)
-	db.TorrentGroupFreeleech = make(map[types.TorrentGroup]*types.TorrentGroupFreeleech)
+	db.Torrents = make(map[string]*cdb.Torrent)
+	db.TorrentGroupFreeleech = make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
 
-	torrents := map[string]*types.Torrent{
+	torrents := map[string]*cdb.Torrent{
 		string([]byte{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}): {
 			ID:             1,
 			Status:         1,
 			Snatched:       2,
 			DownMultiplier: 1,
 			UpMultiplier:   1,
-			Seeders:        map[string]*types.Peer{},
-			Leechers:       map[string]*types.Peer{},
-			Group: types.TorrentGroup{
+			Seeders:        map[string]*cdb.Peer{},
+			Leechers:       map[string]*cdb.Peer{},
+			Group: cdb.TorrentGroup{
 				GroupID:     1,
 				TorrentType: "anime",
 			},
@@ -150,9 +151,9 @@ func TestLoadTorrents(t *testing.T) {
 			Snatched:       0,
 			DownMultiplier: 2,
 			UpMultiplier:   0.5,
-			Seeders:        map[string]*types.Peer{},
-			Leechers:       map[string]*types.Peer{},
-			Group: types.TorrentGroup{
+			Seeders:        map[string]*cdb.Peer{},
+			Leechers:       map[string]*cdb.Peer{},
+			Group: cdb.TorrentGroup{
 				GroupID:     1,
 				TorrentType: "music",
 			},
@@ -163,16 +164,16 @@ func TestLoadTorrents(t *testing.T) {
 			Snatched:       0,
 			DownMultiplier: 1,
 			UpMultiplier:   1,
-			Seeders:        map[string]*types.Peer{},
-			Leechers:       map[string]*types.Peer{},
-			Group: types.TorrentGroup{
+			Seeders:        map[string]*cdb.Peer{},
+			Leechers:       map[string]*cdb.Peer{},
+			Group: cdb.TorrentGroup{
 				GroupID:     2,
 				TorrentType: "anime",
 			},
 		},
 	}
 
-	torrentGroupFreeleech := map[types.TorrentGroup]*types.TorrentGroupFreeleech{
+	torrentGroupFreeleech := map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech{
 		{
 			GroupID:     2,
 			TorrentType: "anime",
@@ -372,7 +373,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 func TestRecordAndFlushTransferHistory(t *testing.T) {
 	prepareTestDatabase()
 
-	testPeer := &types.Peer{
+	testPeer := &cdb.Peer{
 		UserID:       1,
 		TorrentID:    1,
 		Seeding:      true,
@@ -483,7 +484,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 	}
 
 	// Check if existing peer being updated properly
-	gotPeer := &types.Peer{
+	gotPeer := &cdb.Peer{
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 		StartTime: testPeer.StartTime,
@@ -508,7 +509,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 	}
 
 	// Now test for new peer not in database
-	testPeer = &types.Peer{
+	testPeer = &cdb.Peer{
 		UserID:       0,
 		TorrentID:    2,
 		Seeding:      true,
@@ -519,7 +520,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 
 	db.RecordTransferHistory(testPeer, 0, 1000, 1, 0, 1, true)
 
-	gotPeer = &types.Peer{
+	gotPeer = &cdb.Peer{
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 	}
@@ -545,7 +546,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 func TestRecordAndFlushTransferIP(t *testing.T) {
 	prepareTestDatabase()
 
-	testPeer := &types.Peer{
+	testPeer := &cdb.Peer{
 		UserID:       0,
 		TorrentID:    0,
 		ClientID:     1,
@@ -609,7 +610,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 	}
 
 	// Check if existing peer being updated properly
-	gotPeer := &types.Peer{
+	gotPeer := &cdb.Peer{
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 		ClientID:  testPeer.ClientID,
@@ -637,7 +638,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 	}
 
 	// Now test for new peer not in database
-	testPeer = &types.Peer{
+	testPeer = &cdb.Peer{
 		UserID:       1,
 		TorrentID:    2,
 		ClientID:     2,
@@ -654,7 +655,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 	}
 	time.Sleep(200 * time.Millisecond)
 
-	gotPeer = &types.Peer{
+	gotPeer = &cdb.Peer{
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 		ClientID:  testPeer.ClientID,
@@ -678,7 +679,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 func TestRecordAndFlushSnatch(t *testing.T) {
 	prepareTestDatabase()
 
-	testPeer := &types.Peer{
+	testPeer := &cdb.Peer{
 		UserID:    1,
 		TorrentID: 1,
 	}
@@ -719,14 +720,14 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 	hash := string([]byte{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56})
 	torrent := db.Torrents[hash]
 	torrent.LastAction = time.Now().Unix()
-	torrent.Seeders["1-test_peer_id_num_one"] = &types.Peer{
+	torrent.Seeders["1-test_peer_id_num_one"] = &cdb.Peer{
 		UserID:       1,
 		TorrentID:    torrent.ID,
 		ClientID:     1,
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
-	torrent.Leechers["3-test_peer_id_num_two"] = &types.Peer{
+	torrent.Leechers["3-test_peer_id_num_two"] = &cdb.Peer{
 		UserID:       3,
 		TorrentID:    torrent.ID,
 		ClientID:     2,

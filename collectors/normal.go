@@ -31,7 +31,7 @@ type NormalCollector struct {
 	requestsMetric   *prometheus.Desc
 }
 
-var ( // Data
+var (
 	users      int
 	torrents   int
 	clients    int
@@ -49,7 +49,7 @@ func NewNormalCollector() *NormalCollector {
 		clientsMetric:    prometheus.NewDesc("chihaya_clients", "Number of approved clients", nil, nil),
 		hitAndRunsMetric: prometheus.NewDesc("chihaya_hnrs", "Number of active hit and runs registered", nil, nil),
 		peersMetric:      prometheus.NewDesc("chihaya_peers", "Number of peers currently being tracked", nil, nil),
-		requestsMetric:   prometheus.NewDesc("chihaya_requests", "Number of successful requests handled", nil, nil),
+		requestsMetric:   prometheus.NewDesc("chihaya_requests", "Number of requests received", nil, nil),
 	}
 }
 

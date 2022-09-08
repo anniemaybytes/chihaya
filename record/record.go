@@ -19,12 +19,13 @@ package record
 
 import (
 	"bytes"
-	"chihaya/config"
-	"chihaya/log"
-	"chihaya/util"
 	"os"
 	"strconv"
 	"time"
+
+	"chihaya/config"
+	"chihaya/log"
+	"chihaya/util"
 )
 
 var enabled = false
@@ -94,7 +95,7 @@ func Record(
 	}
 
 	if !initialized {
-		log.Fatal.Printf("Can not Record without prior initialization")
+		log.Fatal.Fatalln("Can not Record without prior initialization")
 		return
 	}
 

@@ -19,11 +19,12 @@ package database
 
 import (
 	"bytes"
+	"time"
+
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/log"
 	"chihaya/util"
-	"time"
 )
 
 var (
@@ -40,7 +41,7 @@ func init() {
 
 	result, exists := intervals.GetInt("flush", 5)
 	if !exists {
-		log.Warning.Println("FlushSleepInterval is undefined, using default of 5 seconds - this WILL affect performance!")
+		log.Warning.Print("FlushSleepInterval is undefined; default of 5 seconds might negatively affect performance")
 	}
 
 	flushSleepInterval = result
@@ -83,7 +84,11 @@ func (db *Database) startFlushing() {
 	go db.flushTransferIps()
 	go db.flushSnatches()
 
-	go db.purgeInactivePeers()
+	go func() {
+		time.Sleep(2 * time.Second)
+
+		db.purgeInactivePeers()
+	}()
 }
 
 func (db *Database) flushTorrents() {
@@ -133,7 +138,7 @@ func (db *Database) flushTorrents() {
 
 		logFlushes, _ := config.GetBool("log_flushes", true)
 		if logFlushes && !db.terminate {
-			log.Info.Printf("{torrents} Flushing %d\n", count)
+			log.Info.Printf("{torrents} Flushing %d", count)
 		}
 
 		if count > 0 {
@@ -219,7 +224,7 @@ func (db *Database) flushUsers() {
 
 		logFlushes, _ := config.GetBool("log_flushes", true)
 		if logFlushes && !db.terminate {
-			log.Info.Printf("{users_main} Flushing %d\n", count)
+			log.Info.Printf("{users_main} Flushing %d", count)
 		}
 
 		if count > 0 {
@@ -273,7 +278,7 @@ main:
 		db.transferHistoryWaitGroupMu.Lock()
 		if db.transferHistoryWaitGroupSe == 1 {
 			db.transferHistoryWaitGroupMu.Unlock()
-			log.Warning.Printf("goTransferHistoryWait has started... (skipping flushTransferHistory)")
+			log.Warning.Print("Skipping flushTransferHistory because goTransferHistoryWait is active")
 			time.Sleep(time.Second)
 			continue
 		}
@@ -309,7 +314,7 @@ main:
 
 		logFlushes, _ := config.GetBool("log_flushes", true)
 		if logFlushes && !db.terminate {
-			log.Info.Printf("{transfer_history} Flushing %d\n", count)
+			log.Info.Printf("{transfer_history} Flushing %d", count)
 		}
 
 		if count > 0 {
@@ -379,13 +384,13 @@ func (db *Database) flushTransferIps() {
 
 		logFlushes, _ := config.GetBool("log_flushes", true)
 		if logFlushes && !db.terminate {
-			log.Info.Printf("{transfer_ips} Flushing %d\n", count)
+			log.Info.Printf("{transfer_ips} Flushing %d", count)
 		}
 
 		if count > 0 {
 			startTime := time.Now()
 
-			// todo in future, port should be part of PK
+			// todo: port should be part of PK
 			query.WriteString("\nON DUPLICATE KEY UPDATE port = VALUE(port), downloaded = downloaded + VALUE(downloaded), " +
 				"uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce)")
 			conn.exec(&query)
@@ -442,7 +447,7 @@ func (db *Database) flushSnatches() {
 
 		logFlushes, _ := config.GetBool("log_flushes", true)
 		if logFlushes && !db.terminate {
-			log.Info.Printf("{snatches} Flushing %d\n", count)
+			log.Info.Printf("{snatches} Flushing %d", count)
 		}
 
 		if count > 0 {
@@ -471,8 +476,6 @@ func (db *Database) flushSnatches() {
 }
 
 func (db *Database) purgeInactivePeers() {
-	time.Sleep(2 * time.Second)
-
 	var (
 		start time.Time
 		now   int64
@@ -480,8 +483,6 @@ func (db *Database) purgeInactivePeers() {
 	)
 
 	for !db.terminate {
-		db.waitGroup.Add(1)
-
 		start = time.Now()
 		now = start.Unix()
 		count = 0
@@ -489,66 +490,77 @@ func (db *Database) purgeInactivePeers() {
 		oldestActive := now - int64(peerInactivityInterval)
 
 		// First, remove inactive peers from memory
-		db.TorrentsMutex.Lock()
-		for _, torrent := range db.Torrents {
-			countThisTorrent := count
+		func() {
+			util.TakeSemaphore(db.TorrentsSemaphore)
+			defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
-			for id, peer := range torrent.Leechers {
-				if peer.LastAnnounce < oldestActive {
-					delete(torrent.Leechers, id)
-					count++
+			for _, torrent := range db.Torrents {
+				countThisTorrent := count
+
+				for id, peer := range torrent.Leechers {
+					if peer.LastAnnounce < oldestActive {
+						delete(torrent.Leechers, id)
+						count++
+					}
+				}
+
+				for id, peer := range torrent.Seeders {
+					if peer.LastAnnounce < oldestActive {
+						delete(torrent.Seeders, id)
+						count++
+					}
+				}
+
+				if countThisTorrent != count {
+					db.RecordTorrent(torrent, 0)
 				}
 			}
-
-			for id, peer := range torrent.Seeders {
-				if peer.LastAnnounce < oldestActive {
-					delete(torrent.Seeders, id)
-					count++
-				}
-			}
-
-			if countThisTorrent != count {
-				db.RecordTorrent(torrent, 0)
-			}
-		}
-		db.TorrentsMutex.Unlock()
+		}()
 
 		elapsedTime := time.Since(start)
 		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
-		log.Info.Printf("Purged %d inactive peers from memory (%s)\n", count, elapsedTime.String())
+		log.Info.Printf("Purged %d inactive peers from memory (%s)", count, elapsedTime.String())
 
 		// Wait to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
 		db.goTransferHistoryWait()
 
-		// Then set them to inactive in the database
-		db.mainConn.mutex.Lock()
+		// Set peers as inactive in the database
+		func() {
+			db.waitGroup.Add(1)
+			defer db.waitGroup.Done()
 
-		start = time.Now()
-		result := db.mainConn.execute(db.cleanStalePeersStmt, oldestActive)
+			db.mainConn.mutex.Lock()
+			defer db.mainConn.mutex.Unlock()
 
-		if result != nil {
-			rows, err := result.RowsAffected()
-			if err != nil {
-				log.Info.Printf("Updated %d inactive peers in database (%s)\n", rows, time.Since(start).String())
-			} else {
-				log.Info.Printf("Updated inactive peers in database (%s)\n", time.Since(start).String())
+			start = time.Now()
+			result := db.mainConn.execute(db.cleanStalePeersStmt, oldestActive)
+
+			if result != nil {
+				rows, err := result.RowsAffected()
+				if err != nil {
+					log.Info.Printf("Updated %d inactive peers in database (%s)", rows, time.Since(start).String())
+				} else {
+					log.Info.Printf("Updated inactive peers in database (%s)", time.Since(start).String())
+				}
 			}
-		}
+		}()
 
-		db.mainConn.mutex.Unlock()
-		db.waitGroup.Done()
 		time.Sleep(time.Duration(purgeInactivePeersInterval) * time.Second)
 	}
 }
 
 func (db *Database) goTransferHistoryWait() {
-	log.Info.Printf("Starting goTransferHistoryWait")
+	log.Verbose.Print("Starting goTransferHistoryWait")
+
 	db.transferHistoryWaitGroupMu.Lock()
 	db.transferHistoryWaitGroupSe = 1
 	db.transferHistoryWaitGroupMu.Unlock()
+
 	db.transferHistoryWaitGroup.Wait()
+
 	db.transferHistoryWaitGroupMu.Lock()
 	db.transferHistoryWaitGroupSe = 0
 	db.transferHistoryWaitGroupMu.Unlock()
-	log.Info.Printf("Releasing goTransferHistoryWait")
+
+	log.Verbose.Print("Releasing goTransferHistoryWait")
 }

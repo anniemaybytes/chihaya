@@ -18,9 +18,10 @@
 package database
 
 import (
-	"chihaya/database/types"
-	"chihaya/util"
 	"strconv"
+
+	cdb "chihaya/database/types"
+	"chihaya/util"
 )
 
 /*
@@ -33,7 +34,7 @@ import (
  * so it's expected that the buffers are returned in the flush functions
  */
 
-func (db *Database) RecordTorrent(torrent *types.Torrent, deltaSnatch uint8) {
+func (db *Database) RecordTorrent(torrent *cdb.Torrent, deltaSnatch uint8) {
 	tq := db.bufferPool.Take()
 
 	tq.WriteString("(")
@@ -51,7 +52,7 @@ func (db *Database) RecordTorrent(torrent *types.Torrent, deltaSnatch uint8) {
 	db.torrentChannel <- tq
 }
 
-func (db *Database) RecordUser(user *types.User, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload int64) {
+func (db *Database) RecordUser(user *cdb.User, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload int64) {
 	uq := db.bufferPool.Take()
 
 	uq.WriteString("(")
@@ -69,7 +70,7 @@ func (db *Database) RecordUser(user *types.User, rawDeltaUpload, rawDeltaDownloa
 	db.userChannel <- uq
 }
 
-func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawDeltaDownload, deltaTime,
+func (db *Database) RecordTransferHistory(peer *cdb.Peer, rawDeltaUpload, rawDeltaDownload, deltaTime,
 	deltaSeedTime int64, deltaSnatch uint8, active bool) {
 	th := db.bufferPool.Take()
 
@@ -102,7 +103,7 @@ func (db *Database) RecordTransferHistory(peer *types.Peer, rawDeltaUpload, rawD
 	db.transferHistoryChannel <- th
 }
 
-func (db *Database) RecordTransferIP(peer *types.Peer, rawDeltaUpload, rawDeltaDownload int64) {
+func (db *Database) RecordTransferIP(peer *cdb.Peer, rawDeltaUpload, rawDeltaDownload int64) {
 	ti := db.bufferPool.Take()
 
 	ti.WriteString("(")
@@ -128,7 +129,7 @@ func (db *Database) RecordTransferIP(peer *types.Peer, rawDeltaUpload, rawDeltaD
 	db.transferIpsChannel <- ti
 }
 
-func (db *Database) RecordSnatch(peer *types.Peer, now int64) {
+func (db *Database) RecordSnatch(peer *cdb.Peer, now int64) {
 	sn := db.bufferPool.Take()
 
 	sn.WriteString("(")
@@ -142,7 +143,7 @@ func (db *Database) RecordSnatch(peer *types.Peer, now int64) {
 	db.snatchChannel <- sn
 }
 
-func (db *Database) UnPrune(torrent *types.Torrent) {
+func (db *Database) UnPrune(torrent *cdb.Torrent) {
 	db.mainConn.mutex.Lock()
 	db.mainConn.execute(db.unPruneTorrentStmt, torrent.ID)
 	db.mainConn.mutex.Unlock()

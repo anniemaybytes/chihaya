@@ -15,39 +15,30 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package util
+package server
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"chihaya/log"
 )
 
-type BufferPool struct {
-	pool    chan *bytes.Buffer
-	bufSize int
+type response struct {
+	Now    int64 `json:"now"`
+	Uptime int64 `json:"uptime"`
 }
 
-func NewBufferPool(size int, bufSize int) *BufferPool {
-	return &BufferPool{
-		make(chan *bytes.Buffer, size),
-		bufSize,
-	}
-}
-
-func (pool *BufferPool) Take() (buf *bytes.Buffer) {
-	select {
-	case buf = <-pool.pool:
-		buf.Reset()
-	default:
-		internalBuf := make([]byte, 0, pool.bufSize)
-		buf = bytes.NewBuffer(internalBuf)
+func alive(buf *bytes.Buffer) int {
+	res, err := json.Marshal(response{time.Now().UnixMilli(), time.Since(handler.startTime).Milliseconds()})
+	if err != nil {
+		log.Error.Print("Failed to marshal JSON alive response: ", err)
+		return http.StatusInternalServerError
 	}
 
-	return
-}
+	buf.Write(res)
 
-func (pool *BufferPool) Give(buf *bytes.Buffer) {
-	select {
-	case pool.pool <- buf:
-	default:
-	}
+	return http.StatusOK
 }

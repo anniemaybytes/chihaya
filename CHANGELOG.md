@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v10.0.0
+### Added
+- Use `context.WithTimeout` to cancel long-running request
+
+### Changed
+- Exit on uninitialized `Record` error
+- Improve and standardize logging across various files
+- Update warning messages in `readConfig`
+- Make serialization atomic by using `os.Rename`
+- Refactor old `/check` into new `/alive` endpoint
+- Bump minimum Go version to 1.19
+
 ## v9.0.1
 ### Fixed
 - Record of ID 0 in `approved_clients` table being treated as non-approved
