@@ -19,6 +19,7 @@ package database
 
 import (
 	"bytes"
+	"errors"
 	"time"
 
 	"chihaya/collectors"
@@ -69,6 +70,8 @@ var (
 	transferHistoryFlushBufferSize int
 	transferIpsFlushBufferSize     int
 	snatchFlushBufferSize          int
+
+	errDbTerminate = errors.New("shutting down database connection")
 )
 
 func (db *Database) startFlushing() {
@@ -77,6 +80,8 @@ func (db *Database) startFlushing() {
 	db.transferHistoryChannel = make(chan *bytes.Buffer, transferHistoryFlushBufferSize)
 	db.transferIpsChannel = make(chan *bytes.Buffer, transferIpsFlushBufferSize)
 	db.snatchChannel = make(chan *bytes.Buffer, snatchFlushBufferSize)
+
+	db.transferHistorySemaphore = util.NewSemaphore()
 
 	go db.flushTorrents()
 	go db.flushUsers()
@@ -103,8 +108,6 @@ func (db *Database) flushTorrents() {
 	conn := Open()
 
 	for {
-		length := util.Max(1, len(db.torrentChannel))
-
 		query.Reset()
 		query.WriteString("CREATE TEMPORARY TABLE IF NOT EXISTS flush_torrents (" +
 			"ID int unsigned NOT NULL, " +
@@ -122,10 +125,12 @@ func (db *Database) flushTorrents() {
 		query.Reset()
 		query.WriteString("INSERT INTO flush_torrents VALUES ")
 
+		length := len(db.torrentChannel)
+
 		for count = 0; count < length; count++ {
 			b := <-db.torrentChannel
 			if b == nil {
-				break
+				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
 			}
 
 			query.Write(b.Bytes())
@@ -136,12 +141,12 @@ func (db *Database) flushTorrents() {
 			}
 		}
 
-		logFlushes, _ := config.GetBool("log_flushes", true)
-		if logFlushes && !db.terminate {
-			log.Info.Printf("{torrents} Flushing %d", count)
-		}
-
 		if count > 0 {
+			logFlushes, _ := config.GetBool("log_flushes", true)
+			if logFlushes && !db.terminate {
+				log.Info.Printf("{torrents} Flushing %d", count)
+			}
+
 			startTime := time.Now()
 
 			query.WriteString(" ON DUPLICATE KEY UPDATE Snatched = Snatched + VALUE(Snatched), " +
@@ -189,8 +194,6 @@ func (db *Database) flushUsers() {
 	conn := Open()
 
 	for {
-		length := util.Max(1, len(db.userChannel))
-
 		query.Reset()
 		query.WriteString("CREATE TEMPORARY TABLE IF NOT EXISTS flush_users (" +
 			"ID int unsigned NOT NULL, " +
@@ -208,10 +211,12 @@ func (db *Database) flushUsers() {
 		query.Reset()
 		query.WriteString("INSERT INTO flush_users VALUES ")
 
+		length := len(db.userChannel)
+
 		for count = 0; count < length; count++ {
 			b := <-db.userChannel
 			if b == nil {
-				break
+				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
 			}
 
 			query.Write(b.Bytes())
@@ -222,12 +227,12 @@ func (db *Database) flushUsers() {
 			}
 		}
 
-		logFlushes, _ := config.GetBool("log_flushes", true)
-		if logFlushes && !db.terminate {
-			log.Info.Printf("{users_main} Flushing %d", count)
-		}
-
 		if count > 0 {
+			logFlushes, _ := config.GetBool("log_flushes", true)
+			if logFlushes && !db.terminate {
+				log.Info.Printf("{users_main} Flushing %d", count)
+			}
+
 			startTime := time.Now()
 
 			query.WriteString(" ON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUE(Uploaded), " +
@@ -273,76 +278,66 @@ func (db *Database) flushTransferHistory() {
 
 	conn := Open()
 
-main:
 	for {
-		db.transferHistoryWaitGroupMu.Lock()
-		if db.transferHistoryWaitGroupSe == 1 {
-			db.transferHistoryWaitGroupMu.Unlock()
-			log.Warning.Print("Skipping flushTransferHistory because goTransferHistoryWait is active")
-			time.Sleep(time.Second)
-			continue
-		}
-		db.transferHistoryWaitGroup.Add(1)
-		db.transferHistoryWaitGroupMu.Unlock()
+		length, err := func() (int, error) {
+			util.TakeSemaphore(db.transferHistorySemaphore)
+			defer util.ReturnSemaphore(db.transferHistorySemaphore)
 
-		length := util.Max(1, len(db.transferHistoryChannel))
-		query.Reset()
+			query.Reset()
+			query.WriteString("INSERT INTO transfer_history (uid, fid, uploaded, downloaded, " +
+				"seeding, starttime, last_announce, activetime, seedtime, active, snatched, remaining) VALUES\n")
 
-		query.WriteString("INSERT INTO transfer_history (uid, fid, uploaded, downloaded, " +
-			"seeding, starttime, last_announce, activetime, seedtime, active, snatched, remaining) VALUES\n")
+			length := len(db.transferHistoryChannel)
 
-	counter:
-		for count = 0; count < length; count++ {
-			select {
-			case b, ok := <-db.transferHistoryChannel:
-				if ok {
-					query.Write(b.Bytes())
-					db.bufferPool.Give(b)
-
-					if count != length-1 {
-						query.WriteRune(',')
-					}
-				} else {
-					break counter
+			for count = 0; count < length; count++ {
+				b := <-db.transferHistoryChannel
+				if b == nil {
+					log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
 				}
-			default:
-				db.transferHistoryWaitGroup.Done()
-				time.Sleep(time.Second)
-				continue main
-			}
-		}
 
-		logFlushes, _ := config.GetBool("log_flushes", true)
-		if logFlushes && !db.terminate {
-			log.Info.Printf("{transfer_history} Flushing %d", count)
-		}
+				query.Write(b.Bytes())
+				db.bufferPool.Give(b)
 
-		if count > 0 {
-			startTime := time.Now()
-
-			query.WriteString("\nON DUPLICATE KEY UPDATE uploaded = uploaded + VALUE(uploaded), " +
-				"downloaded = downloaded + VALUE(downloaded), remaining = VALUE(remaining), " +
-				"seeding = VALUE(seeding), activetime = activetime + VALUE(activetime), " +
-				"seedtime = seedtime + VALUE(seedtime), last_announce = VALUE(last_announce), " +
-				"active = VALUE(active), snatched = snatched + VALUE(snatched);")
-
-			conn.exec(&query)
-			db.transferHistoryWaitGroup.Done()
-
-			if !db.terminate {
-				elapsedTime := time.Since(startTime)
-				collectors.UpdateFlushTime("transfer_history", elapsedTime)
-				collectors.UpdateChannelsLen("transfer_history", count)
+				if count != length-1 {
+					query.WriteRune(',')
+				}
 			}
 
-			if length < (transferHistoryFlushBufferSize >> 1) {
-				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
+			if count > 0 {
+				logFlushes, _ := config.GetBool("log_flushes", true)
+				if logFlushes && !db.terminate {
+					log.Info.Printf("{transfer_history} Flushing %d", count)
+				}
+
+				startTime := time.Now()
+
+				query.WriteString("\nON DUPLICATE KEY UPDATE uploaded = uploaded + VALUE(uploaded), " +
+					"downloaded = downloaded + VALUE(downloaded), remaining = VALUE(remaining), " +
+					"seeding = VALUE(seeding), activetime = activetime + VALUE(activetime), " +
+					"seedtime = seedtime + VALUE(seedtime), last_announce = VALUE(last_announce), " +
+					"active = VALUE(active), snatched = snatched + VALUE(snatched);")
+
+				conn.exec(&query)
+
+				if !db.terminate {
+					elapsedTime := time.Since(startTime)
+					collectors.UpdateFlushTime("transfer_history", elapsedTime)
+					collectors.UpdateChannelsLen("transfer_history", count)
+				}
+
+				return length, nil
+			} else if db.terminate {
+				return 0, errDbTerminate
 			}
-		} else if db.terminate {
-			db.transferHistoryWaitGroup.Done()
-			break main
+
+			return length, nil
+		}()
+
+		if err != nil {
+			break
+		} else if length < (transferHistoryFlushBufferSize >> 1) {
+			time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 		} else {
-			db.transferHistoryWaitGroup.Done()
 			time.Sleep(time.Second)
 		}
 	}
@@ -362,16 +357,16 @@ func (db *Database) flushTransferIps() {
 	conn := Open()
 
 	for {
-		length := util.Max(1, len(db.transferIpsChannel))
-
 		query.Reset()
 		query.WriteString("INSERT INTO transfer_ips (uid, fid, client_id, ip, port, uploaded, downloaded, " +
 			"starttime, last_announce) VALUES\n")
 
+		length := len(db.transferIpsChannel)
+
 		for count = 0; count < length; count++ {
 			b := <-db.transferIpsChannel
 			if b == nil {
-				break
+				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
 			}
 
 			query.Write(b.Bytes())
@@ -382,12 +377,12 @@ func (db *Database) flushTransferIps() {
 			}
 		}
 
-		logFlushes, _ := config.GetBool("log_flushes", true)
-		if logFlushes && !db.terminate {
-			log.Info.Printf("{transfer_ips} Flushing %d", count)
-		}
-
 		if count > 0 {
+			logFlushes, _ := config.GetBool("log_flushes", true)
+			if logFlushes && !db.terminate {
+				log.Info.Printf("{transfer_ips} Flushing %d", count)
+			}
+
 			startTime := time.Now()
 
 			// todo: port should be part of PK
@@ -426,15 +421,15 @@ func (db *Database) flushSnatches() {
 	conn := Open()
 
 	for {
-		length := util.Max(1, len(db.snatchChannel))
-
 		query.Reset()
 		query.WriteString("INSERT INTO transfer_history (uid, fid, snatched_time) VALUES\n")
+
+		length := len(db.snatchChannel)
 
 		for count = 0; count < length; count++ {
 			b := <-db.snatchChannel
 			if b == nil {
-				break
+				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
 			}
 
 			query.Write(b.Bytes())
@@ -445,12 +440,12 @@ func (db *Database) flushSnatches() {
 			}
 		}
 
-		logFlushes, _ := config.GetBool("log_flushes", true)
-		if logFlushes && !db.terminate {
-			log.Info.Printf("{snatches} Flushing %d", count)
-		}
-
 		if count > 0 {
+			logFlushes, _ := config.GetBool("log_flushes", true)
+			if logFlushes && !db.terminate {
+				log.Info.Printf("{snatches} Flushing %d", count)
+			}
+
 			startTime := time.Now()
 
 			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time)")
@@ -521,13 +516,14 @@ func (db *Database) purgeInactivePeers() {
 		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
 		log.Info.Printf("Purged %d inactive peers from memory (%s)", count, elapsedTime.String())
 
-		// Wait to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
-		db.goTransferHistoryWait()
-
 		// Set peers as inactive in the database
 		func() {
 			db.waitGroup.Add(1)
 			defer db.waitGroup.Done()
+
+			// Wait to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
+			util.TakeSemaphore(db.transferHistorySemaphore)
+			defer util.ReturnSemaphore(db.transferHistorySemaphore)
 
 			db.mainConn.mutex.Lock()
 			defer db.mainConn.mutex.Unlock()
@@ -547,20 +543,4 @@ func (db *Database) purgeInactivePeers() {
 
 		time.Sleep(time.Duration(purgeInactivePeersInterval) * time.Second)
 	}
-}
-
-func (db *Database) goTransferHistoryWait() {
-	log.Verbose.Print("Starting goTransferHistoryWait")
-
-	db.transferHistoryWaitGroupMu.Lock()
-	db.transferHistoryWaitGroupSe = 1
-	db.transferHistoryWaitGroupMu.Unlock()
-
-	db.transferHistoryWaitGroup.Wait()
-
-	db.transferHistoryWaitGroupMu.Lock()
-	db.transferHistoryWaitGroupSe = 0
-	db.transferHistoryWaitGroupMu.Unlock()
-
-	log.Verbose.Print("Releasing goTransferHistoryWait")
 }

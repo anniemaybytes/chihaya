@@ -46,6 +46,7 @@ func TestMain(m *testing.M) {
 		testfixtures.Database(db.mainConn.sqlDb),
 		testfixtures.Dialect("mariadb"),
 		testfixtures.Directory("fixtures"),
+		testfixtures.DangerousSkipTestDatabaseCheck(),
 	)
 	if err != nil {
 		panic(err)
@@ -693,7 +694,7 @@ func TestRecordAndFlushSnatch(t *testing.T) {
 
 	db.RecordSnatch(testPeer, currTime)
 
-	for len(db.transferHistoryChannel) > 0 {
+	for len(db.snatchChannel) > 0 {
 		time.Sleep(time.Second)
 	}
 	time.Sleep(200 * time.Millisecond)

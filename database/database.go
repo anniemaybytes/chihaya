@@ -69,9 +69,7 @@ type Database struct {
 
 	bufferPool *util.BufferPool
 
-	transferHistoryWaitGroup   sync.WaitGroup
-	transferHistoryWaitGroupMu sync.Mutex
-	transferHistoryWaitGroupSe uint8
+	transferHistorySemaphore util.Semaphore
 
 	terminate bool
 	waitGroup sync.WaitGroup
