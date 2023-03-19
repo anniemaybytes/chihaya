@@ -175,7 +175,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		ip, exists := getPublicIPV4(qp.Get("ip"))       // ... then try to get public IP if sent by client
 
 		// Fail if ip and ipv4 are not same, and both are provided
-		if existsV4 && exists && ip != ipV4 {
+		if (existsV4 && exists) && (ip != ipV4) {
 			return ""
 		}
 
@@ -188,10 +188,8 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		}
 
 		// Check for proxied IP header
-		proxyHeader, exists := config.Section("http").Get("proxy_header", "")
-		if exists {
-			ips, exists := header[proxyHeader]
-			if exists && len(ips) > 0 {
+		if proxyHeader, exists := config.Section("http").Get("proxy_header", ""); exists {
+			if ips, exists := header[proxyHeader]; exists && len(ips) > 0 {
 				return ips[0]
 			}
 		}
@@ -225,7 +223,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 
 	torrent, exists := db.Torrents[infoHashes[0]]
 	if !exists {
-		failure("This torrent does not exist", buf, 30*time.Second)
+		failure("This torrent does not exist", buf, 5*time.Minute)
 		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
@@ -239,7 +237,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		boolean type so there is no risk of data loss. */
 		go db.UnPrune(torrent)
 	} else if torrent.Status != 0 {
-		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrent.Status, left), buf, 5*time.Minute)
+		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrent.Status, left), buf, 15*time.Minute)
 		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 

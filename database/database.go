@@ -298,12 +298,12 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 					time.Sleep(wait)
 
 					continue
-				} else {
-					log.Error.Printf("SQL error %d: %s", merr.Number, merr.Message)
-					log.WriteStack()
-
-					collectors.IncrementSQLErrorCount()
 				}
+
+				log.Error.Printf("SQL error %d: %s", merr.Number, merr.Message)
+				log.WriteStack()
+
+				collectors.IncrementSQLErrorCount()
 			} else {
 				log.Panic.Printf("Error executing SQL: %s", err)
 				panic(err)

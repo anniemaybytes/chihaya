@@ -25,7 +25,8 @@
       ],
       "extends": [
         "schedule:weekends"
-      ]
+      ],
+      "automerge": true
     }
   ]
 }

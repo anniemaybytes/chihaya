@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.50.1-alpine
+        image: golangci/golangci-lint:v1.52.0-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.50.1-alpine
+        image: golangci/golangci-lint:v1.52.0-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -30,7 +30,7 @@ type: docker
 
 services:
     -   name: mariadb
-        image: mariadb:10.10
+        image: mariadb:10.11
         pull: always
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: yes
@@ -46,7 +46,7 @@ steps:
             PLUGIN_HOST: mariadb
             PLUGIN_PORT: 3306
     -   name: test
-        image: golang:1.19-alpine
+        image: golang:1.20-alpine
         pull: always
         environment:
             CGO_ENABLED: 0
@@ -58,7 +58,7 @@ steps:
             - go get -v -t -d ./...
             - go test ./... -v -buildvcs=false -coverprofile=coverage.out
     -   name: coverage
-        image: golang:1.19-alpine
+        image: golang:1.20-alpine
         commands:
             - go tool cover -func=coverage.out
 
@@ -100,27 +100,7 @@ steps:
         commands:
             - export PLUGIN_REPO=$DOCKER_REGISTRY/chihaya
             - /usr/local/bin/dockerd-entrypoint.sh /bin/drone-docker
-        when:
-            event:
-                - promote
-    -   name: dry-run
-        image: plugins/docker
-        pull: always
-        settings:
-            dry_run: true
-            repo: animebytes/chihaya
-            tags: latest
-        when:
-            event:
-                exclude:
-                    - promote
 
 trigger:
-    ref:
-        - refs/heads/master
-        - refs/pull/**
-        - refs/tags/**
-
-depends_on:
-    - compliance
-    - tests
+    event:
+        - promote

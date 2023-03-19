@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v10.2.0
+### Changed
+- Increase announce interval for non-existing torrents
+
 ## v10.1.0
 ### Changed
 - Use new `util.Semaphore` (introduced in `v10.0.0`) in `database/flush`

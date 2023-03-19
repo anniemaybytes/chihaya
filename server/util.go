@@ -18,12 +18,33 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"github.com/zeebo/bencode"
+	"time"
 
 	"chihaya/database"
 	cdb "chihaya/database/types"
 	"chihaya/util"
 )
+
+func failure(err string, buf *bytes.Buffer, interval time.Duration) {
+	data := make(map[string]interface{})
+	data["failure reason"] = err
+	data["interval"] = interval / time.Second     // Assuming in seconds
+	data["min interval"] = interval / time.Second // Assuming in seconds
+
+	encoded, errz := bencode.EncodeBytes(data)
+	if errz != nil {
+		panic(errz)
+	}
+
+	buf.Reset()
+
+	if _, errz = buf.Write(encoded); errz != nil {
+		panic(errz)
+	}
+}
 
 func clientApproved(peerID string, db *database.Database) (uint16, bool) {
 	util.TakeSemaphore(db.ClientsSemaphore)

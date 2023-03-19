@@ -791,7 +791,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 	}
 }
 
-func TestTerminate(t *testing.T) {
+func TestTerminate(_ *testing.T) {
 	prepareTestDatabase()
 
 	db.Terminate()

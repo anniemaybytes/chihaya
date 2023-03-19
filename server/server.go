@@ -36,7 +36,6 @@ import (
 	"chihaya/util"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/zeebo/bencode"
 )
 
 type httpHandler struct {
@@ -62,24 +61,6 @@ var (
 	handler  *httpHandler
 	listener net.Listener
 )
-
-func failure(err string, buf *bytes.Buffer, interval time.Duration) {
-	failureData := make(map[string]interface{})
-	failureData["failure reason"] = err
-	failureData["interval"] = interval / time.Second     // Assuming in seconds
-	failureData["min interval"] = interval / time.Second // Assuming in seconds
-
-	data, errz := bencode.EncodeBytes(failureData)
-	if errz != nil {
-		panic(errz)
-	}
-
-	buf.Reset()
-
-	if _, errz = buf.Write(data); errz != nil {
-		panic(errz)
-	}
-}
 
 func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) int {
 	dir, action := path.Split(r.URL.Path)
