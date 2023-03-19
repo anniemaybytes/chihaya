@@ -58,6 +58,7 @@ func metrics(ctx context.Context, auth string, db *database.Database, buf *bytes
 	collectors.UpdateHitAndRuns(len(db.HitAndRuns))
 	collectors.UpdatePeers(peers)
 	collectors.UpdateRequests(handler.requests.Load())
+	collectors.UpdateThroughput(handler.throughput)
 
 	mfs, _ := handler.normalRegisterer.(prometheus.Gatherer).Gather()
 	for _, mf := range mfs {

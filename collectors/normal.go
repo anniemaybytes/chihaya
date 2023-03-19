@@ -29,6 +29,7 @@ type NormalCollector struct {
 	hitAndRunsMetric *prometheus.Desc
 	peersMetric      *prometheus.Desc
 	requestsMetric   *prometheus.Desc
+	throughputMetric *prometheus.Desc
 }
 
 var (
@@ -39,6 +40,7 @@ var (
 	peers      int
 	uptime     float64
 	requests   uint64
+	throughput int
 )
 
 func NewNormalCollector() *NormalCollector {
@@ -50,6 +52,7 @@ func NewNormalCollector() *NormalCollector {
 		hitAndRunsMetric: prometheus.NewDesc("chihaya_hnrs", "Number of active hit and runs registered", nil, nil),
 		peersMetric:      prometheus.NewDesc("chihaya_peers", "Number of peers currently being tracked", nil, nil),
 		requestsMetric:   prometheus.NewDesc("chihaya_requests", "Number of requests received", nil, nil),
+		throughputMetric: prometheus.NewDesc("chihaya_throughput", "Current throughput in requests per minute", nil, nil),
 	}
 }
 
@@ -61,6 +64,7 @@ func (collector *NormalCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.hitAndRunsMetric
 	ch <- collector.peersMetric
 	ch <- collector.requestsMetric
+	ch <- collector.throughputMetric
 }
 
 func (collector *NormalCollector) Collect(ch chan<- prometheus.Metric) {
@@ -71,6 +75,7 @@ func (collector *NormalCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collector.hitAndRunsMetric, prometheus.GaugeValue, float64(hitAndRuns))
 	ch <- prometheus.MustNewConstMetric(collector.peersMetric, prometheus.GaugeValue, float64(peers))
 	ch <- prometheus.MustNewConstMetric(collector.requestsMetric, prometheus.CounterValue, float64(requests))
+	ch <- prometheus.MustNewConstMetric(collector.throughputMetric, prometheus.GaugeValue, float64(throughput))
 }
 
 func UpdateUptime(seconds float64) {
@@ -99,4 +104,8 @@ func UpdateHitAndRuns(count int) {
 
 func UpdateRequests(count uint64) {
 	requests = count
+}
+
+func UpdateThroughput(rpm int) {
+	throughput = rpm
 }

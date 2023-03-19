@@ -49,7 +49,8 @@ type httpHandler struct {
 
 	db *database.Database
 
-	requests atomic.Uint64
+	requests   atomic.Uint64
+	throughput int
 
 	contextTimeout time.Duration
 
@@ -254,6 +255,30 @@ func Start() {
 		log.Warning.Print("Setting idleTimeout <= 0 disables Keep-Alive which might negatively impact performance")
 		server.SetKeepAlivesEnabled(false)
 	}
+
+	// Start new goroutine to calculate throughput
+	go func() {
+		lastTime := time.Now()
+		lastRequests := handler.requests.Load()
+
+		for {
+			if handler.terminate {
+				break
+			}
+
+			time.Sleep(time.Minute)
+
+			now := time.Now()
+			duration := now.Sub(lastTime)
+			requests := handler.requests.Load()
+
+			handler.throughput = int(float64(requests-lastRequests)/duration.Seconds()*60 + 0.5)
+			log.Info.Printf("Current throughput: %d rpm", handler.throughput)
+
+			lastTime = now
+			lastRequests = requests
+		}
+	}()
 
 	// Initialize database and recorder
 	handler.db.Init()
