@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v10.5.0
+### Changed
+- Adjust histogram buckets to better capture wider range of data
+
 ## v10.4.1
 ### Fixed
 - Load group freeleech during initialization

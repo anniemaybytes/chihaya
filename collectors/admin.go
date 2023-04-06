@@ -57,7 +57,7 @@ var (
 	serializationTime = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "chihaya_serialization_seconds",
 		Help:    "Histogram of the time taken to serialize database",
-		Buckets: []float64{.25, .5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5},
+		Buckets: []float64{2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 8, 10},
 	})
 	reloadTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "chihaya_reload_seconds",
@@ -67,7 +67,7 @@ var (
 	flushTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "chihaya_flush_seconds",
 		Help:    "Histogram of the time taken to flush data from channels to database",
-		Buckets: []float64{.005, .01, .025, .05, .1, .25, .5, 1},
+		Buckets: []float64{.01, .025, .05, .1, .25, .5, 1, 1.5, 2, 5},
 	}, []string{"type"})
 
 	torrentFlushBufferLength         prometheus.Histogram
