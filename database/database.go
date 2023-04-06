@@ -172,6 +172,7 @@ func (db *Database) Init() {
 	db.loadUsers()
 	db.loadHitAndRuns()
 	db.loadTorrents()
+	db.loadGroupsFreeleech()
 	db.loadConfig()
 	db.loadClients()
 
