@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v10.4.0
+### Changed
+- Separate torrents and group freeleech reload
+- Reload approved client list on every refresh
+
 ## v10.3.0
 ### Added
 - Prometheus metric `throughput`

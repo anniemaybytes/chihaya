@@ -131,7 +131,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		failure("Malformed request - missing info_hash", buf, 1*time.Hour)
 		return http.StatusOK // Required by torrent clients to interpret failure response
 	} else if len(infoHashes) > 1 {
-		failure("Malformed request - multiple info_hash values provided", buf, 1*time.Hour)
+		failure("Malformed request - can only announce singular info_hash", buf, 1*time.Hour)
 		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
@@ -421,17 +421,17 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 	leechCount := len(torrent.Leechers)
 	snatchCount := torrent.Snatched
 
-	respData := make(map[string]interface{})
-	respData["complete"] = seedCount
-	respData["incomplete"] = leechCount
-	respData["downloaded"] = snatchCount
-	respData["min interval"] = minAnnounceInterval
+	response := make(map[string]interface{})
+	response["complete"] = seedCount
+	response["incomplete"] = leechCount
+	response["downloaded"] = snatchCount
+	response["min interval"] = minAnnounceInterval
 
 	/* We ask clients to announce each interval seconds. In order to spread the load on tracker,
 	we will vary the interval given to client by random number of seconds between 0 and value
 	specified in config */
 	announceDrift := util.Rand(0, maxAccounceDrift)
-	respData["interval"] = announceInterval + announceDrift
+	response["interval"] = announceInterval + announceDrift
 
 	if numWant > 0 && active {
 		compactString, exists := qp.Get("compact")
@@ -500,7 +500,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 				peerBuff.Write(other.Addr)
 			}
 
-			respData["peers"] = peerBuff.String()
+			response["peers"] = peerBuff.String()
 		} else {
 			peerList := make([]map[string]interface{}, len(peersToSend))
 			for i, other := range peersToSend {
@@ -512,11 +512,11 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 				}
 				peerList[i] = peerMap
 			}
-			respData["peers"] = peerList
+			response["peers"] = peerList
 		}
 	}
 
-	bufdata, err := bencode.EncodeBytes(respData)
+	bufdata, err := bencode.EncodeBytes(response)
 	if err != nil {
 		panic(err)
 	}

@@ -26,12 +26,12 @@ import (
 	"chihaya/log"
 )
 
-type response struct {
-	Now    int64 `json:"now"`
-	Uptime int64 `json:"uptime"`
-}
-
 func alive(buf *bytes.Buffer) int {
+	type response struct {
+		Now    int64 `json:"now"`
+		Uptime int64 `json:"uptime"`
+	}
+
 	res, err := json.Marshal(response{time.Now().UnixMilli(), time.Since(handler.startTime).Milliseconds()})
 	if err != nil {
 		log.Error.Print("Failed to marshal JSON alive response: ", err)

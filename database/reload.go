@@ -49,24 +49,17 @@ func init() {
  */
 func (db *Database) startReloading() {
 	go func() {
-		time.Sleep(time.Duration(reloadInterval) * time.Second)
-
-		count := 0
-
 		for !db.terminate {
+			time.Sleep(time.Duration(reloadInterval) * time.Second)
+
 			db.waitGroup.Add(1)
 			db.loadUsers()
 			db.loadHitAndRuns()
 			db.loadTorrents()
+			db.loadGroupsFreeleech()
 			db.loadConfig()
-
-			if count%10 == 0 {
-				db.loadClients()
-			}
-			count++
-
+			db.loadClients()
 			db.waitGroup.Done()
-			time.Sleep(time.Duration(reloadInterval) * time.Second)
 		}
 	}()
 }
@@ -106,13 +99,13 @@ func (db *Database) loadUsers() {
 			log.WriteStack()
 		}
 
-		old, exists := db.Users[torrentPass]
-		if exists && old != nil {
+		if old, exists := db.Users[torrentPass]; exists && old != nil {
 			old.ID = id
 			old.DownMultiplier = downMultiplier
 			old.UpMultiplier = upMultiplier
 			old.DisableDownload = disableDownload
 			old.TrackerHide = trackerHide
+
 			newUsers[torrentPass] = old
 		} else {
 			newUsers[torrentPass] = &cdb.User{
@@ -182,7 +175,6 @@ func (db *Database) loadTorrents() {
 
 	start := time.Now()
 	newTorrents := make(map[string]*cdb.Torrent)
-	newTorrentGroupFreeleech := make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
 
 	rows := db.mainConn.query(db.loadTorrentsStmt)
 	if rows == nil {
@@ -206,7 +198,8 @@ func (db *Database) loadTorrents() {
 			group                        cdb.TorrentGroup
 		)
 
-		if err := rows.Scan(&id,
+		if err := rows.Scan(
+			&id,
 			&infoHash,
 			&downMultiplier,
 			&upMultiplier,
@@ -219,14 +212,14 @@ func (db *Database) loadTorrents() {
 			log.WriteStack()
 		}
 
-		old, exists := db.Torrents[infoHash]
-		if exists && old != nil {
+		if old, exists := db.Torrents[infoHash]; exists && old != nil {
 			old.ID = id
 			old.DownMultiplier = downMultiplier
 			old.UpMultiplier = upMultiplier
 			old.Snatched = snatched
 			old.Status = status
 			old.Group = group
+
 			newTorrents[infoHash] = old
 		} else {
 			newTorrents[infoHash] = &cdb.Torrent{
@@ -245,13 +238,29 @@ func (db *Database) loadTorrents() {
 
 	db.Torrents = newTorrents
 
-	rows = db.mainConn.query(db.loadTorrentGroupFreeleechStmt)
+	elapsedTime := time.Since(start)
+	collectors.UpdateReloadTime("torrents", elapsedTime)
+	log.Info.Printf("Torrent load complete (%d rows, %s)", len(db.Torrents), elapsedTime.String())
+}
+
+func (db *Database) loadGroupsFreeleech() {
+	db.mainConn.mutex.Lock()
+	defer db.mainConn.mutex.Unlock()
+
+	start := time.Now()
+	newTorrentGroupFreeleech := make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
+
+	rows := db.mainConn.query(db.loadTorrentGroupFreeleechStmt)
 	if rows == nil {
 		log.Error.Print("Failed to load torrent group freeleech data from database")
 		log.WriteStack()
 
 		return
 	}
+
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var (
@@ -264,24 +273,17 @@ func (db *Database) loadTorrents() {
 			log.WriteStack()
 		}
 
-		old, exists := db.TorrentGroupFreeleech[group]
-		if exists && old != nil {
-			old.DownMultiplier = downMultiplier
-			old.UpMultiplier = upMultiplier
-			newTorrentGroupFreeleech[group] = old
-		} else {
-			newTorrentGroupFreeleech[group] = &cdb.TorrentGroupFreeleech{
-				UpMultiplier:   upMultiplier,
-				DownMultiplier: downMultiplier,
-			}
+		newTorrentGroupFreeleech[group] = &cdb.TorrentGroupFreeleech{
+			UpMultiplier:   upMultiplier,
+			DownMultiplier: downMultiplier,
 		}
 	}
 
 	db.TorrentGroupFreeleech = newTorrentGroupFreeleech
 
 	elapsedTime := time.Since(start)
-	collectors.UpdateReloadTime("torrents", elapsedTime)
-	log.Info.Printf("Torrent load complete (%d rows, %s)", len(db.Torrents), elapsedTime.String())
+	collectors.UpdateReloadTime("groups_freeleech", elapsedTime)
+	log.Info.Printf("Group freeleech load complete (%d rows, %s)", len(db.Torrents), elapsedTime.String())
 }
 
 func (db *Database) loadConfig() {
@@ -320,6 +322,7 @@ func (db *Database) loadClients() {
 	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
+	newClients := make(map[uint16]string)
 
 	rows := db.mainConn.query(db.loadClientsStmt)
 	if rows == nil {
@@ -332,8 +335,6 @@ func (db *Database) loadClients() {
 	defer func() {
 		_ = rows.Close()
 	}()
-
-	newClients := make(map[uint16]string)
 
 	for rows.Next() {
 		var (

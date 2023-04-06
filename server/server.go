@@ -261,11 +261,7 @@ func Start() {
 		lastTime := time.Now()
 		lastRequests := handler.requests.Load()
 
-		for {
-			if handler.terminate {
-				break
-			}
-
+		for !handler.terminate {
 			time.Sleep(time.Minute)
 
 			now := time.Now()
