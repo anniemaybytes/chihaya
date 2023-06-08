@@ -33,7 +33,7 @@ var (
 	BuildVersion = "development"
 )
 
-func printHelp() {
+func help() {
 	fmt.Printf("Usage of %s:\n", os.Args[0])
 	fmt.Println("  dump       umarashals gob cache files into readable JSON files")
 	fmt.Println("  restore    marshals JSON files back into gob cache")
@@ -44,181 +44,79 @@ func main() {
 		BuildVersion, BuildDate, runtime.Version())
 
 	if len(os.Args) < 2 {
-		printHelp()
+		help()
 		return
 	}
 
-	pattern := os.Args[1]
-	switch pattern {
+	switch os.Args[1] {
 	case "dump":
-		dumpCache()
+		dump(make(map[string]*cdb.Torrent), cdb.TorrentCacheFile)
+		dump(make(map[string]*cdb.User), cdb.UserCacheFile)
+
 		return
 	case "restore":
-		restoreCache()
+		restore(make(map[string]*cdb.Torrent), cdb.TorrentCacheFile)
+		restore(make(map[string]*cdb.User), cdb.UserCacheFile)
+
 		return
+	default:
+		help()
 	}
-
-	printHelp()
 }
 
-func dumpCache() {
-	torrents := make(map[string]*cdb.Torrent)
-	users := make(map[string]*cdb.User)
+func dump[cdb any](v cdb, f string) {
+	fmt.Printf("Dumping data for %s, this might take a while...", f)
 
-	// dump torrent data
-	torrentGobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.TorrentCacheFile), os.O_RDONLY, 0600)
+	gobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", f), os.O_RDONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Dumping data for torrent cache, this might take a while...")
-
-	if err = gob.NewDecoder(torrentGobFile).Decode(&torrents); err != nil {
-		panic(err)
-	}
-
-	if err = torrentGobFile.Close(); err != nil {
-		panic(err)
-	}
-
-	res, err := json.MarshalIndent(torrents, "", "\t")
+	jsonFile, err := os.OpenFile(fmt.Sprintf("%s.json", f), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		panic(err)
 	}
 
-	torrentJSONFile, err := os.OpenFile(fmt.Sprintf("%s.json", cdb.TorrentCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
+	if err = gob.NewDecoder(gobFile).Decode(&v); err != nil {
 		panic(err)
 	}
 
-	if _, err = torrentJSONFile.Write(res); err != nil {
+	encoder := json.NewEncoder(jsonFile)
+	encoder.SetIndent("", "\t")
+
+	if err = encoder.Encode(v); err != nil {
 		panic(err)
 	}
 
-	if err = torrentJSONFile.Close(); err != nil {
-		panic(err)
-	}
+	_ = gobFile.Close()
+	_ = jsonFile.Close()
 
-	peersLen := 0
-	torrentsLen := len(torrents)
-
-	for _, t := range torrents {
-		peersLen += len(t.Leechers) + len(t.Seeders)
-	}
-
-	fmt.Printf("Done! Exported %d torrent entries with %d peers\n", torrentsLen, peersLen)
-
-	// dump user data
-	userGobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.UserCacheFile), os.O_RDONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Dumping data for user cache, this might take a while...")
-
-	if err = gob.NewDecoder(userGobFile).Decode(&users); err != nil {
-		panic(err)
-	}
-
-	res, err = json.MarshalIndent(users, "", "\t")
-	if err != nil {
-		panic(err)
-	}
-
-	if err = userGobFile.Close(); err != nil {
-		panic(err)
-	}
-
-	userJSONFile, err := os.OpenFile(fmt.Sprintf("%s.json", cdb.UserCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err = userJSONFile.Write(res); err != nil {
-		panic(err)
-	}
-
-	if err = userJSONFile.Close(); err != nil {
-		panic(err)
-	}
-
-	usersLen := len(users)
-
-	fmt.Printf("Done! Exported %d user entries\n", usersLen)
+	fmt.Println("...Done!")
 }
 
-func restoreCache() {
-	torrents := make(map[string]*cdb.Torrent)
-	users := make(map[string]*cdb.User)
+func restore[cdb any](v cdb, f string) {
+	fmt.Printf("Restoring data for %s, this might take a while...", f)
 
-	// restore torrent data
-	torrentJSONFile, err := os.OpenFile(fmt.Sprintf("%s.json", cdb.TorrentCacheFile), os.O_RDONLY, 0600)
+	jsonFile, err := os.OpenFile(fmt.Sprintf("%s.json", f), os.O_RDONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
 
-	torrentGobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.TorrentCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
+	gobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", f), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Restoring data for torrent cache, this might take a while...")
-
-	if err = json.NewDecoder(torrentJSONFile).Decode(&torrents); err != nil {
+	if err = json.NewDecoder(jsonFile).Decode(&v); err != nil {
 		panic(err)
 	}
 
-	if err = torrentJSONFile.Close(); err != nil {
+	if err = gob.NewEncoder(gobFile).Encode(&v); err != nil {
 		panic(err)
 	}
 
-	if err = gob.NewEncoder(torrentGobFile).Encode(&torrents); err != nil {
-		panic(err)
-	}
+	_ = jsonFile.Close()
+	_ = gobFile.Close()
 
-	if err = torrentGobFile.Close(); err != nil {
-		panic(err)
-	}
-
-	peersLen := 0
-	torrentsLen := len(torrents)
-
-	for _, t := range torrents {
-		peersLen += len(t.Leechers) + len(t.Seeders)
-	}
-
-	fmt.Printf("Done! Imported %d torrent entries with %d peers\n", torrentsLen, peersLen)
-
-	// restore user data
-	userJSONFile, err := os.OpenFile(fmt.Sprintf("%s.json", cdb.UserCacheFile), os.O_RDONLY, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	userGobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", cdb.UserCacheFile), os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Restoring data for user cache, this might take a while...")
-
-	if err = json.NewDecoder(userJSONFile).Decode(&users); err != nil {
-		panic(err)
-	}
-
-	if err = userJSONFile.Close(); err != nil {
-		panic(err)
-	}
-
-	if err = gob.NewEncoder(userGobFile).Encode(&users); err != nil {
-		panic(err)
-	}
-
-	if err = userGobFile.Close(); err != nil {
-		panic(err)
-	}
-
-	usersLen := len(users)
-
-	fmt.Printf("Done! Imported %d user entries\n", usersLen)
+	fmt.Println("...Done!")
 }

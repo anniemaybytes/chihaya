@@ -164,18 +164,30 @@ split every hour for easier analysis. Every line in a file should be treated as 
 JSON object. Below is a definition on how to read the data:
 
 ```text
-[torrentId, userId, ipAddr, port, event, seeding, deltaUp, deltaDown, up, down, left] 
+[
+    torrent_id,
+    user_id,
+    ip_addr,
+    port,
+    event,
+    seeding,
+    delta_up,
+    delta_down,
+    up,
+    down,
+    left
+] 
 ```
 
-- `torrentId` - the ID of torrent being announced
-- `userId` - the ID of user making the announce
-- `ipAddr` - IP address of peer (this might _not_ be an address from which request was sent)
+- `torrent_id` - the ID of torrent being announced
+- `user_id` - the ID of user making the announce
+- `ip_addr` - IP address of peer (this might _not_ be an address from which request was sent)
 - `port` - port the peer listens on as resolved by tracker; this might be an invalid or
 closed port, the tracker performs no validation on it
 - `event` - the event as given by client; for regular announces it is empty
 - `seeding` - whether tracker recognizes peer as seeder or leecher, either `1` or `0`
-- `deltaUp` - delta of uploaded between announces for this peer, in bytes
-- `deltaDown` - delta of downloaded between announces for this peer, in bytes
+- `delta_up` - delta of uploaded between announces for this peer, in bytes
+- `delta_down` - delta of downloaded between announces for this peer, in bytes
 - `up` - number of `uploaded` bytes, as reported by client for this announce
 - `down` - number of `downloaded` bytes, as reported by client for this announce
 - `left` - number of `left` bytes, as reported by client for this announce; if this is more
