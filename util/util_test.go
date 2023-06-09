@@ -18,14 +18,13 @@
 package util
 
 import (
-	"math/rand"
 	"testing"
 )
 
 func TestMin(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		a := rand.Int()
-		b := rand.Int()
+		a := UnsafeInt()
+		b := UnsafeInt()
 		gotMin := Min(a, b)
 
 		var actualMin int
@@ -43,8 +42,8 @@ func TestMin(t *testing.T) {
 
 func TestMax(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		a := rand.Int()
-		b := rand.Int()
+		a := UnsafeInt()
+		b := UnsafeInt()
 		gotMax := Max(a, b)
 
 		var actualMax int
@@ -66,7 +65,7 @@ func TestBtoa(t *testing.T) {
 
 		var actualResult string
 
-		if rand.Intn(2) == 1 {
+		if UnsafeIntn(2) == 1 {
 			b = true
 			actualResult = "1"
 		} else {
@@ -77,39 +76,6 @@ func TestBtoa(t *testing.T) {
 		gotResult := Btoa(b)
 		if actualResult != gotResult {
 			t.Fatalf("Got wrong string (%s) for bool %t!", gotResult, b)
-		}
-	}
-}
-
-func TestIntn(t *testing.T) {
-	for i := 1; i < 2000; i++ {
-		genInt := Intn(i)
-
-		if genInt < 0 || genInt >= i {
-			t.Fatalf("Generated random integer (%d) does not fall in the range [0, %d)!", genInt, i)
-		}
-	}
-}
-
-func TestRandStringBytes(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		n := rand.Intn(100000)
-		randomString := RandStringBytes(n)
-
-		if len(randomString) != n {
-			t.Fatalf("String (length %d) not of required length (%d)!", len(randomString), n)
-		}
-	}
-}
-
-func TestRand(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		min := rand.Intn(1000)
-		max := rand.Intn(1000) + min
-		randomInt := Rand(min, max)
-
-		if randomInt < min || randomInt > max {
-			t.Fatalf("Integer %d is outside specified range (%d - %d)", randomInt, min, max)
 		}
 	}
 }

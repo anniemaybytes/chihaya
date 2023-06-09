@@ -32,6 +32,6 @@ linters:
 
 issues:
     exclude-rules:
-        - path: _test\.go
+        - path: util/unsafe_rand(_test)?\.go
           linters:
               - gosec

@@ -19,24 +19,20 @@ package config
 
 import (
 	"encoding/json"
-	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
-
-	"chihaya/util"
 )
 
 var configTest Map
 
 func TestMain(m *testing.M) {
-	rand.Seed(time.Now().UnixNano())
+	tempPath, err := os.MkdirTemp(os.TempDir(), "chihaya_config-*")
+	if err != nil {
+		panic(err)
+	}
 
-	tempPath := filepath.Join(os.TempDir(), "chihaya_config-"+util.RandStringBytes(6))
-
-	if err := os.Mkdir(tempPath, 0755); err != nil {
+	if err := os.Chmod(tempPath, 0755); err != nil {
 		panic(err)
 	}
 

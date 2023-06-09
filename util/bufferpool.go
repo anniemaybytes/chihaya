@@ -19,35 +19,30 @@ package util
 
 import (
 	"bytes"
+	"sync"
 )
 
 type BufferPool struct {
-	pool    chan *bytes.Buffer
-	bufSize int
+	pool sync.Pool
 }
 
-func NewBufferPool(size int, bufSize int) *BufferPool {
-	return &BufferPool{
-		make(chan *bytes.Buffer, size),
-		bufSize,
+func NewBufferPool(bufSize int) *BufferPool {
+	p := &BufferPool{}
+	p.pool.New = func() any {
+		internalBuf := make([]byte, 0, bufSize)
+		return bytes.NewBuffer(internalBuf)
 	}
+
+	return p
 }
 
 func (pool *BufferPool) Take() (buf *bytes.Buffer) {
-	select {
-	case buf = <-pool.pool:
-		buf.Reset()
-	default:
-		internalBuf := make([]byte, 0, pool.bufSize)
-		buf = bytes.NewBuffer(internalBuf)
-	}
+	buf = pool.pool.Get().(*bytes.Buffer)
+	buf.Reset()
 
 	return
 }
 
 func (pool *BufferPool) Give(buf *bytes.Buffer) {
-	select {
-	case pool.pool <- buf:
-	default:
-	}
+	pool.pool.Put(buf)
 }

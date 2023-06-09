@@ -82,12 +82,8 @@ func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Databas
 	scrapeData["interval"] = scrapeInterval
 	scrapeData["min interval"] = scrapeInterval
 
-	bufdata, err := bencode.EncodeBytes(scrapeData)
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err = buf.Write(bufdata); err != nil {
+	encoder := bencode.NewEncoder(buf)
+	if err = encoder.Encode(scrapeData); err != nil {
 		panic(err)
 	}
 

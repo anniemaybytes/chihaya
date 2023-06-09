@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"chihaya/collectors"
@@ -60,10 +61,10 @@ type Database struct {
 	unPruneTorrentStmt            *sql.Stmt
 
 	Users                 map[string]*cdb.User
-	HitAndRuns            map[cdb.UserTorrentPair]struct{}
+	HitAndRuns            atomic.Pointer[map[cdb.UserTorrentPair]struct{}]
 	Torrents              map[string]*cdb.Torrent // SHA-1 hash (20 bytes)
-	TorrentGroupFreeleech map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech
-	Clients               map[uint16]string
+	TorrentGroupFreeleech atomic.Pointer[map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech]
+	Clients               atomic.Pointer[map[uint16]string]
 
 	mainConn *Connection // Used for reloading and misc queries
 
@@ -101,12 +102,7 @@ func (db *Database) Init() {
 	db.ClientsSemaphore = util.NewSemaphore()
 
 	// Used for recording updates, so the max required size should be < 128 bytes. See record.go for details
-	maxBuffers := torrentFlushBufferSize +
-		userFlushBufferSize +
-		transferHistoryFlushBufferSize +
-		transferIpsFlushBufferSize +
-		snatchFlushBufferSize
-	db.bufferPool = util.NewBufferPool(maxBuffers, 128)
+	db.bufferPool = util.NewBufferPool(128)
 
 	var err error
 
@@ -161,9 +157,13 @@ func (db *Database) Init() {
 	}
 
 	db.Users = make(map[string]*cdb.User)
-	db.HitAndRuns = make(map[cdb.UserTorrentPair]struct{})
 	db.Torrents = make(map[string]*cdb.Torrent)
-	db.Clients = make(map[uint16]string)
+
+	dbHitAndRuns := make(map[cdb.UserTorrentPair]struct{})
+	db.HitAndRuns.Store(&dbHitAndRuns)
+
+	dbClients := make(map[uint16]string)
+	db.Clients.Store(&dbClients)
 
 	db.deserialize()
 

@@ -19,12 +19,13 @@ package params
 
 import (
 	"fmt"
-	"math/rand"
 	"net/url"
 	"os"
 	"reflect"
 	"strconv"
 	"testing"
+
+	"chihaya/util"
 )
 
 var infoHashes []string
@@ -34,7 +35,7 @@ func TestMain(m *testing.M) {
 
 	for i := 0; i < 10; i++ {
 		token = make([]byte, 20)
-		rand.Read(token)
+		_, _ = util.UnsafeReadRand(token[:])
 
 		infoHashes = append(infoHashes, string(token))
 	}

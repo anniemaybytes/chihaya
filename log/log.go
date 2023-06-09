@@ -25,6 +25,7 @@ import (
 
 var flags = log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix
 
+//goland:noinspection GoUnusedGlobalVariable
 var (
 	Verbose = log.New(os.Stdout, "[V] ", flags)
 	Info    = log.New(os.Stdout, "[I] ", flags)

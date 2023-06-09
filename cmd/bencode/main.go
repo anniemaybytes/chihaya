@@ -38,7 +38,7 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&decode, "d", false, "Decodes data instead of encoding")
+	flag.BoolVar(&decode, "D", false, "Decodes data instead of encoding")
 	flag.BoolVar(&help, "h", false, "Prints this help message")
 }
 

@@ -230,7 +230,7 @@ func Start() {
 
 	/* Initialize reusable buffer pool; this is faster than allocating new memory for every request.
 	If necessary, new memory will be allocated when pool is empty, however. */
-	bufferPool := util.NewBufferPool(500, 512)
+	bufferPool := util.NewBufferPool(512)
 	handler.bufferPool = bufferPool
 
 	addr, _ := config.Section("http").Get("addr", ":34000")
@@ -318,7 +318,10 @@ func Start() {
 }
 
 func Stop() {
-	// Closing the listener stops accepting connections and causes Serve to return
-	_ = listener.Close()
+	if listener != nil {
+		// Closing the listener stops accepting connections and causes Serve to return
+		_ = listener.Close()
+	}
+
 	handler.terminate = true
 }

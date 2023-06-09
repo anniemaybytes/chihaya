@@ -329,13 +329,13 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 	torrentGroupDownMultiplier := 1.0
 	torrentGroupUpMultiplier := 1.0
 
-	if torrentGroupFreeleech, exists := db.TorrentGroupFreeleech[torrent.Group]; exists {
+	if torrentGroupFreeleech, exists := (*db.TorrentGroupFreeleech.Load())[torrent.Group]; exists {
 		torrentGroupDownMultiplier = torrentGroupFreeleech.DownMultiplier
 		torrentGroupUpMultiplier = torrentGroupFreeleech.UpMultiplier
 	}
 
 	var deltaDownload int64
-	if !database.GlobalFreeleech {
+	if !database.GlobalFreeleech.Load() {
 		deltaDownload = int64(float64(rawDeltaDownload) * math.Abs(user.DownMultiplier) *
 			math.Abs(torrentGroupDownMultiplier) * math.Abs(torrent.DownMultiplier))
 	}
@@ -430,7 +430,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 	/* We ask clients to announce each interval seconds. In order to spread the load on tracker,
 	we will vary the interval given to client by random number of seconds between 0 and value
 	specified in config */
-	announceDrift := util.Rand(0, maxAccounceDrift)
+	announceDrift := util.UnsafeRand(0, maxAccounceDrift)
 	response["interval"] = announceInterval + announceDrift
 
 	if numWant > 0 && active {
@@ -516,12 +516,8 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		}
 	}
 
-	bufdata, err := bencode.EncodeBytes(response)
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err = buf.Write(bufdata); err != nil {
+	encoder := bencode.NewEncoder(buf)
+	if err = encoder.Encode(response); err != nil {
 		panic(err)
 	}
 

@@ -23,17 +23,17 @@ import (
 )
 
 func TestBufferPool(t *testing.T) {
-	bufferpool := NewBufferPool(1, 1)
+	bufferPool := NewBufferPool(64)
 
-	poolBuf := bufferpool.Take()
+	poolBuf := bufferPool.Take()
 	if !bytes.Equal(poolBuf.Bytes(), []byte("")) {
 		t.Fatalf("Buffer from empty bufferpool was allocated incorrectly.")
 	}
 
 	origBuf := bytes.NewBuffer([]byte("X"))
-	bufferpool.Give(origBuf)
+	bufferPool.Give(origBuf)
 
-	reusedBuf := bufferpool.Take()
+	reusedBuf := bufferPool.Take()
 	if !bytes.Equal(reusedBuf.Bytes(), []byte("")) {
 		t.Fatalf("Buffer from filled bufferpool was recycled incorrectly.")
 	}

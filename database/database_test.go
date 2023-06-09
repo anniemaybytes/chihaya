@@ -105,24 +105,27 @@ func TestLoadUsers(t *testing.T) {
 func TestLoadHitAndRuns(t *testing.T) {
 	prepareTestDatabase()
 
-	db.HitAndRuns = make(map[cdb.UserTorrentPair]struct{})
+	dbHitAndRuns := make(map[cdb.UserTorrentPair]struct{})
+	db.HitAndRuns.Store(&dbHitAndRuns)
 
 	db.loadHitAndRuns()
+
+	dbHitAndRuns = *db.HitAndRuns.Load()
 
 	hnr := cdb.UserTorrentPair{
 		UserID:    2,
 		TorrentID: 2,
 	}
-	_, hnrExists := db.HitAndRuns[hnr]
+	_, hnrExists := dbHitAndRuns[hnr]
 
-	if len(db.HitAndRuns) != 1 {
+	if len(dbHitAndRuns) != 1 {
 		t.Fatal(fixtureFailure("Did not load all hit and runs as expected from fixture file",
 			1,
-			len(db.HitAndRuns)))
+			len(dbHitAndRuns)))
 	}
 
 	if !hnrExists {
-		t.Fatal(fixtureFailure("Did not load hit and run as expected from fixture file", db.HitAndRuns, hnr))
+		t.Fatal(fixtureFailure("Did not load hit and run as expected from fixture file", dbHitAndRuns, hnr))
 	}
 }
 
@@ -204,7 +207,8 @@ func TestLoadTorrents(t *testing.T) {
 func TestLoadGroupsFreeleech(t *testing.T) {
 	prepareTestDatabase()
 
-	db.TorrentGroupFreeleech = make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
+	dbMap := make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
+	db.TorrentGroupFreeleech.Store(&dbMap)
 
 	torrentGroupFreeleech := map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech{
 		{
@@ -219,52 +223,58 @@ func TestLoadGroupsFreeleech(t *testing.T) {
 	// Test with fresh data
 	db.loadGroupsFreeleech()
 
-	if len(db.TorrentGroupFreeleech) != len(torrentGroupFreeleech) {
+	dbMap = *db.TorrentGroupFreeleech.Load()
+
+	if len(dbMap) != len(torrentGroupFreeleech) {
 		t.Fatal(fixtureFailure("Did not load all torrent group freeleech data as expected from fixture file",
 			len(torrentGroupFreeleech),
-			len(db.TorrentGroupFreeleech)))
+			len(dbMap)))
 	}
 
 	for group, freeleech := range torrentGroupFreeleech {
-		if !reflect.DeepEqual(freeleech, db.TorrentGroupFreeleech[group]) {
+		if !reflect.DeepEqual(freeleech, dbMap[group]) {
 			t.Fatal(fixtureFailure(
 				fmt.Sprintf("Did not load torrent group freeleech data (%v) as expected from fixture file", group),
 				freeleech,
-				db.TorrentGroupFreeleech[group]))
+				dbMap[group]))
 		}
 	}
 
 	// Now test load on top of existing data
-	oldTorrentGroupFreeleech := db.TorrentGroupFreeleech
+	oldTorrentGroupFreeleech := *db.TorrentGroupFreeleech.Load()
 
 	db.loadGroupsFreeleech()
 
-	if !reflect.DeepEqual(oldTorrentGroupFreeleech, db.TorrentGroupFreeleech) {
+	dbMap = *db.TorrentGroupFreeleech.Load()
+
+	if !reflect.DeepEqual(oldTorrentGroupFreeleech, dbMap) {
 		t.Fatal(fixtureFailure(
 			"Did not reload torrent group freeleech data as expected from fixture file",
 			oldTorrentGroupFreeleech,
-			db.TorrentGroupFreeleech))
+			dbMap))
 	}
 }
 
 func TestLoadConfig(t *testing.T) {
 	prepareTestDatabase()
 
-	GlobalFreeleech = false
+	GlobalFreeleech.Store(false)
 
 	db.loadConfig()
 
-	if GlobalFreeleech {
+	if GlobalFreeleech.Load() {
 		t.Fatal(fixtureFailure("Did not load config as expected from fixture file",
 			false,
-			GlobalFreeleech))
+			true))
 	}
 }
 
 func TestLoadClients(t *testing.T) {
 	prepareTestDatabase()
 
-	db.Clients = make(map[uint16]string)
+	dbClients := make(map[uint16]string)
+	db.Clients.Store(&dbClients)
+
 	expectedClients := map[uint16]string{
 		1: "-TR2",
 		3: "-DE13",
@@ -272,12 +282,14 @@ func TestLoadClients(t *testing.T) {
 
 	db.loadClients()
 
-	if len(db.Clients) != 2 {
-		t.Fatal(fixtureFailure("Did not load all clients as expected from fixture file", 2, db.Clients))
+	dbClients = *db.Clients.Load()
+
+	if len(dbClients) != 2 {
+		t.Fatal(fixtureFailure("Did not load all clients as expected from fixture file", 2, dbClients))
 	}
 
-	if !reflect.DeepEqual(expectedClients, db.Clients) {
-		t.Fatal(fixtureFailure("Did not load clients as expected from fixture file", expectedClients, db.Clients))
+	if !reflect.DeepEqual(expectedClients, dbClients) {
+		t.Fatal(fixtureFailure("Did not load clients as expected from fixture file", expectedClients, dbClients))
 	}
 }
 

@@ -17,13 +17,6 @@
 
 package util
 
-import (
-	"crypto/rand"
-	"encoding/binary"
-)
-
-const alphanumBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
 func Min(a int, b int) int {
 	if a < b {
 		return a
@@ -46,29 +39,4 @@ func Btoa(a bool) string {
 	}
 
 	return "0"
-}
-
-func Intn(n int) int {
-	b := make([]byte, 8)
-
-	if _, err := rand.Read(b); err != nil {
-		panic(err)
-	}
-
-	i := binary.BigEndian.Uint32(b)
-
-	return int(i) % n
-}
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = alphanumBytes[Intn(len(alphanumBytes))]
-	}
-
-	return string(b)
-}
-
-func Rand(min int, max int) int {
-	return Intn(max-min+1) + min
 }

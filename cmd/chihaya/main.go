@@ -20,17 +20,22 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
+	_ "net/http/pprof" //nolint:gosec
 	"os"
 	"os/signal"
 	"runtime"
-	"runtime/pprof"
 	"syscall"
 
 	"chihaya/log"
 	"chihaya/server"
 )
 
-var profile, help bool
+var (
+	pprof string
+	help  bool
+)
 
 // Provided at compile-time
 var (
@@ -39,13 +44,13 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&profile, "P", false, "Generate profiling data for pprof into chihaya.cpu")
+	flag.StringVar(&pprof, "P", "", "Starts special pprof debug server on specified addr")
 	flag.BoolVar(&help, "h", false, "Shows this help dialog")
 }
 
 func main() {
-	fmt.Printf("chihaya (kuroneko), ver=%s date=%s runtime=%s\n\n",
-		BuildVersion, BuildDate, runtime.Version())
+	fmt.Printf("chihaya (kuroneko), ver=%s date=%s runtime=%s, cpus=%d\n\n",
+		BuildVersion, BuildDate, runtime.Version(), runtime.GOMAXPROCS(0))
 
 	flag.Parse()
 
@@ -56,17 +61,27 @@ func main() {
 		return
 	}
 
-	if profile {
-		log.Info.Printf("Running with profiling enabled, using %d CPUs", runtime.GOMAXPROCS(0))
+	if len(pprof) > 0 {
+		// Both are disabled by default; sample 1% of events
+		runtime.SetMutexProfileFraction(100)
+		runtime.SetBlockProfileRate(100)
 
-		f, err := os.Create("chihaya.cpu")
-		if err != nil {
-			log.Fatal.Fatalf("Failed to create profile file: %s\n", err)
-		} else {
-			if err = pprof.StartCPUProfile(f); err != nil {
-				log.Fatal.Fatalf("Can not start profiling session: %s\n", err)
+		go func() {
+			l, err := net.Listen("tcp", pprof)
+			if err != nil {
+				log.Error.Printf("Failed to start special pprof debug server: %v", err)
+				return
 			}
-		}
+
+			//nolint:gosec
+			s := &http.Server{
+				Handler: http.DefaultServeMux,
+			}
+
+			log.Warning.Printf("Started special pprof debug server on %s", l.Addr())
+
+			_ = s.Serve(l)
+		}()
 	}
 
 	go func() {
@@ -74,15 +89,13 @@ func main() {
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		<-c
 
-		if profile {
-			pprof.StopCPUProfile()
-		}
-
 		log.Info.Print("Caught interrupt, shutting down...")
+
 		server.Stop()
 		<-c
 		os.Exit(0)
 	}()
 
+	log.Info.Print("Starting main server loop...")
 	server.Start()
 }

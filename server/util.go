@@ -34,14 +34,10 @@ func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 	data["interval"] = interval / time.Second     // Assuming in seconds
 	data["min interval"] = interval / time.Second // Assuming in seconds
 
-	encoded, errz := bencode.EncodeBytes(data)
-	if errz != nil {
-		panic(errz)
-	}
-
 	buf.Reset()
 
-	if _, errz = buf.Write(encoded); errz != nil {
+	encoder := bencode.NewEncoder(buf)
+	if errz := encoder.Encode(buf); errz != nil {
 		panic(errz)
 	}
 }
@@ -55,7 +51,7 @@ func clientApproved(peerID string, db *database.Database) (uint16, bool) {
 		matched   bool
 	)
 
-	for id, clientID := range db.Clients {
+	for id, clientID := range *db.Clients.Load() {
 		widLen = len(clientID)
 		if widLen <= len(peerID) {
 			matched = true
@@ -96,7 +92,7 @@ func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
 		TorrentID: torrentID,
 	}
 
-	_, exists := db.HitAndRuns[hnr]
+	_, exists := (*db.HitAndRuns.Load())[hnr]
 
 	return exists
 }

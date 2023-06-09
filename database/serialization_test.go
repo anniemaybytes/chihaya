@@ -67,6 +67,7 @@ func TestSerializer(t *testing.T) {
 		Seeders:        map[string]*cdb.Peer{"12-peer_is_twenty_chars": testPeer},
 	}
 
+	// Prepare empty map to populate with test data
 	db.Torrents = make(map[string]*cdb.Torrent)
 	db.Users = make(map[string]*cdb.User)
 
@@ -79,13 +80,20 @@ func TestSerializer(t *testing.T) {
 	}
 
 	db.serialize()
+
+	// Reset map to fully test deserialization
+	db.Torrents = make(map[string]*cdb.Torrent)
+	db.Users = make(map[string]*cdb.User)
+
 	db.deserialize()
 
 	if !reflect.DeepEqual(db.Torrents, testTorrents) {
-		t.Fatalf("Torrents after serialization and deserialization do not match original torrents!")
+		t.Fatalf("Torrents (%v) after serialization and deserialization do not match original torrents (%v)!",
+			db.Torrents, testTorrents)
 	}
 
 	if !reflect.DeepEqual(db.Users, testUsers) {
-		t.Fatalf("Users after serialization and deserialization do not match original users!")
+		t.Fatalf("Users (%v) after serialization and deserialization do not match original users (%v)!",
+			db.Users, testUsers)
 	}
 }

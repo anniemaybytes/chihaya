@@ -19,9 +19,7 @@ package record
 
 import (
 	"bufio"
-	"math/rand"
 	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -40,11 +38,12 @@ type record struct {
 }
 
 func TestMain(m *testing.M) {
-	rand.Seed(time.Now().UnixNano())
+	tempPath, err := os.MkdirTemp(os.TempDir(), "chihaya_record-*")
+	if err != nil {
+		panic(err)
+	}
 
-	tempPath := filepath.Join(os.TempDir(), "chihaya_record-"+util.RandStringBytes(6))
-
-	if err := os.Mkdir(tempPath, 0755); err != nil {
+	if err := os.Chmod(tempPath, 0755); err != nil {
 		panic(err)
 	}
 
@@ -68,14 +67,14 @@ func TestRecord(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		tmp := record{
 			true,
-			uint16(rand.Uint32()),
-			rand.Uint32(),
-			rand.Uint32(),
-			rand.Uint64(),
-			rand.Uint64(),
-			rand.Uint64(),
-			int64(rand.Uint64()),
-			int64(rand.Uint64()),
+			uint16(util.UnsafeUint32()),
+			util.UnsafeUint32(),
+			util.UnsafeUint32(),
+			util.UnsafeUint64(),
+			util.UnsafeUint64(),
+			util.UnsafeUint64(),
+			int64(util.UnsafeUint64()),
+			int64(util.UnsafeUint64()),
 			"completed",
 			"127.0.0.1",
 		}

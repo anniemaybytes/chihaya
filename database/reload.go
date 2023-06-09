@@ -18,6 +18,7 @@
 package database
 
 import (
+	"sync/atomic"
 	"time"
 
 	"chihaya/collectors"
@@ -30,7 +31,7 @@ import (
 var (
 	reloadInterval int
 	// GlobalFreeleech indicates whether site is now in freeleech mode (takes precedence over torrent-specific multipliers)
-	GlobalFreeleech = false
+	GlobalFreeleech atomic.Bool
 )
 
 func init() {
@@ -159,11 +160,11 @@ func (db *Database) loadHitAndRuns() {
 		newHnr[hnr] = struct{}{}
 	}
 
-	db.HitAndRuns = newHnr
+	db.HitAndRuns.Store(&newHnr)
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
-	log.Info.Printf("Hit and run load complete (%d rows, %s)", len(db.HitAndRuns), elapsedTime.String())
+	log.Info.Printf("Hit and run load complete (%d rows, %s)", len(newHnr), elapsedTime.String())
 }
 
 func (db *Database) loadTorrents() {
@@ -279,7 +280,7 @@ func (db *Database) loadGroupsFreeleech() {
 		}
 	}
 
-	db.TorrentGroupFreeleech = newTorrentGroupFreeleech
+	db.TorrentGroupFreeleech.Store(&newTorrentGroupFreeleech)
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("groups_freeleech", elapsedTime)
@@ -310,7 +311,7 @@ func (db *Database) loadConfig() {
 			log.WriteStack()
 		}
 
-		GlobalFreeleech = globalFreelech
+		GlobalFreeleech.Store(globalFreelech)
 	}
 }
 
@@ -350,9 +351,9 @@ func (db *Database) loadClients() {
 		newClients[id] = peerID
 	}
 
-	db.Clients = newClients
+	db.Clients.Store(&newClients)
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("clients", elapsedTime)
-	log.Info.Printf("Client list load complete (%d rows, %s)", len(db.Clients), elapsedTime.String())
+	log.Info.Printf("Client list load complete (%d rows, %s)", len(newClients), elapsedTime.String())
 }
