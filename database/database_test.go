@@ -132,43 +132,43 @@ func TestLoadHitAndRuns(t *testing.T) {
 func TestLoadTorrents(t *testing.T) {
 	prepareTestDatabase()
 
-	db.Torrents = make(map[string]*cdb.Torrent)
+	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
 
-	torrents := map[string]*cdb.Torrent{
-		string([]byte{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}): {
+	torrents := map[cdb.TorrentHash]*cdb.Torrent{
+		{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}: {
 			ID:             1,
 			Status:         1,
 			Snatched:       2,
 			DownMultiplier: 1,
 			UpMultiplier:   1,
-			Seeders:        map[string]*cdb.Peer{},
-			Leechers:       map[string]*cdb.Peer{},
+			Seeders:        map[cdb.PeerKey]*cdb.Peer{},
+			Leechers:       map[cdb.PeerKey]*cdb.Peer{},
 			Group: cdb.TorrentGroup{
 				GroupID:     1,
 				TorrentType: "anime",
 			},
 		},
-		string([]byte{22, 168, 45, 221, 87, 225, 140, 177, 94, 34, 242, 225, 196, 234, 222, 46, 187, 131, 177, 155}): {
+		{22, 168, 45, 221, 87, 225, 140, 177, 94, 34, 242, 225, 196, 234, 222, 46, 187, 131, 177, 155}: {
 			ID:             2,
 			Status:         0,
 			Snatched:       0,
 			DownMultiplier: 2,
 			UpMultiplier:   0.5,
-			Seeders:        map[string]*cdb.Peer{},
-			Leechers:       map[string]*cdb.Peer{},
+			Seeders:        map[cdb.PeerKey]*cdb.Peer{},
+			Leechers:       map[cdb.PeerKey]*cdb.Peer{},
 			Group: cdb.TorrentGroup{
 				GroupID:     1,
 				TorrentType: "music",
 			},
 		},
-		string([]byte{89, 252, 84, 49, 177, 28, 118, 28, 148, 205, 62, 185, 8, 37, 234, 110, 109, 200, 165, 241}): {
+		{89, 252, 84, 49, 177, 28, 118, 28, 148, 205, 62, 185, 8, 37, 234, 110, 109, 200, 165, 241}: {
 			ID:             3,
 			Status:         0,
 			Snatched:       0,
 			DownMultiplier: 1,
 			UpMultiplier:   1,
-			Seeders:        map[string]*cdb.Peer{},
-			Leechers:       map[string]*cdb.Peer{},
+			Seeders:        map[cdb.PeerKey]*cdb.Peer{},
+			Leechers:       map[cdb.PeerKey]*cdb.Peer{},
 			Group: cdb.TorrentGroup{
 				GroupID:     2,
 				TorrentType: "anime",
@@ -296,19 +296,19 @@ func TestLoadClients(t *testing.T) {
 func TestUnPrune(t *testing.T) {
 	prepareTestDatabase()
 
-	hash := string([]byte{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56})
-	torrent := *db.Torrents[hash]
+	h := cdb.TorrentHash{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}
+	torrent := *db.Torrents[h]
 	torrent.Status = 0
 
-	db.UnPrune(db.Torrents[hash])
+	db.UnPrune(db.Torrents[h])
 
 	db.loadTorrents()
 
-	if !reflect.DeepEqual(&torrent, db.Torrents[hash]) {
+	if !reflect.DeepEqual(&torrent, db.Torrents[h]) {
 		t.Fatal(fixtureFailure(
-			fmt.Sprintf("Torrent (%x) was not unpruned properly", hash),
+			fmt.Sprintf("Torrent (%x) was not unpruned properly", h),
 			&torrent,
-			db.Torrents[hash]))
+			db.Torrents[h]))
 	}
 }
 
@@ -742,17 +742,17 @@ func TestRecordAndFlushSnatch(t *testing.T) {
 func TestRecordAndFlushTorrents(t *testing.T) {
 	prepareTestDatabase()
 
-	hash := string([]byte{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56})
-	torrent := db.Torrents[hash]
+	h := cdb.TorrentHash{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}
+	torrent := db.Torrents[h]
 	torrent.LastAction = time.Now().Unix()
-	torrent.Seeders["1-test_peer_id_num_one"] = &cdb.Peer{
+	torrent.Seeders[cdb.NewPeerKey(1, cdb.PeerIDFromRawString("test_peer_id_num_one"))] = &cdb.Peer{
 		UserID:       1,
 		TorrentID:    torrent.ID,
 		ClientID:     1,
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
-	torrent.Leechers["3-test_peer_id_num_two"] = &cdb.Peer{
+	torrent.Leechers[cdb.NewPeerKey(3, cdb.PeerIDFromRawString("test_peer_id_num_two"))] = &cdb.Peer{
 		UserID:       3,
 		TorrentID:    torrent.ID,
 		ClientID:     2,
@@ -784,7 +784,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 
 	if torrent.Snatched+5 != snatched {
 		t.Fatal(fixtureFailure(
-			fmt.Sprintf("Snatches incorrectly updated in the database for torrent %x", hash),
+			fmt.Sprintf("Snatches incorrectly updated in the database for torrent %x", h),
 			torrent.Snatched+5,
 			snatched,
 		))
@@ -792,7 +792,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 
 	if torrent.LastAction != lastAction {
 		t.Fatal(fixtureFailure(
-			fmt.Sprintf("Last incorrectly updated in the database for torrent %x", hash),
+			fmt.Sprintf("Last incorrectly updated in the database for torrent %x", h),
 			torrent.LastAction,
 			lastAction,
 		))
@@ -800,7 +800,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 
 	if len(torrent.Seeders) != numSeeders {
 		t.Fatal(fixtureFailure(
-			fmt.Sprintf("Seeders incorrectly updated in the database for torrent %x", hash),
+			fmt.Sprintf("Seeders incorrectly updated in the database for torrent %x", h),
 			len(torrent.Seeders),
 			numSeeders,
 		))
@@ -808,7 +808,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 
 	if len(torrent.Leechers) != numLeechers {
 		t.Fatal(fixtureFailure(
-			fmt.Sprintf("Leechers incorrectly updated in the database for torrent %x", hash),
+			fmt.Sprintf("Leechers incorrectly updated in the database for torrent %x", h),
 			len(torrent.Leechers),
 			numLeechers,
 		))

@@ -18,9 +18,9 @@
 package main
 
 import (
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 
@@ -35,8 +35,8 @@ var (
 
 func help() {
 	fmt.Printf("Usage of %s:\n", os.Args[0])
-	fmt.Println("  dump       umarashals gob cache files into readable JSON files")
-	fmt.Println("  restore    marshals JSON files back into gob cache")
+	fmt.Println("  dump       unmarshals binary cache files into readable JSON files")
+	fmt.Println("  restore    marshals JSON files back into binary cache")
 }
 
 func main() {
@@ -50,13 +50,29 @@ func main() {
 
 	switch os.Args[1] {
 	case "dump":
-		dump(make(map[string]*cdb.Torrent), cdb.TorrentCacheFile)
-		dump(make(map[string]*cdb.User), cdb.UserCacheFile)
+		dump(func(reader io.Reader) (map[cdb.TorrentHash]*cdb.Torrent, error) {
+			t := make(map[cdb.TorrentHash]*cdb.Torrent)
+			if err := cdb.LoadTorrents(reader, t); err != nil {
+				return nil, err
+			}
+			return t, nil
+		}, cdb.TorrentCacheFile)
+		dump(func(reader io.Reader) (map[string]*cdb.User, error) {
+			u := make(map[string]*cdb.User)
+			if err := cdb.LoadUsers(reader, u); err != nil {
+				return nil, err
+			}
+			return u, nil
+		}, cdb.UserCacheFile)
 
 		return
 	case "restore":
-		restore(make(map[string]*cdb.Torrent), cdb.TorrentCacheFile)
-		restore(make(map[string]*cdb.User), cdb.UserCacheFile)
+		restore(func(writer io.Writer, v map[cdb.TorrentHash]*cdb.Torrent) error {
+			return cdb.WriteTorrents(writer, v)
+		}, cdb.TorrentCacheFile)
+		restore(func(writer io.Writer, v map[string]*cdb.User) error {
+			return cdb.WriteUsers(writer, v)
+		}, cdb.UserCacheFile)
 
 		return
 	default:
@@ -64,10 +80,10 @@ func main() {
 	}
 }
 
-func dump[cdb any](v cdb, f string) {
+func dump[cdb any](readFunc func(reader io.Reader) (cdb, error), f string) {
 	fmt.Printf("Dumping data for %s, this might take a while...", f)
 
-	gobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", f), os.O_RDONLY, 0600)
+	binFile, err := os.OpenFile(fmt.Sprintf("%s.bin", f), os.O_RDONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
@@ -77,7 +93,9 @@ func dump[cdb any](v cdb, f string) {
 		panic(err)
 	}
 
-	if err = gob.NewDecoder(gobFile).Decode(&v); err != nil {
+	var v cdb
+
+	if v, err = readFunc(binFile); err != nil {
 		panic(err)
 	}
 
@@ -88,13 +106,13 @@ func dump[cdb any](v cdb, f string) {
 		panic(err)
 	}
 
-	_ = gobFile.Close()
+	_ = binFile.Close()
 	_ = jsonFile.Close()
 
 	fmt.Println("...Done!")
 }
 
-func restore[cdb any](v cdb, f string) {
+func restore[cdb any](writeFunc func(writer io.Writer, v cdb) error, f string) {
 	fmt.Printf("Restoring data for %s, this might take a while...", f)
 
 	jsonFile, err := os.OpenFile(fmt.Sprintf("%s.json", f), os.O_RDONLY, 0600)
@@ -102,21 +120,22 @@ func restore[cdb any](v cdb, f string) {
 		panic(err)
 	}
 
-	gobFile, err := os.OpenFile(fmt.Sprintf("%s.gob", f), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	binFile, err := os.OpenFile(fmt.Sprintf("%s.bin", f), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		panic(err)
 	}
 
+	var v cdb
 	if err = json.NewDecoder(jsonFile).Decode(&v); err != nil {
 		panic(err)
 	}
 
-	if err = gob.NewEncoder(gobFile).Encode(&v); err != nil {
+	if err = writeFunc(binFile, v); err != nil {
 		panic(err)
 	}
 
 	_ = jsonFile.Close()
-	_ = gobFile.Close()
+	_ = binFile.Close()
 
 	fmt.Println("...Done!")
 }

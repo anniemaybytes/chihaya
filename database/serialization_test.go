@@ -28,7 +28,7 @@ import (
 )
 
 func TestSerializer(t *testing.T) {
-	testTorrents := make(map[string]*cdb.Torrent)
+	testTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
 	testUsers := make(map[string]*cdb.User)
 
 	testUsers["mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ"] = &cdb.User{
@@ -51,24 +51,27 @@ func TestSerializer(t *testing.T) {
 		Left:         0,
 		Uploaded:     100,
 		Downloaded:   1000,
-		ID:           "12-10-2130706433-4",
+		ID:           cdb.PeerIDFromRawString("12-10-2130706433-4"),
 	}
 
-	testTorrentHash := []byte{
+	testTorrentHash := cdb.TorrentHash{
 		114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56,
 	}
-	testTorrents[string(testTorrentHash)] = &cdb.Torrent{
+	testTorrents[testTorrentHash] = &cdb.Torrent{
 		Status:         1,
 		Snatched:       100,
 		ID:             10,
 		LastAction:     time.Now().Unix(),
 		UpMultiplier:   1,
 		DownMultiplier: 1,
-		Seeders:        map[string]*cdb.Peer{"12-peer_is_twenty_chars": testPeer},
+		Seeders: map[cdb.PeerKey]*cdb.Peer{
+			cdb.NewPeerKey(12, cdb.PeerIDFromRawString("peer_is_twenty_chars")): testPeer,
+		},
+		Leechers: map[cdb.PeerKey]*cdb.Peer{},
 	}
 
 	// Prepare empty map to populate with test data
-	db.Torrents = make(map[string]*cdb.Torrent)
+	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
 	db.Users = make(map[string]*cdb.User)
 
 	if err := copier.Copy(&db.Torrents, testTorrents); err != nil {
@@ -82,7 +85,7 @@ func TestSerializer(t *testing.T) {
 	db.serialize()
 
 	// Reset map to fully test deserialization
-	db.Torrents = make(map[string]*cdb.Torrent)
+	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
 	db.Users = make(map[string]*cdb.User)
 
 	db.deserialize()

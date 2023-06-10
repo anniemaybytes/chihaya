@@ -18,6 +18,7 @@
 package params
 
 import (
+	cdb "chihaya/database/types"
 	"fmt"
 	"net/url"
 	"os"
@@ -28,16 +29,15 @@ import (
 	"chihaya/util"
 )
 
-var infoHashes []string
+var infoHashes []cdb.TorrentHash
 
 func TestMain(m *testing.M) {
-	var token []byte
+	var token cdb.TorrentHash
 
 	for i := 0; i < 10; i++ {
-		token = make([]byte, 20)
 		_, _ = util.UnsafeReadRand(token[:])
 
-		infoHashes = append(infoHashes, string(token))
+		infoHashes = append(infoHashes, token)
 	}
 
 	os.Exit(m.Run())
@@ -47,7 +47,7 @@ func TestParseQuery(t *testing.T) {
 	query := ""
 
 	for _, infoHash := range infoHashes {
-		query += "info_hash=" + url.QueryEscape(infoHash) + "&"
+		query += "info_hash=" + url.QueryEscape(string(infoHash[:])) + "&"
 	}
 
 	queryMap := make(map[string]string)
@@ -155,7 +155,7 @@ func TestInfoHashes(t *testing.T) {
 	query := ""
 
 	for _, infoHash := range infoHashes {
-		query += "info_hash=" + url.QueryEscape(infoHash) + "&"
+		query += "info_hash=" + url.QueryEscape(string(infoHash[:])) + "&"
 	}
 
 	query = query[:len(query)-1]

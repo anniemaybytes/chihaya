@@ -62,7 +62,7 @@ type Database struct {
 
 	Users                 map[string]*cdb.User
 	HitAndRuns            atomic.Pointer[map[cdb.UserTorrentPair]struct{}]
-	Torrents              map[string]*cdb.Torrent // SHA-1 hash (20 bytes)
+	Torrents              map[cdb.TorrentHash]*cdb.Torrent // SHA-1 hash (20 bytes)
 	TorrentGroupFreeleech atomic.Pointer[map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech]
 	Clients               atomic.Pointer[map[uint16]string]
 
@@ -157,7 +157,7 @@ func (db *Database) Init() {
 	}
 
 	db.Users = make(map[string]*cdb.User)
-	db.Torrents = make(map[string]*cdb.Torrent)
+	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
 
 	dbHitAndRuns := make(map[cdb.UserTorrentPair]struct{})
 	db.HitAndRuns.Store(&dbHitAndRuns)
@@ -183,13 +183,12 @@ func (db *Database) Init() {
 }
 
 func (db *Database) Terminate() {
+	log.Info.Print("Terminating database connection...")
+
 	db.terminate = true
 
-	close(db.torrentChannel)
-	close(db.userChannel)
-	close(db.transferHistoryChannel)
-	close(db.transferIpsChannel)
-	close(db.snatchChannel)
+	log.Info.Print("Closing all flush channels...")
+	db.closeFlushChannels()
 
 	go func() {
 		time.Sleep(10 * time.Second)

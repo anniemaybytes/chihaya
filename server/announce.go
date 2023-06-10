@@ -258,7 +258,8 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 
 	event, _ := qp.Get("event")
 	completed := event == "completed"
-	peerKey := fmt.Sprintf("%d-%s", user.ID, peerID)
+
+	peerKey := cdb.NewPeerKey(user.ID, cdb.PeerIDFromRawString(peerID))
 
 	if left > 0 {
 		if isDisabledDownload(db, user, torrent) {
@@ -305,7 +306,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 
 	// Update peer info/stats
 	if newPeer {
-		peer.ID = peerID
+		peer.ID = peerKey.PeerID()
 		peer.UserID = user.ID
 		peer.TorrentID = torrent.ID
 		peer.StartTime = now
@@ -386,7 +387,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		deltaSnatch = 1
 	}
 
-	peer.Addr = []byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
+	peer.Addr = [6]byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
 	peer.Port = port
 	peer.IPAddr = ipAddr
 
@@ -497,7 +498,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 			var peerBuff bytes.Buffer
 
 			for _, other := range peersToSend {
-				peerBuff.Write(other.Addr)
+				peerBuff.Write(other.Addr[:])
 			}
 
 			response["peers"] = peerBuff.String()

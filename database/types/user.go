@@ -17,6 +17,11 @@
 
 package types
 
+import (
+	"encoding/binary"
+	"math"
+)
+
 type User struct {
 	ID uint32
 
@@ -28,6 +33,48 @@ type User struct {
 	DownMultiplier float64
 }
 
+func (u *User) Load(reader readerAndByteReader) (err error) {
+	if err = binary.Read(reader, binary.LittleEndian, &u.ID); err != nil {
+		return err
+	}
+
+	if err = binary.Read(reader, binary.LittleEndian, &u.DisableDownload); err != nil {
+		return err
+	}
+
+	if err = binary.Read(reader, binary.LittleEndian, &u.TrackerHide); err != nil {
+		return err
+	}
+
+	if err = binary.Read(reader, binary.LittleEndian, &u.UpMultiplier); err != nil {
+		return err
+	}
+
+	return binary.Read(reader, binary.LittleEndian, &u.DownMultiplier)
+}
+
+func (u *User) Append(preAllocatedBuffer []byte) (buf []byte) {
+	buf = preAllocatedBuffer
+	buf = binary.LittleEndian.AppendUint32(buf, u.ID)
+
+	if u.DisableDownload {
+		buf = append(buf, 1)
+	} else {
+		buf = append(buf, 0)
+	}
+
+	if u.TrackerHide {
+		buf = append(buf, 1)
+	} else {
+		buf = append(buf, 0)
+	}
+
+	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(u.UpMultiplier))
+	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(u.DownMultiplier))
+
+	return buf
+}
+
 type UserTorrentPair struct {
 	UserID    uint32
 	TorrentID uint32
@@ -35,3 +82,7 @@ type UserTorrentPair struct {
 
 // UserCacheFile holds filename used by serializer for this type
 var UserCacheFile = "user-cache"
+
+// UserCacheVersion Used to distinguish old versions on the on-disk cache.
+// Bump when fields are altered on User struct
+const UserCacheVersion = 1

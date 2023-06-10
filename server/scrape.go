@@ -54,7 +54,7 @@ func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Databas
 	}
 
 	scrapeData := make(map[string]interface{})
-	fileData := make(map[string]interface{})
+	fileData := make(map[cdb.TorrentHash]interface{})
 
 	if !util.TryTakeSemaphore(ctx, db.TorrentsSemaphore) {
 		return http.StatusRequestTimeout

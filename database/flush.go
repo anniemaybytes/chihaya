@@ -24,6 +24,7 @@ import (
 
 	"chihaya/collectors"
 	"chihaya/config"
+	cdb "chihaya/database/types"
 	"chihaya/log"
 	"chihaya/util"
 )
@@ -94,6 +95,14 @@ func (db *Database) startFlushing() {
 
 		db.purgeInactivePeers()
 	}()
+}
+
+func (db *Database) closeFlushChannels() {
+	close(db.torrentChannel)
+	close(db.userChannel)
+	close(db.transferHistoryChannel)
+	close(db.transferIpsChannel)
+	close(db.snatchChannel)
 }
 
 func (db *Database) flushTorrents() {
@@ -497,6 +506,13 @@ func (db *Database) purgeInactivePeers() {
 						delete(torrent.Leechers, id)
 						count++
 					}
+				}
+
+				if countThisTorrent != count && len(torrent.Leechers) == 0 {
+					/* Deallocate previous map since Go does not free space used on maps when deleting objects.
+					We're doing it only for Leechers as potential advantage from freeing one or two Seeders is
+					virtually nil, while Leechers can incur significant memory leaks due to initial swarm activity. */
+					torrent.Leechers = make(map[cdb.PeerKey]*cdb.Peer)
 				}
 
 				for id, peer := range torrent.Seeders {

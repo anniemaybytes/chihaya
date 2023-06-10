@@ -175,7 +175,7 @@ func (db *Database) loadTorrents() {
 	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
-	newTorrents := make(map[string]*cdb.Torrent)
+	newTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
 
 	rows := db.mainConn.query(db.loadTorrentsStmt)
 	if rows == nil {
@@ -191,7 +191,7 @@ func (db *Database) loadTorrents() {
 
 	for rows.Next() {
 		var (
-			infoHash                     string
+			infoHash                     cdb.TorrentHash
 			id                           uint32
 			downMultiplier, upMultiplier float64
 			snatched                     uint16
@@ -231,8 +231,8 @@ func (db *Database) loadTorrents() {
 				Status:         status,
 				Group:          group,
 
-				Seeders:  make(map[string]*cdb.Peer),
-				Leechers: make(map[string]*cdb.Peer),
+				Seeders:  make(map[cdb.PeerKey]*cdb.Peer),
+				Leechers: make(map[cdb.PeerKey]*cdb.Peer),
 			}
 		}
 	}

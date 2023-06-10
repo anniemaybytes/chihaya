@@ -19,6 +19,7 @@
 package params
 
 import (
+	cdb "chihaya/database/types"
 	"net/url"
 	"strconv"
 	"strings"
@@ -27,7 +28,7 @@ import (
 type QueryParam struct {
 	query      string
 	params     map[string]string
-	infoHashes []string
+	infoHashes []cdb.TorrentHash
 }
 
 func ParseQuery(query string) (qp *QueryParam, err error) {
@@ -65,8 +66,8 @@ func ParseQuery(query string) (qp *QueryParam, err error) {
 		}
 
 		if key == "info_hash" {
-			if len(value) == 20 {
-				qp.infoHashes = append(qp.infoHashes, value)
+			if len(value) == cdb.TorrentHashSize {
+				qp.infoHashes = append(qp.infoHashes, cdb.TorrentHashFromBytes([]byte(value)))
 			}
 		} else {
 			qp.params[strings.ToLower(key)] = value
@@ -106,7 +107,7 @@ func (qp *QueryParam) GetUint16(which string) (ret uint16, exists bool) {
 	return
 }
 
-func (qp *QueryParam) InfoHashes() []string {
+func (qp *QueryParam) InfoHashes() []cdb.TorrentHash {
 	return qp.infoHashes
 }
 

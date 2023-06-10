@@ -18,7 +18,6 @@
 package database
 
 import (
-	"encoding/gob"
 	"fmt"
 	"os"
 	"time"
@@ -49,11 +48,11 @@ func (db *Database) startSerializing() {
 func (db *Database) serialize() {
 	log.Info.Printf("Serializing database to cache file")
 
-	torrentGobFilename := fmt.Sprintf("%s.gob", cdb.TorrentCacheFile)
-	userGobFilename := fmt.Sprintf("%s.gob", cdb.UserCacheFile)
+	torrentBinFilename := fmt.Sprintf("%s.bin", cdb.TorrentCacheFile)
+	userBinFilename := fmt.Sprintf("%s.bin", cdb.UserCacheFile)
 
-	torrentTmpFilename := fmt.Sprintf("%s.tmp", torrentGobFilename)
-	userTmpFilename := fmt.Sprintf("%s.tmp", userGobFilename)
+	torrentTmpFilename := fmt.Sprintf("%s.tmp", torrentBinFilename)
+	userTmpFilename := fmt.Sprintf("%s.tmp", userBinFilename)
 
 	start := time.Now()
 
@@ -73,14 +72,14 @@ func (db *Database) serialize() {
 		util.TakeSemaphore(db.TorrentsSemaphore)
 		defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
-		if err = gob.NewEncoder(torrentFile).Encode(db.Torrents); err != nil {
+		if err = cdb.WriteTorrents(torrentFile, db.Torrents); err != nil {
 			log.Error.Print("Failed to encode torrents for serialization: ", err)
 			return err
 		}
 
 		return nil
 	}() == nil {
-		if err := os.Rename(torrentTmpFilename, torrentGobFilename); err != nil {
+		if err := os.Rename(torrentTmpFilename, torrentBinFilename); err != nil {
 			log.Error.Print("Couldn't write new torrent cache: ", err)
 		}
 	}
@@ -101,14 +100,14 @@ func (db *Database) serialize() {
 		util.TakeSemaphore(db.UsersSemaphore)
 		defer util.ReturnSemaphore(db.UsersSemaphore)
 
-		if err = gob.NewEncoder(userFile).Encode(db.Users); err != nil {
+		if err = cdb.WriteUsers(userFile, db.Users); err != nil {
 			log.Error.Print("Failed to encode users for serialization: ", err)
 			return err
 		}
 
 		return nil
 	}() == nil {
-		if err := os.Rename(userTmpFilename, userGobFilename); err != nil {
+		if err := os.Rename(userTmpFilename, userBinFilename); err != nil {
 			log.Error.Print("Couldn't write new user cache: ", err)
 		}
 	}
@@ -121,13 +120,13 @@ func (db *Database) serialize() {
 func (db *Database) deserialize() {
 	log.Info.Print("Deserializing database from cache file...")
 
-	torrentGobFilename := fmt.Sprintf("%s.gob", cdb.TorrentCacheFile)
-	userGobFilename := fmt.Sprintf("%s.gob", cdb.UserCacheFile)
+	torrentBinFilename := fmt.Sprintf("%s.bin", cdb.TorrentCacheFile)
+	userBinFilename := fmt.Sprintf("%s.bin", cdb.UserCacheFile)
 
 	start := time.Now()
 
 	func() {
-		torrentFile, err := os.OpenFile(torrentGobFilename, os.O_RDONLY, 0)
+		torrentFile, err := os.OpenFile(torrentBinFilename, os.O_RDONLY, 0)
 		if err != nil {
 			log.Warning.Print("Torrent cache missing: ", err)
 			return
@@ -136,20 +135,17 @@ func (db *Database) deserialize() {
 		//goland:noinspection GoUnhandledErrorResult
 		defer torrentFile.Close()
 
-		decoder := gob.NewDecoder(torrentFile)
-
 		util.TakeSemaphore(db.TorrentsSemaphore)
 		defer util.ReturnSemaphore(db.TorrentsSemaphore)
 
-		err = decoder.Decode(&db.Torrents)
-		if err != nil {
+		if err = cdb.LoadTorrents(torrentFile, db.Torrents); err != nil {
 			log.Error.Print("Failed to deserialize torrent cache: ", err)
 			return
 		}
 	}()
 
 	func() {
-		userFile, err := os.OpenFile(userGobFilename, os.O_RDONLY, 0)
+		userFile, err := os.OpenFile(userBinFilename, os.O_RDONLY, 0)
 		if err != nil {
 			log.Warning.Print("User cache missing: ", err)
 			return
@@ -158,13 +154,10 @@ func (db *Database) deserialize() {
 		//goland:noinspection GoUnhandledErrorResult
 		defer userFile.Close()
 
-		decoder := gob.NewDecoder(userFile)
-
 		util.TakeSemaphore(db.UsersSemaphore)
 		defer util.ReturnSemaphore(db.UsersSemaphore)
 
-		err = decoder.Decode(&db.Users)
-		if err != nil {
+		if err = cdb.LoadUsers(userFile, db.Users); err != nil {
 			log.Error.Print("Failed to deserialize user cache: ", err)
 			return
 		}
