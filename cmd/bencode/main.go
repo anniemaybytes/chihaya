@@ -19,16 +19,10 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
+	"github.com/zeebo/bencode"
 	"os"
 	"runtime"
-
-	"github.com/zeebo/bencode"
-)
-
-var (
-	decode, help bool
 )
 
 // provided at compile-time
@@ -37,39 +31,38 @@ var (
 	BuildVersion = "development"
 )
 
-func init() {
-	flag.BoolVar(&decode, "D", false, "Decodes data instead of encoding")
-	flag.BoolVar(&help, "h", false, "Prints this help message")
+func help() {
+	fmt.Printf("bencode for chihaya (kuroneko), ver=%s date=%s runtime=%s\n\n",
+		BuildVersion, BuildDate, runtime.Version())
+	fmt.Printf("Usage of %s:\n", os.Args[0])
+	fmt.Println("  decode  decode bencoded string into json object")
+	fmt.Println("  encode  encode json object into bencoded string")
 }
 
 func main() {
-	fmt.Printf("bencode for chihaya (kuroneko), ver=%s date=%s runtime=%s\n\n",
-		BuildVersion, BuildDate, runtime.Version())
-
-	flag.Parse()
-
-	if help {
-		fmt.Printf("Usage of %s:\n", os.Args[0])
-		flag.PrintDefaults()
-
+	if len(os.Args) < 2 {
+		help()
 		return
 	}
 
-	var val interface{}
+	switch os.Args[1] {
+	case "decode":
+		var val interface{}
 
-	if decode {
 		decoder := bencode.NewDecoder(os.Stdin)
 		if err := decoder.Decode(&val); err != nil {
 			panic(err)
 		}
 
-		out, err := json.MarshalIndent(val, "", "\t")
-		if err != nil {
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "\t")
+
+		if err := encoder.Encode(val); err != nil {
 			panic(err)
 		}
+	case "encode":
+		var val interface{}
 
-		fmt.Print(string(out))
-	} else {
 		decoder := json.NewDecoder(os.Stdin)
 		decoder.UseNumber()
 
@@ -81,5 +74,7 @@ func main() {
 		if err := encoder.Encode(val); err != nil {
 			panic(err)
 		}
+	default:
+		help()
 	}
 }

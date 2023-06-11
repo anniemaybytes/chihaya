@@ -20,12 +20,13 @@ package server
 import (
 	"bytes"
 	"context"
-	"github.com/zeebo/bencode"
 	"time"
 
 	"chihaya/database"
 	cdb "chihaya/database/types"
 	"chihaya/util"
+
+	"github.com/zeebo/bencode"
 )
 
 func failure(err string, buf *bytes.Buffer, interval time.Duration) {

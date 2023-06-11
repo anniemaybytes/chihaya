@@ -19,10 +19,11 @@
 package params
 
 import (
-	cdb "chihaya/database/types"
 	"net/url"
 	"strconv"
 	"strings"
+
+	cdb "chihaya/database/types"
 )
 
 type QueryParam struct {

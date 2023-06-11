@@ -20,7 +20,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"net"
@@ -387,14 +386,10 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		deltaSnatch = 1
 	}
 
-	peer.Addr = [6]byte{ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3], byte(port >> 8), byte(port & 0xff)}
-	peer.Port = port
-	peer.IPAddr = ipAddr
-
 	if user.TrackerHide {
-		peer.IP = 2130706433 // 127.0.0.1
+		peer.Addr = cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, port) // 127.0.0.1
 	} else {
-		peer.IP = binary.BigEndian.Uint32(ipBytes)
+		peer.Addr = cdb.NewPeerAddressFromIPPort(ipBytes, port)
 	}
 
 	peer.ClientID = clientID
@@ -495,21 +490,21 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		}
 
 		if compact {
-			var peerBuff bytes.Buffer
+			peerBuff := make([]byte, 0, len(peersToSend)*cdb.PeerAddressSize)
 
 			for _, other := range peersToSend {
-				peerBuff.Write(other.Addr[:])
+				peerBuff = append(peerBuff, other.Addr[:]...)
 			}
 
-			response["peers"] = peerBuff.String()
+			response["peers"] = peerBuff
 		} else {
 			peerList := make([]map[string]interface{}, len(peersToSend))
 			for i, other := range peersToSend {
 				peerMap := make(map[string]interface{})
-				peerMap["ip"] = other.IPAddr
-				peerMap["port"] = other.Port
+				peerMap["ip"] = other.Addr.IPString()
+				peerMap["port"] = other.Addr.Port()
 				if !noPeerID {
-					peerMap["peer id"] = other.ID
+					peerMap["peer id"] = other.ID[:]
 				}
 				peerList[i] = peerMap
 			}

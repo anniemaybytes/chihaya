@@ -18,7 +18,6 @@
 package params
 
 import (
-	cdb "chihaya/database/types"
 	"fmt"
 	"net/url"
 	"os"
@@ -26,6 +25,7 @@ import (
 	"strconv"
 	"testing"
 
+	cdb "chihaya/database/types"
 	"chihaya/util"
 )
 

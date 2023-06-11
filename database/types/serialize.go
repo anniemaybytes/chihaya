@@ -43,24 +43,24 @@ func WriteSerializeHeader(writer io.Writer, n int, version uint64) (err error) {
 	return nil
 }
 
-var errUnexpectedVersion = errors.New("unexpected version")
+var errUnsupportedVersion = errors.New("unsupported version")
 
-func LoadSerializeHeader(reader readerAndByteReader, expectedVersion uint64) (n int, err error) {
-	var varInt uint64
+func LoadSerializeHeader(reader readerAndByteReader, maxSupportedVersion uint64) (n int, version uint64, err error) {
+	var records uint64
 
-	if varInt, err = binary.ReadUvarint(reader); err != nil {
-		return 0, err
+	if version, err = binary.ReadUvarint(reader); err != nil {
+		return 0, 0, err
 	}
 
-	if varInt != expectedVersion {
-		return 0, errUnexpectedVersion
+	if version == 0 || version > maxSupportedVersion {
+		return 0, version, errUnsupportedVersion
 	}
 
-	if varInt, err = binary.ReadUvarint(reader); err != nil {
-		return 0, err
+	if records, err = binary.ReadUvarint(reader); err != nil {
+		return 0, version, err
 	}
 
-	return int(varInt), nil
+	return int(records), version, nil
 }
 
 func WriteTorrents(w io.Writer, torrents map[TorrentHash]*Torrent) error {
@@ -93,7 +93,7 @@ func WriteTorrents(w io.Writer, torrents map[TorrentHash]*Torrent) error {
 func LoadTorrents(r io.Reader, torrents map[TorrentHash]*Torrent) error {
 	reader := bufio.NewReader(r)
 
-	n, err := LoadSerializeHeader(reader, TorrentCacheVersion)
+	n, version, err := LoadSerializeHeader(reader, TorrentCacheVersion)
 
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func LoadTorrents(r io.Reader, torrents map[TorrentHash]*Torrent) error {
 
 		t := &Torrent{}
 
-		if err := t.Load(reader); err != nil {
+		if err := t.Load(version, reader); err != nil {
 			return err
 		}
 
@@ -149,7 +149,7 @@ func WriteUsers(w io.Writer, users map[string]*User) error {
 func LoadUsers(r io.Reader, users map[string]*User) error {
 	reader := bufio.NewReader(r)
 
-	n, err := LoadSerializeHeader(reader, UserCacheVersion)
+	n, version, err := LoadSerializeHeader(reader, UserCacheVersion)
 
 	if err != nil {
 		return err
@@ -169,7 +169,7 @@ func LoadUsers(r io.Reader, users map[string]*User) error {
 		}
 
 		u := &User{}
-		if err := u.Load(reader); err != nil {
+		if err := u.Load(version, reader); err != nil {
 			return err
 		}
 

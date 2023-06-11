@@ -33,7 +33,7 @@ type User struct {
 	DownMultiplier float64
 }
 
-func (u *User) Load(reader readerAndByteReader) (err error) {
+func (u *User) Load(_ uint64, reader readerAndByteReader) (err error) {
 	if err = binary.Read(reader, binary.LittleEndian, &u.ID); err != nil {
 		return err
 	}

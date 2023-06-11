@@ -130,7 +130,7 @@ type Torrent struct {
 	DownMultiplier float64
 }
 
-func (t *Torrent) Load(reader readerAndByteReader) (err error) {
+func (t *Torrent) Load(version uint64, reader readerAndByteReader) (err error) {
 	var varIntLen uint64
 
 	if varIntLen, err = binary.ReadUvarint(reader); err != nil {
@@ -147,7 +147,7 @@ func (t *Torrent) Load(reader readerAndByteReader) (err error) {
 
 		s := &Peer{}
 
-		if err = s.Load(reader); err != nil {
+		if err = s.Load(version, reader); err != nil {
 			return err
 		}
 
@@ -167,14 +167,14 @@ func (t *Torrent) Load(reader readerAndByteReader) (err error) {
 
 		l := &Peer{}
 
-		if err = l.Load(reader); err != nil {
+		if err = l.Load(version, reader); err != nil {
 			return err
 		}
 
 		t.Leechers[k] = l
 	}
 
-	if err = t.Group.Load(reader); err != nil {
+	if err = t.Group.Load(version, reader); err != nil {
 		return err
 	}
 
@@ -241,7 +241,7 @@ type TorrentGroup struct {
 	GroupID     uint32
 }
 
-func (g *TorrentGroup) Load(reader readerAndByteReader) (err error) {
+func (g *TorrentGroup) Load(_ uint64, reader readerAndByteReader) (err error) {
 	var varIntLen uint64
 
 	if varIntLen, err = binary.ReadUvarint(reader); err != nil {
@@ -272,4 +272,4 @@ var TorrentCacheFile = "torrent-cache"
 
 // TorrentCacheVersion Used to distinguish old versions on the on-disk cache.
 // Bump when fields are altered on Torrent, Peer or TorrentGroup structs
-const TorrentCacheVersion = 1
+const TorrentCacheVersion = 2

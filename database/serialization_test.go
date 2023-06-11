@@ -18,6 +18,7 @@
 package database
 
 import (
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -43,8 +44,7 @@ func TestSerializer(t *testing.T) {
 		UserID:       12,
 		TorrentID:    10,
 		ClientID:     4,
-		IP:           2130706433,
-		Port:         63448,
+		Addr:         cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, 63448),
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 		Seeding:      true,

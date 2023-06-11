@@ -19,6 +19,7 @@ package database
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"testing"
@@ -575,8 +576,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:       0,
 		TorrentID:    0,
 		ClientID:     1,
-		IP:           2130706433,
-		Port:         63448,
+		Addr:         cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, 63448),
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
@@ -595,7 +595,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 
 	row := db.mainConn.sqlDb.QueryRow("SELECT uploaded, downloaded "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
-		testPeer.UserID, testPeer.TorrentID, testPeer.IP, testPeer.ClientID)
+		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
 	err := row.Scan(&initUpload, &initDownload)
 	if err != nil {
@@ -611,7 +611,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 
 	row = db.mainConn.sqlDb.QueryRow("SELECT uploaded, downloaded "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
-		testPeer.UserID, testPeer.TorrentID, testPeer.IP, testPeer.ClientID)
+		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
 	err = row.Scan(&upload, &download)
 	if err != nil {
@@ -639,7 +639,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 		ClientID:  testPeer.ClientID,
-		IP:        testPeer.IP,
+		Addr:      cdb.NewPeerAddressFromIPPort(testPeer.Addr.IP(), 0),
 		StartTime: testPeer.StartTime,
 	}
 
@@ -647,12 +647,16 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 
 	row = db.mainConn.sqlDb.QueryRow("SELECT port, starttime, last_announce "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
-		testPeer.UserID, testPeer.TorrentID, testPeer.IP, testPeer.ClientID)
+		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
-	err = row.Scan(&gotPeer.Port, &gotStartTime, &gotPeer.LastAnnounce)
+	var port uint16
+
+	err = row.Scan(&port, &gotStartTime, &gotPeer.LastAnnounce)
 	if err != nil {
 		panic(err)
 	}
+
+	gotPeer.Addr = cdb.NewPeerAddressFromIPPort(gotPeer.Addr.IP(), port)
 
 	if !reflect.DeepEqual(testPeer, gotPeer) {
 		t.Fatal(fixtureFailure("Existing peer incorrectly updated in the database", testPeer, gotPeer))
@@ -667,8 +671,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:       1,
 		TorrentID:    2,
 		ClientID:     2,
-		IP:           2130706433,
-		Port:         63448,
+		Addr:         cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, 63448),
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
@@ -684,17 +687,19 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 		ClientID:  testPeer.ClientID,
-		IP:        testPeer.IP,
+		Addr:      cdb.NewPeerAddressFromIPPort(testPeer.Addr.IP(), 0),
 	}
 
 	row = db.mainConn.sqlDb.QueryRow("SELECT port, starttime, last_announce "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
-		testPeer.UserID, testPeer.TorrentID, testPeer.IP, testPeer.ClientID)
+		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
-	err = row.Scan(&gotPeer.Port, &gotPeer.StartTime, &gotPeer.LastAnnounce)
+	err = row.Scan(&port, &gotPeer.StartTime, &gotPeer.LastAnnounce)
 	if err != nil {
 		panic(err)
 	}
+
+	gotPeer.Addr = cdb.NewPeerAddressFromIPPort(gotPeer.Addr.IP(), port)
 
 	if !reflect.DeepEqual(testPeer, gotPeer) {
 		t.Fatal(fixtureFailure("New peer is incorrectly inserted in the database", testPeer, gotPeer))

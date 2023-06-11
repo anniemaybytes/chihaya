@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"net"
 )
 
 // PeerID Sent in tracker requests with client information
@@ -75,6 +76,7 @@ func (k *PeerKey) UnmarshalText(b []byte) error {
 
 var errWrongPeerKeySize = errors.New("wrong peer key size")
 var errWrongPeerIDSize = errors.New("wrong peer id size")
+var errWrongPeerAddressSize = errors.New("wrong peer address size")
 var errNilPeerID = errors.New("nil peer id")
 
 func PeerIDFromRawString(buf string) (id PeerID) {
@@ -127,13 +129,66 @@ func (id *PeerID) UnmarshalText(b []byte) error {
 	return nil
 }
 
-type Peer struct {
-	ID PeerID
+const PeerAddressSize = 4 + 2
 
-	IPAddr string
-	Addr   [6]byte
-	IP     uint32
-	Port   uint16
+type PeerAddress [PeerAddressSize]byte
+
+func NewPeerAddressFromIPPort(ip net.IP, port uint16) PeerAddress {
+	var a PeerAddress
+
+	copy(a[:], ip)
+	binary.BigEndian.PutUint16(a[4:], port)
+
+	return a
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (a PeerAddress) IP() net.IP {
+	return a[:4]
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (a PeerAddress) IPNumeric() uint32 {
+	return binary.BigEndian.Uint32(a[:])
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (a PeerAddress) IPString() string {
+	return a.IP().String()
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (a PeerAddress) Port() uint16 {
+	return binary.BigEndian.Uint16(a[4:])
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (a PeerAddress) MarshalText() ([]byte, error) {
+	var buf [PeerAddressSize * 2]byte
+
+	hex.Encode(buf[:], a[:])
+
+	return buf[:], nil
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (a *PeerAddress) UnmarshalText(b []byte) error {
+	if len(b) != PeerAddressSize*2 {
+		return errWrongPeerAddressSize
+	}
+
+	if _, err := hex.Decode(a[:], b[:]); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Peer
+// Theoretical min layout size: 6 + 8 + 8 + 8 + 8 + 8 + 8 + 4 + 4 + 6 + 2 + 1 = 71 bytes
+// Current layout size go1.20.4: 80 bytes via unsafe.Sizeof(Peer{})
+type Peer struct {
+	Addr PeerAddress
 
 	Uploaded   uint64
 	Downloaded uint64
@@ -144,45 +199,65 @@ type Peer struct {
 
 	TorrentID uint32
 	UserID    uint32
-	ClientID  uint16
+
+	// ID placed here so in-memory layout is smaller
+	ID PeerID
+
+	ClientID uint16
 
 	Seeding bool
 }
 
-func (p *Peer) Load(reader readerAndByteReader) (err error) {
+var errInvalidAddrLength = errors.New("invalid Addr length")
+
+func (p *Peer) Load(version uint64, reader readerAndByteReader) (err error) {
 	if _, err = io.ReadFull(reader, p.ID[:]); err != nil {
 		return err
 	}
 
-	var varIntLen uint64
+	if version == 1 {
+		// Read IPAddr string
+		var varIntLen uint64
 
-	if varIntLen, err = binary.ReadUvarint(reader); err != nil {
-		return err
-	}
+		if varIntLen, err = binary.ReadUvarint(reader); err != nil {
+			return err
+		}
 
-	buf := make([]byte, varIntLen)
+		buf := make([]byte, varIntLen)
 
-	if _, err = io.ReadFull(reader, buf); err != nil {
-		return err
-	}
+		if _, err = io.ReadFull(reader, buf); err != nil {
+			return err
+		}
 
-	p.IPAddr = string(buf)
+		// Read length of Addr
+		if varIntLen, err = binary.ReadUvarint(reader); err != nil {
+			return err
+		}
 
-	// Keep this read to maintain binary compatibility
-	if _, err = binary.ReadUvarint(reader); err != nil {
-		return err
-	}
+		if int(varIntLen) != len(p.Addr) {
+			return errInvalidAddrLength
+		}
 
-	if _, err = io.ReadFull(reader, p.Addr[:]); err != nil {
-		return err
-	}
+		if _, err = io.ReadFull(reader, p.Addr[:]); err != nil {
+			return err
+		}
 
-	if err = binary.Read(reader, binary.LittleEndian, &p.IP); err != nil {
-		return err
-	}
+		var (
+			ip   uint32
+			port uint16
+		)
 
-	if err = binary.Read(reader, binary.LittleEndian, &p.Port); err != nil {
-		return err
+		if err = binary.Read(reader, binary.LittleEndian, &ip); err != nil {
+			return err
+		}
+
+		if err = binary.Read(reader, binary.LittleEndian, &port); err != nil {
+			return err
+		}
+	} else {
+		if _, err = io.ReadFull(reader, p.Addr[:]); err != nil {
+			return err
+		}
 	}
 
 	if err = binary.Read(reader, binary.LittleEndian, &p.Uploaded); err != nil {
@@ -223,15 +298,7 @@ func (p *Peer) Load(reader readerAndByteReader) (err error) {
 func (p *Peer) Append(preAllocatedBuffer []byte) (buf []byte) {
 	buf = preAllocatedBuffer
 	buf = append(buf, p.ID[:]...)
-
-	buf = binary.AppendUvarint(buf, uint64(len(p.IPAddr)))
-	buf = append(buf, p.IPAddr[:]...)
-
-	buf = binary.AppendUvarint(buf, uint64(len(p.Addr)))
 	buf = append(buf, p.Addr[:]...)
-
-	buf = binary.LittleEndian.AppendUint32(buf, p.IP)
-	buf = binary.LittleEndian.AppendUint16(buf, p.Port)
 	buf = binary.LittleEndian.AppendUint64(buf, p.Uploaded)
 	buf = binary.LittleEndian.AppendUint64(buf, p.Downloaded)
 	buf = binary.LittleEndian.AppendUint64(buf, p.Left)
