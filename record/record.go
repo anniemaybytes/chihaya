@@ -28,16 +28,18 @@ import (
 	"chihaya/util"
 )
 
-var enabled = false
-var initialized = false
-var recordChan chan []byte
+var (
+	enabled     = false
+	initialized = false
+	channel     chan []byte
+)
 
 func getFile(t time.Time) (*os.File, error) {
 	return os.OpenFile("events/events_"+t.Format("2006-01-02T15")+".json", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 }
 
 func Init() {
-	if enabled, _ := config.GetBool("record", enabled); !enabled {
+	if enabled, _ = config.GetBool("record", enabled); !enabled {
 		return
 	}
 
@@ -46,30 +48,30 @@ func Init() {
 	}
 
 	start := time.Now()
-	recordChan = make(chan []byte)
+	channel = make(chan []byte)
 
-	recordFile, err := getFile(start)
+	file, err := getFile(start)
 	if err != nil {
 		panic(err)
 	}
 
 	go func() {
-		for buf := range recordChan {
+		for buf := range channel {
 			now := time.Now()
 			if now.Hour() != start.Hour() {
 				start = now
 
-				if err := recordFile.Close(); err != nil {
+				if err = file.Close(); err != nil {
 					panic(err)
 				}
 
-				recordFile, err = getFile(start)
+				file, err = getFile(start)
 				if err != nil {
 					panic(err)
 				}
 			}
 
-			if _, err := recordFile.Write(buf); err != nil {
+			if _, err = file.Write(buf); err != nil {
 				panic(err)
 			}
 		}
@@ -90,7 +92,7 @@ func Record(
 	up,
 	down,
 	left uint64) {
-	if enabled, _ := config.GetBool("record", enabled); !enabled {
+	if enabled, _ = config.GetBool("record", enabled); !enabled {
 		return
 	}
 
@@ -130,5 +132,5 @@ func Record(
 	buf.WriteString(strconv.FormatUint(left, 10))
 	buf.WriteString("]\n")
 
-	recordChan <- buf.Bytes()
+	channel <- buf.Bytes()
 }

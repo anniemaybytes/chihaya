@@ -34,7 +34,7 @@ import (
  * so it's expected that the buffers are returned in the flush functions
  */
 
-func (db *Database) RecordTorrent(torrent *cdb.Torrent, deltaSnatch uint8) {
+func (db *Database) QueueTorrent(torrent *cdb.Torrent, deltaSnatch uint8) {
 	tq := db.bufferPool.Take()
 
 	tq.WriteString("(")
@@ -52,26 +52,26 @@ func (db *Database) RecordTorrent(torrent *cdb.Torrent, deltaSnatch uint8) {
 	db.torrentChannel <- tq
 }
 
-func (db *Database) RecordUser(user *cdb.User, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload int64) {
+func (db *Database) QueueUser(user *cdb.User, rawDeltaUp, rawDeltaDown, deltaUp, deltaDown int64) {
 	uq := db.bufferPool.Take()
 
 	uq.WriteString("(")
 	uq.WriteString(strconv.FormatUint(uint64(user.ID), 10))
 	uq.WriteString(",")
-	uq.WriteString(strconv.FormatInt(deltaUpload, 10))
+	uq.WriteString(strconv.FormatInt(deltaUp, 10))
 	uq.WriteString(",")
-	uq.WriteString(strconv.FormatInt(deltaDownload, 10))
+	uq.WriteString(strconv.FormatInt(deltaDown, 10))
 	uq.WriteString(",")
-	uq.WriteString(strconv.FormatInt(rawDeltaDownload, 10))
+	uq.WriteString(strconv.FormatInt(rawDeltaDown, 10))
 	uq.WriteString(",")
-	uq.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
+	uq.WriteString(strconv.FormatInt(rawDeltaUp, 10))
 	uq.WriteString(")")
 
 	db.userChannel <- uq
 }
 
-func (db *Database) RecordTransferHistory(peer *cdb.Peer, rawDeltaUpload, rawDeltaDownload, deltaTime,
-	deltaSeedTime int64, deltaSnatch uint8, active bool) {
+func (db *Database) QueueTransferHistory(peer *cdb.Peer, rawDeltaUp, rawDeltaDown, deltaTime, deltaSeedTime int64,
+	deltaSnatch uint8, active bool) {
 	th := db.bufferPool.Take()
 
 	th.WriteString("(")
@@ -79,9 +79,9 @@ func (db *Database) RecordTransferHistory(peer *cdb.Peer, rawDeltaUpload, rawDel
 	th.WriteString(",")
 	th.WriteString(strconv.FormatUint(uint64(peer.TorrentID), 10))
 	th.WriteString(",")
-	th.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
+	th.WriteString(strconv.FormatInt(rawDeltaUp, 10))
 	th.WriteString(",")
-	th.WriteString(strconv.FormatInt(rawDeltaDownload, 10))
+	th.WriteString(strconv.FormatInt(rawDeltaDown, 10))
 	th.WriteString(",")
 	th.WriteString(util.Btoa(peer.Seeding))
 	th.WriteString(",")
@@ -103,7 +103,7 @@ func (db *Database) RecordTransferHistory(peer *cdb.Peer, rawDeltaUpload, rawDel
 	db.transferHistoryChannel <- th
 }
 
-func (db *Database) RecordTransferIP(peer *cdb.Peer, rawDeltaUpload, rawDeltaDownload int64) {
+func (db *Database) QueueTransferIP(peer *cdb.Peer, rawDeltaUp, rawDeltaDown int64) {
 	ti := db.bufferPool.Take()
 
 	ti.WriteString("(")
@@ -117,9 +117,9 @@ func (db *Database) RecordTransferIP(peer *cdb.Peer, rawDeltaUpload, rawDeltaDow
 	ti.WriteString(",")
 	ti.WriteString(strconv.FormatUint(uint64(peer.Addr.Port()), 10))
 	ti.WriteString(",")
-	ti.WriteString(strconv.FormatInt(rawDeltaUpload, 10))
+	ti.WriteString(strconv.FormatInt(rawDeltaUp, 10))
 	ti.WriteString(",")
-	ti.WriteString(strconv.FormatInt(rawDeltaDownload, 10))
+	ti.WriteString(strconv.FormatInt(rawDeltaDown, 10))
 	ti.WriteString(",")
 	ti.WriteString(strconv.FormatInt(peer.StartTime, 10))
 	ti.WriteString(",")
@@ -129,7 +129,7 @@ func (db *Database) RecordTransferIP(peer *cdb.Peer, rawDeltaUpload, rawDeltaDow
 	db.transferIpsChannel <- ti
 }
 
-func (db *Database) RecordSnatch(peer *cdb.Peer, now int64) {
+func (db *Database) QueueSnatch(peer *cdb.Peer, now int64) {
 	sn := db.bufferPool.Take()
 
 	sn.WriteString("(")

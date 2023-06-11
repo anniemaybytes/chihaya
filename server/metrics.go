@@ -51,6 +51,13 @@ func metrics(ctx context.Context, auth string, db *database.Database, buf *bytes
 		peers += len(t.Leechers) + len(t.Seeders)
 	}
 
+	// Early exit before response write
+	select {
+	case <-ctx.Done():
+		return http.StatusRequestTimeout
+	default:
+	}
+
 	collectors.UpdateUptime(time.Since(handler.startTime).Seconds())
 	collectors.UpdateUsers(len(db.Users))
 	collectors.UpdateTorrents(len(db.Torrents))

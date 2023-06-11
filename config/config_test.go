@@ -32,11 +32,11 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	if err := os.Chmod(tempPath, 0755); err != nil {
+	if err = os.Chmod(tempPath, 0755); err != nil {
 		panic(err)
 	}
 
-	if err := os.Chdir(tempPath); err != nil {
+	if err = os.Chdir(tempPath); err != nil {
 		panic(err)
 	}
 

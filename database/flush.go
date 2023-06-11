@@ -523,7 +523,7 @@ func (db *Database) purgeInactivePeers() {
 				}
 
 				if countThisTorrent != count {
-					db.RecordTorrent(torrent, 0)
+					db.QueueTorrent(torrent, 0)
 				}
 			}
 		}()

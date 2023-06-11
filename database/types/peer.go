@@ -18,12 +18,14 @@
 package types
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"io"
 	"net"
+	"strconv"
 )
 
 // PeerID Sent in tracker requests with client information
@@ -76,7 +78,6 @@ func (k *PeerKey) UnmarshalText(b []byte) error {
 
 var errWrongPeerKeySize = errors.New("wrong peer key size")
 var errWrongPeerIDSize = errors.New("wrong peer id size")
-var errWrongPeerAddressSize = errors.New("wrong peer address size")
 var errNilPeerID = errors.New("nil peer id")
 
 func PeerIDFromRawString(buf string) (id PeerID) {
@@ -115,16 +116,22 @@ func (id *PeerID) Value() (driver.Value, error) {
 
 //goland:noinspection GoMixedReceiverTypes
 func (id PeerID) MarshalText() ([]byte, error) {
-	return id[:], nil
+	var buf [20 * 2]byte
+
+	hex.Encode(buf[:], id[:])
+
+	return buf[:], nil
 }
 
 //goland:noinspection GoMixedReceiverTypes
 func (id *PeerID) UnmarshalText(b []byte) error {
-	if len(b) != 20 {
+	if len(b) != 20*2 {
 		return errWrongPeerIDSize
 	}
 
-	copy(id[:], b)
+	if _, err := hex.Decode(id[:], b[:]); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -164,22 +171,36 @@ func (a PeerAddress) Port() uint16 {
 
 //goland:noinspection GoMixedReceiverTypes
 func (a PeerAddress) MarshalText() ([]byte, error) {
-	var buf [PeerAddressSize * 2]byte
+	buf := make([]byte, 0, 15+1+5)
+	buf = append(buf, a.IP().String()...)
+	buf = append(buf, ':')
+	buf = strconv.AppendUint(buf, uint64(a.Port()), 10)
 
-	hex.Encode(buf[:], a[:])
-
-	return buf[:], nil
+	return buf, nil
 }
+
+var errInvalidPeerAddress = errors.New("invalid peer address")
 
 //goland:noinspection GoMixedReceiverTypes
 func (a *PeerAddress) UnmarshalText(b []byte) error {
-	if len(b) != PeerAddressSize*2 {
-		return errWrongPeerAddressSize
+	i := bytes.IndexByte(b, ':')
+	if i == -1 || i == 0 || i == (len(b)-1) {
+		return errInvalidPeerAddress
 	}
 
-	if _, err := hex.Decode(a[:], b[:]); err != nil {
-		return err
+	ip := net.ParseIP(string(b[:i]))
+	if ip.To4() == nil {
+		return errInvalidPeerAddress
 	}
+
+	copy(a[:], ip.To4())
+
+	port, err := strconv.ParseUint(string(b[i+1:]), 10, 16)
+	if err != nil {
+		return errInvalidPeerAddress
+	}
+
+	binary.BigEndian.PutUint16(a[4:], uint16(port))
 
 	return nil
 }

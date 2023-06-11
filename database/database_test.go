@@ -348,7 +348,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 		panic(err)
 	}
 
-	db.RecordUser(testUser, deltaRawUpload, deltaRawDownload, deltaUpload, deltaDownload)
+	db.QueueUser(testUser, deltaRawUpload, deltaRawDownload, deltaUpload, deltaDownload)
 
 	for len(db.userChannel) > 0 {
 		time.Sleep(time.Second)
@@ -444,7 +444,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 		panic(err)
 	}
 
-	db.RecordTransferHistory(testPeer,
+	db.QueueTransferHistory(testPeer,
 		deltaRawUpload,
 		deltaRawDownload,
 		deltaActiveTime,
@@ -544,7 +544,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 		Left:         65000,
 	}
 
-	db.RecordTransferHistory(testPeer, 0, 1000, 1, 0, 1, true)
+	db.QueueTransferHistory(testPeer, 0, 1000, 1, 0, 1, true)
 
 	gotPeer = &cdb.Peer{
 		UserID:    testPeer.UserID,
@@ -602,7 +602,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		panic(err)
 	}
 
-	db.RecordTransferIP(testPeer, deltaUpload, deltaDownload)
+	db.QueueTransferIP(testPeer, deltaUpload, deltaDownload)
 
 	for len(db.transferIpsChannel) > 0 {
 		time.Sleep(time.Second)
@@ -676,7 +676,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		LastAnnounce: time.Now().Unix(),
 	}
 
-	db.RecordTransferIP(testPeer, 0, 0)
+	db.QueueTransferIP(testPeer, 0, 0)
 
 	for len(db.transferIpsChannel) > 0 {
 		time.Sleep(time.Second)
@@ -721,7 +721,7 @@ func TestRecordAndFlushSnatch(t *testing.T) {
 
 	currTime = time.Now().Unix()
 
-	db.RecordSnatch(testPeer, currTime)
+	db.QueueSnatch(testPeer, currTime)
 
 	for len(db.snatchChannel) > 0 {
 		time.Sleep(time.Second)
@@ -765,7 +765,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 		LastAnnounce: time.Now().Unix(),
 	}
 
-	db.RecordTorrent(torrent, 5)
+	db.QueueTorrent(torrent, 5)
 
 	for len(db.torrentChannel) > 0 {
 		time.Sleep(time.Second)

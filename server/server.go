@@ -63,7 +63,7 @@ var (
 	listener net.Listener
 )
 
-func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) int {
+func (handler *httpHandler) respond(ctx context.Context, r *http.Request, buf *bytes.Buffer) int {
 	dir, action := path.Split(r.URL.Path)
 	if action == "" {
 		return http.StatusNotFound
@@ -91,7 +91,7 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) int {
 	 * ===================================================
 	 */
 
-	user, err := isPasskeyValid(r.Context(), passkey, handler.db)
+	user, err := isPasskeyValid(ctx, passkey, handler.db)
 	if err != nil {
 		return http.StatusRequestTimeout
 	} else if user == nil {
@@ -101,15 +101,15 @@ func (handler *httpHandler) respond(r *http.Request, buf *bytes.Buffer) int {
 
 	switch action {
 	case "announce":
-		return announce(r.Context(), r.URL.RawQuery, r.Header, r.RemoteAddr, user, handler.db, buf)
+		return announce(ctx, r.URL.RawQuery, r.Header, r.RemoteAddr, user, handler.db, buf)
 	case "scrape":
 		if enabled, _ := config.GetBool("scrape", true); !enabled {
 			return http.StatusNotFound
 		}
 
-		return scrape(r.Context(), r.URL.RawQuery, user, handler.db, buf)
+		return scrape(ctx, r.URL.RawQuery, user, handler.db, buf)
 	case "metrics":
-		return metrics(r.Context(), r.Header.Get("Authorization"), handler.db, buf)
+		return metrics(ctx, r.Header.Get("Authorization"), handler.db, buf)
 	}
 
 	return http.StatusNotFound
@@ -127,25 +127,12 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.waitGroup.Add(1)
 	defer handler.waitGroup.Done()
 
-	// Prepare, consume and mark as being used buffer for request
-	var (
-		buf      *bytes.Buffer
-		bufInUse sync.WaitGroup
-	)
-
-	buf = handler.bufferPool.Take()
-
-	bufInUse.Add(1)
-	defer bufInUse.Done()
-
-	// Spawn new goroutine that waits for buffer to be unused before returning it back to pool for reuse
-	go func() {
-		bufInUse.Wait()
-		handler.bufferPool.Give(buf)
-	}()
-
 	// Flush buffered data to client
 	defer w.(http.Flusher).Flush()
+
+	buf := handler.bufferPool.Take()
+	// Mark buf to be returned to bufferPool after we are done with it
+	defer handler.bufferPool.Give(buf)
 
 	// Gracefully handle panics so that they're confined to single request and don't crash server
 	defer func() {
@@ -162,52 +149,15 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Prepare and start new context with timeoud to abort long-running requests
-	var (
-		ctx    context.Context
-		cancel context.CancelFunc
-		status int
-		done   = make(chan struct{})
-		errz   = make(chan any, 1)
-	)
-
-	ctx, cancel = context.WithTimeout(r.Context(), handler.contextTimeout)
+	// Prepare and start new context with timeout to abort long-running requests
+	ctx, cancel := context.WithTimeout(r.Context(), handler.contextTimeout)
 	defer cancel()
 
-	/* Mark buffer as in use; we can't recycle buffer until both ServeHTTP and handler are done with it.
-	This must be done outside of goroutine itself to avoid concurrency issues where select statement below
-	finishes before our handler goroutine has a chance to start, bringing WaitGroup counter to 0 while
-	other goroutine is Waiting, which is invalid scenario and will result in panic. */
-	bufInUse.Add(1)
+	/* Pass flow to handler; note that handler should be responsible for actually cancelling
+	its own work based on request context cancellation */
+	status := handler.respond(ctx, r, buf)
 
-	// Start new blocking handler in goroutine
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				errz <- err
-			}
-		}()
-
-		// Once this goroutine exits, we should free its hold on buffer
-		defer bufInUse.Done()
-
-		/* Pass flow to handler; note that handler should be responsible for actually cancelling
-		its own work based on request context cancellation */
-		status = handler.respond(r, buf)
-
-		// Close channel, marking that handler finished its work
-		close(done)
-	}()
-
-	// Await on either panic, handler to finish or context deadline to expire
 	select {
-	case err := <-errz:
-		panic(err)
-	case <-done:
-		w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
-		w.Header().Add("Content-Type", "text/plain")
-		w.WriteHeader(status)
-		_, _ = w.Write(buf.Bytes())
 	case <-ctx.Done():
 		collectors.IncrementTimeoutRequests()
 
@@ -222,6 +172,11 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			w.WriteHeader(http.StatusRequestTimeout)
 		}
+	default:
+		w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
+		w.Header().Add("Content-Type", "text/plain")
+		w.WriteHeader(status)
+		_, _ = w.Write(buf.Bytes())
 	}
 }
 

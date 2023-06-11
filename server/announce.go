@@ -382,7 +382,7 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 
 		active = false
 	} else if completed {
-		go db.RecordSnatch(peer, now)
+		go db.QueueSnatch(peer, now)
 		deltaSnatch = 1
 	}
 
@@ -395,10 +395,10 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 	peer.ClientID = clientID
 
 	// If the channels are already full, block until a flush occurs
-	go db.RecordTorrent(torrent, deltaSnatch)
-	go db.RecordTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
-	go db.RecordUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	go db.RecordTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
+	go db.QueueTorrent(torrent, deltaSnatch)
+	go db.QueueTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
+	go db.QueueUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
+	go db.QueueTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
 	go record.Record(
 		peer.TorrentID,
 		user.ID,
@@ -510,6 +510,13 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 			}
 			response["peers"] = peerList
 		}
+	}
+
+	// Early exit before response write
+	select {
+	case <-ctx.Done():
+		return http.StatusRequestTimeout
+	default:
 	}
 
 	encoder := bencode.NewEncoder(buf)

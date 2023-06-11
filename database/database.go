@@ -101,7 +101,7 @@ func (db *Database) Init() {
 	db.UsersSemaphore = util.NewSemaphore()
 	db.ClientsSemaphore = util.NewSemaphore()
 
-	// Used for recording updates, so the max required size should be < 128 bytes. See record.go for details
+	// Used for recording updates, so the max required size should be < 128 bytes. See queue.go for details
 	db.bufferPool = util.NewBufferPool(128)
 
 	var err error

@@ -82,6 +82,13 @@ func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Databas
 	scrapeData["interval"] = scrapeInterval
 	scrapeData["min interval"] = scrapeInterval
 
+	// Early exit before response write
+	select {
+	case <-ctx.Done():
+		return http.StatusRequestTimeout
+	default:
+	}
+
 	encoder := bencode.NewEncoder(buf)
 	if err = encoder.Encode(scrapeData); err != nil {
 		panic(err)
