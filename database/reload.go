@@ -25,7 +25,6 @@ import (
 	"chihaya/config"
 	cdb "chihaya/database/types"
 	"chihaya/log"
-	"chihaya/util"
 )
 
 var (
@@ -66,8 +65,8 @@ func (db *Database) startReloading() {
 }
 
 func (db *Database) loadUsers() {
-	util.TakeSemaphore(db.UsersSemaphore)
-	defer util.ReturnSemaphore(db.UsersSemaphore)
+	db.UsersLock.Lock()
+	defer db.UsersLock.Unlock()
 
 	db.mainConn.mutex.Lock()
 	defer db.mainConn.mutex.Unlock()
@@ -168,75 +167,87 @@ func (db *Database) loadHitAndRuns() {
 }
 
 func (db *Database) loadTorrents() {
-	util.TakeSemaphore(db.TorrentsSemaphore)
-	defer util.ReturnSemaphore(db.TorrentsSemaphore)
+	var start time.Time
 
-	db.mainConn.mutex.Lock()
-	defer db.mainConn.mutex.Unlock()
-
-	start := time.Now()
 	newTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
 
-	rows := db.mainConn.query(db.loadTorrentsStmt)
-	if rows == nil {
-		log.Error.Print("Failed to load torrents from database")
-		log.WriteStack()
+	func() {
+		db.TorrentsLock.RLock()
+		defer db.TorrentsLock.RUnlock()
 
-		return
-	}
+		db.mainConn.mutex.Lock()
+		defer db.mainConn.mutex.Unlock()
 
-	defer func() {
-		_ = rows.Close()
-	}()
+		start = time.Now()
 
-	for rows.Next() {
-		var (
-			infoHash                     cdb.TorrentHash
-			id                           uint32
-			downMultiplier, upMultiplier float64
-			snatched                     uint16
-			status                       uint8
-			group                        cdb.TorrentGroup
-		)
-
-		if err := rows.Scan(
-			&id,
-			&infoHash,
-			&downMultiplier,
-			&upMultiplier,
-			&snatched,
-			&status,
-			&group.GroupID,
-			&group.TorrentType,
-		); err != nil {
-			log.Error.Printf("Error scanning torrent row: %s", err)
+		rows := db.mainConn.query(db.loadTorrentsStmt)
+		if rows == nil {
+			log.Error.Print("Failed to load torrents from database")
 			log.WriteStack()
+
+			return
 		}
 
-		if old, exists := db.Torrents[infoHash]; exists && old != nil {
-			old.ID = id
-			old.DownMultiplier = downMultiplier
-			old.UpMultiplier = upMultiplier
-			old.Snatched = snatched
-			old.Status = status
-			old.Group = group
+		defer func() {
+			_ = rows.Close()
+		}()
 
-			newTorrents[infoHash] = old
-		} else {
-			newTorrents[infoHash] = &cdb.Torrent{
-				ID:             id,
-				UpMultiplier:   upMultiplier,
-				DownMultiplier: downMultiplier,
-				Snatched:       snatched,
-				Status:         status,
-				Group:          group,
+		for rows.Next() {
+			var (
+				infoHash                     cdb.TorrentHash
+				id                           uint32
+				downMultiplier, upMultiplier float64
+				snatched                     uint16
+				status                       uint8
+				group                        cdb.TorrentGroup
+			)
 
-				Seeders:  make(map[cdb.PeerKey]*cdb.Peer),
-				Leechers: make(map[cdb.PeerKey]*cdb.Peer),
+			if err := rows.Scan(
+				&id,
+				&infoHash,
+				&downMultiplier,
+				&upMultiplier,
+				&snatched,
+				&status,
+				&group.GroupID,
+				&group.TorrentType,
+			); err != nil {
+				log.Error.Printf("Error scanning torrent row: %s", err)
+				log.WriteStack()
+			}
+
+			if old, exists := db.Torrents[infoHash]; exists && old != nil {
+				func() {
+					old.Lock()
+					defer old.Unlock()
+
+					old.ID = id
+					old.DownMultiplier = downMultiplier
+					old.UpMultiplier = upMultiplier
+					old.Snatched = snatched
+					old.Status = status
+					old.Group = group
+				}()
+
+				newTorrents[infoHash] = old
+			} else {
+				newTorrents[infoHash] = &cdb.Torrent{
+					ID:             id,
+					UpMultiplier:   upMultiplier,
+					DownMultiplier: downMultiplier,
+					Snatched:       snatched,
+					Status:         status,
+					Group:          group,
+
+					Seeders:  make(map[cdb.PeerKey]*cdb.Peer),
+					Leechers: make(map[cdb.PeerKey]*cdb.Peer),
+				}
 			}
 		}
-	}
+	}()
 
+	db.TorrentsLock.Lock()
+	defer db.TorrentsLock.Unlock()
 	db.Torrents = newTorrents
 
 	elapsedTime := time.Since(start)
@@ -316,9 +327,6 @@ func (db *Database) loadConfig() {
 }
 
 func (db *Database) loadClients() {
-	util.TakeSemaphore(db.ClientsSemaphore)
-	defer util.ReturnSemaphore(db.ClientsSemaphore)
-
 	db.mainConn.mutex.Lock()
 	defer db.mainConn.mutex.Unlock()
 

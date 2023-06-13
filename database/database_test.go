@@ -298,7 +298,17 @@ func TestUnPrune(t *testing.T) {
 	prepareTestDatabase()
 
 	h := cdb.TorrentHash{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}
-	torrent := *db.Torrents[h]
+	torrent := cdb.Torrent{
+		Seeders:        db.Torrents[h].Seeders,
+		Leechers:       db.Torrents[h].Leechers,
+		Group:          db.Torrents[h].Group,
+		ID:             db.Torrents[h].ID,
+		Snatched:       db.Torrents[h].Snatched,
+		Status:         db.Torrents[h].Status,
+		LastAction:     db.Torrents[h].LastAction,
+		UpMultiplier:   db.Torrents[h].UpMultiplier,
+		DownMultiplier: db.Torrents[h].DownMultiplier,
+	}
 	torrent.Status = 0
 
 	db.UnPrune(db.Torrents[h])

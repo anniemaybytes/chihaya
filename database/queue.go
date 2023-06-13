@@ -49,7 +49,13 @@ func (db *Database) QueueTorrent(torrent *cdb.Torrent, deltaSnatch uint8) {
 	tq.WriteString(strconv.FormatInt(torrent.LastAction, 10))
 	tq.WriteString(")")
 
-	db.torrentChannel <- tq
+	select {
+	case db.torrentChannel <- tq:
+	default:
+		go func() {
+			db.torrentChannel <- tq
+		}()
+	}
 }
 
 func (db *Database) QueueUser(user *cdb.User, rawDeltaUp, rawDeltaDown, deltaUp, deltaDown int64) {
@@ -67,7 +73,13 @@ func (db *Database) QueueUser(user *cdb.User, rawDeltaUp, rawDeltaDown, deltaUp,
 	uq.WriteString(strconv.FormatInt(rawDeltaUp, 10))
 	uq.WriteString(")")
 
-	db.userChannel <- uq
+	select {
+	case db.userChannel <- uq:
+	default:
+		go func() {
+			db.userChannel <- uq
+		}()
+	}
 }
 
 func (db *Database) QueueTransferHistory(peer *cdb.Peer, rawDeltaUp, rawDeltaDown, deltaTime, deltaSeedTime int64,
@@ -100,7 +112,13 @@ func (db *Database) QueueTransferHistory(peer *cdb.Peer, rawDeltaUp, rawDeltaDow
 	th.WriteString(strconv.FormatUint(peer.Left, 10))
 	th.WriteString(")")
 
-	db.transferHistoryChannel <- th
+	select {
+	case db.transferHistoryChannel <- th:
+	default:
+		go func() {
+			db.transferHistoryChannel <- th
+		}()
+	}
 }
 
 func (db *Database) QueueTransferIP(peer *cdb.Peer, rawDeltaUp, rawDeltaDown int64) {
@@ -126,7 +144,13 @@ func (db *Database) QueueTransferIP(peer *cdb.Peer, rawDeltaUp, rawDeltaDown int
 	ti.WriteString(strconv.FormatInt(peer.LastAnnounce, 10))
 	ti.WriteString(")")
 
-	db.transferIpsChannel <- ti
+	select {
+	case db.transferIpsChannel <- ti:
+	default:
+		go func() {
+			db.transferIpsChannel <- ti
+		}()
+	}
 }
 
 func (db *Database) QueueSnatch(peer *cdb.Peer, now int64) {
@@ -140,7 +164,13 @@ func (db *Database) QueueSnatch(peer *cdb.Peer, now int64) {
 	sn.WriteString(strconv.FormatInt(now, 10))
 	sn.WriteString(")")
 
-	db.snatchChannel <- sn
+	select {
+	case db.snatchChannel <- sn:
+	default:
+		go func() {
+			db.snatchChannel <- sn
+		}()
+	}
 }
 
 func (db *Database) UnPrune(torrent *cdb.Torrent) {

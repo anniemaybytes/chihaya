@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"github.com/viney-shih/go-lock"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -41,9 +42,8 @@ type Connection struct {
 }
 
 type Database struct {
-	TorrentsSemaphore util.Semaphore
-	ClientsSemaphore  util.Semaphore
-	UsersSemaphore    util.Semaphore
+	TorrentsLock lock.RWMutex
+	UsersLock    lock.RWMutex
 
 	snatchChannel          chan *bytes.Buffer
 	transferHistoryChannel chan *bytes.Buffer
@@ -70,7 +70,7 @@ type Database struct {
 
 	bufferPool *util.BufferPool
 
-	transferHistorySemaphore util.Semaphore
+	transferHistoryLock lock.Mutex
 
 	terminate bool
 	waitGroup sync.WaitGroup
@@ -96,10 +96,9 @@ func (db *Database) Init() {
 
 	db.mainConn = Open()
 
-	// Initializing semaphore channels
-	db.TorrentsSemaphore = util.NewSemaphore()
-	db.UsersSemaphore = util.NewSemaphore()
-	db.ClientsSemaphore = util.NewSemaphore()
+	// Initializing locks
+	db.TorrentsLock = lock.NewCASMutex()
+	db.UsersLock = lock.NewCASMutex()
 
 	// Used for recording updates, so the max required size should be < 128 bytes. See queue.go for details
 	db.bufferPool = util.NewBufferPool(128)

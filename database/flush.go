@@ -20,13 +20,13 @@ package database
 import (
 	"bytes"
 	"errors"
+	"github.com/viney-shih/go-lock"
 	"time"
 
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
 	"chihaya/log"
-	"chihaya/util"
 )
 
 var (
@@ -82,7 +82,7 @@ func (db *Database) startFlushing() {
 	db.transferIpsChannel = make(chan *bytes.Buffer, transferIpsFlushBufferSize)
 	db.snatchChannel = make(chan *bytes.Buffer, snatchFlushBufferSize)
 
-	db.transferHistorySemaphore = util.NewSemaphore()
+	db.transferHistoryLock = lock.NewCASMutex()
 
 	go db.flushTorrents()
 	go db.flushUsers()
@@ -289,8 +289,8 @@ func (db *Database) flushTransferHistory() {
 
 	for {
 		length, err := func() (int, error) {
-			util.TakeSemaphore(db.transferHistorySemaphore)
-			defer util.ReturnSemaphore(db.transferHistorySemaphore)
+			db.transferHistoryLock.Lock()
+			defer db.transferHistoryLock.Unlock()
 
 			query.Reset()
 			query.WriteString("INSERT INTO transfer_history (uid, fid, uploaded, downloaded, " +
@@ -495,36 +495,42 @@ func (db *Database) purgeInactivePeers() {
 
 		// First, remove inactive peers from memory
 		func() {
-			util.TakeSemaphore(db.TorrentsSemaphore)
-			defer util.ReturnSemaphore(db.TorrentsSemaphore)
+			db.TorrentsLock.RLock()
+			defer db.TorrentsLock.RUnlock()
 
 			for _, torrent := range db.Torrents {
-				countThisTorrent := count
+				func() {
+					//Take write lock to operate on entries
+					torrent.Lock()
+					defer torrent.Unlock()
 
-				for id, peer := range torrent.Leechers {
-					if peer.LastAnnounce < oldestActive {
-						delete(torrent.Leechers, id)
-						count++
+					countThisTorrent := count
+
+					for id, peer := range torrent.Leechers {
+						if peer.LastAnnounce < oldestActive {
+							delete(torrent.Leechers, id)
+							count++
+						}
 					}
-				}
 
-				if countThisTorrent != count && len(torrent.Leechers) == 0 {
-					/* Deallocate previous map since Go does not free space used on maps when deleting objects.
-					We're doing it only for Leechers as potential advantage from freeing one or two Seeders is
-					virtually nil, while Leechers can incur significant memory leaks due to initial swarm activity. */
-					torrent.Leechers = make(map[cdb.PeerKey]*cdb.Peer)
-				}
-
-				for id, peer := range torrent.Seeders {
-					if peer.LastAnnounce < oldestActive {
-						delete(torrent.Seeders, id)
-						count++
+					if countThisTorrent != count && len(torrent.Leechers) == 0 {
+						/* Deallocate previous map since Go does not free space used on maps when deleting objects.
+						We're doing it only for Leechers as potential advantage from freeing one or two Seeders is
+						virtually nil, while Leechers can incur significant memory leaks due to initial swarm activity. */
+						torrent.Leechers = make(map[cdb.PeerKey]*cdb.Peer)
 					}
-				}
 
-				if countThisTorrent != count {
-					db.QueueTorrent(torrent, 0)
-				}
+					for id, peer := range torrent.Seeders {
+						if peer.LastAnnounce < oldestActive {
+							delete(torrent.Seeders, id)
+							count++
+						}
+					}
+
+					if countThisTorrent != count {
+						db.QueueTorrent(torrent, 0)
+					}
+				}()
 			}
 		}()
 
@@ -538,8 +544,8 @@ func (db *Database) purgeInactivePeers() {
 			defer db.waitGroup.Done()
 
 			// Wait to prevent a race condition where the user has announced but their announce time hasn't been flushed yet
-			util.TakeSemaphore(db.transferHistorySemaphore)
-			defer util.ReturnSemaphore(db.transferHistorySemaphore)
+			db.transferHistoryLock.Lock()
+			defer db.transferHistoryLock.Unlock()
 
 			db.mainConn.mutex.Lock()
 			defer db.mainConn.mutex.Unlock()

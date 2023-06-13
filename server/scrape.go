@@ -26,8 +26,6 @@ import (
 	"chihaya/database"
 	cdb "chihaya/database/types"
 	"chihaya/server/params"
-	"chihaya/util"
-
 	"github.com/zeebo/bencode"
 )
 
@@ -39,6 +37,9 @@ func init() {
 }
 
 func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
+	torrent.RLock()
+	defer torrent.RUnlock()
+
 	ret := make(map[string]interface{})
 	ret["complete"] = len(torrent.Seeders)
 	ret["downloaded"] = torrent.Snatched
@@ -56,10 +57,10 @@ func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Databas
 	scrapeData := make(map[string]interface{})
 	fileData := make(map[cdb.TorrentHash]interface{})
 
-	if !util.TryTakeSemaphore(ctx, db.TorrentsSemaphore) {
+	if !db.TorrentsLock.RTryLockWithContext(ctx) {
 		return http.StatusRequestTimeout
 	}
-	defer util.ReturnSemaphore(db.TorrentsSemaphore)
+	defer db.TorrentsLock.RUnlock()
 
 	if qp.InfoHashes() != nil {
 		for _, infoHash := range qp.InfoHashes() {

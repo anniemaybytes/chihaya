@@ -27,8 +27,6 @@ import (
 	"chihaya/config"
 	"chihaya/database"
 	"chihaya/log"
-	"chihaya/util"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
 )
@@ -36,19 +34,24 @@ import (
 var bearerPrefix = "Bearer "
 
 func metrics(ctx context.Context, auth string, db *database.Database, buf *bytes.Buffer) int {
-	if !util.TryTakeSemaphore(ctx, db.UsersSemaphore) {
+	if !db.UsersLock.RTryLockWithContext(ctx) {
 		return http.StatusRequestTimeout
 	}
-	defer util.ReturnSemaphore(db.UsersSemaphore)
+	defer db.UsersLock.RUnlock()
 
-	if !util.TryTakeSemaphore(ctx, db.TorrentsSemaphore) {
+	if !db.TorrentsLock.RTryLockWithContext(ctx) {
 		return http.StatusRequestTimeout
 	}
-	defer util.ReturnSemaphore(db.TorrentsSemaphore)
+	defer db.TorrentsLock.RUnlock()
 
 	peers := 0
+
 	for _, t := range db.Torrents {
-		peers += len(t.Leechers) + len(t.Seeders)
+		func() {
+			t.RLock()
+			defer t.RUnlock()
+			peers += len(t.Leechers) + len(t.Seeders)
+		}()
 	}
 
 	// Early exit before response write

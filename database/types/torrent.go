@@ -24,6 +24,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"sync"
 )
 
 const TorrentHashSize = 20
@@ -128,6 +129,26 @@ type Torrent struct {
 
 	UpMultiplier   float64
 	DownMultiplier float64
+
+	// lock This must be taken whenever read or write is made to fields on this torrent.
+	// Maybe single sync.Mutex is easier to handle, but prevent concurrent access.
+	lock sync.RWMutex
+}
+
+func (t *Torrent) Lock() {
+	t.lock.Lock()
+}
+
+func (t *Torrent) Unlock() {
+	t.lock.Unlock()
+}
+
+func (t *Torrent) RLock() {
+	t.lock.RLock()
+}
+
+func (t *Torrent) RUnlock() {
+	t.lock.RUnlock()
 }
 
 func (t *Torrent) Load(version uint64, reader readerAndByteReader) (err error) {
@@ -202,6 +223,9 @@ func (t *Torrent) Load(version uint64, reader readerAndByteReader) (err error) {
 }
 
 func (t *Torrent) Append(preAllocatedBuffer []byte) (buf []byte) {
+	t.RLock()
+	defer t.RUnlock()
+
 	buf = preAllocatedBuffer
 	buf = binary.AppendUvarint(buf, uint64(len(t.Seeders)))
 

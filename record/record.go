@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	enabled     = false
+	enabled     = false // global for testing purposes
 	initialized = false
 	channel     chan []byte
 )
@@ -39,7 +39,7 @@ func getFile(t time.Time) (*os.File, error) {
 }
 
 func Init() {
-	if enabled, _ = config.GetBool("record", enabled); !enabled {
+	if enabled, _ := config.GetBool("record", enabled); !enabled {
 		return
 	}
 
@@ -92,7 +92,7 @@ func Record(
 	up,
 	down,
 	left uint64) {
-	if enabled, _ = config.GetBool("record", enabled); !enabled {
+	if enabled, _ := config.GetBool("record", enabled); !enabled {
 		return
 	}
 

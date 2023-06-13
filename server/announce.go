@@ -215,16 +215,20 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if !util.TryTakeSemaphore(ctx, db.TorrentsSemaphore) {
+	if !db.TorrentsLock.RTryLockWithContext(ctx) {
 		return http.StatusRequestTimeout
 	}
-	defer util.ReturnSemaphore(db.TorrentsSemaphore)
+	defer db.TorrentsLock.RUnlock()
 
 	torrent, exists := db.Torrents[infoHashes[0]]
 	if !exists {
 		failure("This torrent does not exist", buf, 5*time.Minute)
 		return http.StatusOK // Required by torrent clients to interpret failure response
 	}
+
+	// Take torrent lock to read/write on it to prevent race conditions
+	torrent.Lock()
+	defer torrent.Unlock()
 
 	if torrent.Status == 1 && left == 0 {
 		log.Info.Printf("Unpruning torrent %d", torrent.ID)
@@ -395,10 +399,11 @@ func announce(ctx context.Context, qs string, header http.Header, remoteAddr str
 	peer.ClientID = clientID
 
 	// If the channels are already full, block until a flush occurs
-	go db.QueueTorrent(torrent, deltaSnatch)
-	go db.QueueTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
-	go db.QueueUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	go db.QueueTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
+	db.QueueTorrent(torrent, deltaSnatch)
+	db.QueueTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
+	db.QueueUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
+	db.QueueTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
+
 	go record.Record(
 		peer.TorrentID,
 		user.ID,

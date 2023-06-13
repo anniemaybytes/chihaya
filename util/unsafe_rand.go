@@ -19,31 +19,56 @@ package util
 
 import (
 	unsafeRandom "math/rand"
+	"sync"
 	"time"
 )
 
-var randomSource = unsafeRandom.New(unsafeRandom.NewSource(time.Now().Unix()))
+var randomSourcePool sync.Pool
+
+func init() {
+	randomSourcePool.New = func() any {
+		return unsafeRandom.New(unsafeRandom.NewSource(time.Now().UnixNano()))
+	}
+}
 
 func UnsafeInt() int {
+	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
+	defer randomSourcePool.Put(randomSource)
+
 	return randomSource.Int()
 }
 
 func UnsafeIntn(n int) int {
+	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
+	defer randomSourcePool.Put(randomSource)
+
 	return randomSource.Intn(n)
 }
 
 func UnsafeUint32() uint32 {
+	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
+	defer randomSourcePool.Put(randomSource)
+
 	return randomSource.Uint32()
 }
 
 func UnsafeUint64() uint64 {
+	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
+	defer randomSourcePool.Put(randomSource)
+
 	return randomSource.Uint64()
 }
 
 func UnsafeRand(min int, max int) int {
+	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
+	defer randomSourcePool.Put(randomSource)
+
 	return randomSource.Intn(max-min+1) + min
 }
 
 func UnsafeReadRand(p []byte) (n int, err error) {
+	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
+	defer randomSourcePool.Put(randomSource)
+
 	return randomSource.Read(p)
 }

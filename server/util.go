@@ -24,7 +24,6 @@ import (
 
 	"chihaya/database"
 	cdb "chihaya/database/types"
-	"chihaya/util"
 
 	"github.com/zeebo/bencode"
 )
@@ -44,9 +43,6 @@ func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 }
 
 func clientApproved(peerID string, db *database.Database) (uint16, bool) {
-	util.TakeSemaphore(db.ClientsSemaphore)
-	defer util.ReturnSemaphore(db.ClientsSemaphore)
-
 	var (
 		widLen, i int
 		matched   bool
@@ -74,10 +70,10 @@ func clientApproved(peerID string, db *database.Database) (uint16, bool) {
 }
 
 func isPasskeyValid(ctx context.Context, passkey string, db *database.Database) (*cdb.User, error) {
-	if !util.TryTakeSemaphore(ctx, db.UsersSemaphore) {
+	if !db.UsersLock.RTryLockWithContext(ctx) {
 		return nil, ctx.Err()
 	}
-	defer util.ReturnSemaphore(db.UsersSemaphore)
+	defer db.UsersLock.RUnlock()
 
 	user, exists := db.Users[passkey]
 	if !exists {

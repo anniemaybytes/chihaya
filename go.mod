@@ -8,6 +8,7 @@ require (
 	github.com/jinzhu/copier v0.3.5
 	github.com/prometheus/client_golang v1.15.1
 	github.com/prometheus/common v0.44.0
+	github.com/viney-shih/go-lock v1.1.2
 	github.com/zeebo/bencode v1.0.0
 )
 
@@ -33,6 +34,7 @@ require (
 	github.com/shopspring/decimal v1.3.1 // indirect
 	go.opentelemetry.io/otel v1.15.0 // indirect
 	go.opentelemetry.io/otel/trace v1.15.0 // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
