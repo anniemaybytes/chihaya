@@ -32,6 +32,7 @@ type AdminCollector struct {
 	deadlockAbortedMetric *prometheus.Desc
 	erroredRequestsMetric *prometheus.Desc
 	timeoutRequestsMetric *prometheus.Desc
+	cancelRequestsMetric  *prometheus.Desc
 	sqlErrorCountMetric   *prometheus.Desc
 
 	serializationTimeSummary *prometheus.Histogram
@@ -81,6 +82,7 @@ var (
 	deadlockAborted = 0
 	erroredRequests = 0
 	timeoutRequests = 0
+	cancelRequests  = 0
 	sqlErrorCount   = 0
 )
 
@@ -131,6 +133,8 @@ func NewAdminCollector() *AdminCollector {
 			"Number of failed requests", nil, nil),
 		timeoutRequestsMetric: prometheus.NewDesc("chihaya_requests_timeout",
 			"Number of requests for which context deadline was exceeded", nil, nil),
+		cancelRequestsMetric: prometheus.NewDesc("chihaya_requests_cancel",
+			"Number of requests for which context was prematurely cancelled", nil, nil),
 		sqlErrorCountMetric: prometheus.NewDesc("chihaya_sql_errors_count",
 			"Number of SQL errors", nil, nil),
 
@@ -152,6 +156,7 @@ func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.deadlockTimeMetric
 	ch <- collector.erroredRequestsMetric
 	ch <- collector.timeoutRequestsMetric
+	ch <- collector.cancelRequestsMetric
 	ch <- collector.sqlErrorCountMetric
 
 	serializationTime.Describe(ch)
@@ -171,6 +176,7 @@ func (collector *AdminCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(collector.deadlockTimeMetric, prometheus.CounterValue, deadlockTime.Seconds())
 	ch <- prometheus.MustNewConstMetric(collector.erroredRequestsMetric, prometheus.CounterValue, float64(erroredRequests))
 	ch <- prometheus.MustNewConstMetric(collector.timeoutRequestsMetric, prometheus.CounterValue, float64(timeoutRequests))
+	ch <- prometheus.MustNewConstMetric(collector.cancelRequestsMetric, prometheus.CounterValue, float64(cancelRequests))
 	ch <- prometheus.MustNewConstMetric(collector.sqlErrorCountMetric, prometheus.CounterValue, float64(sqlErrorCount))
 
 	serializationTime.Collect(ch)
@@ -202,6 +208,10 @@ func IncrementErroredRequests() {
 
 func IncrementTimeoutRequests() {
 	timeoutRequests++
+}
+
+func IncrementCancelRequests() {
+	cancelRequests++
 }
 
 func IncrementSQLErrorCount() {

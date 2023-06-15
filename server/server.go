@@ -159,17 +159,19 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case <-ctx.Done():
-		collectors.IncrementTimeoutRequests()
-
 		switch err := ctx.Err(); err {
 		case context.DeadlineExceeded:
+			collectors.IncrementTimeoutRequests()
+
 			failure("Request context deadline exceeded", buf, 5*time.Minute)
 
 			w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
 			w.Header().Add("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK) // Required by torrent clients to interpret failure response
 			_, _ = w.Write(buf.Bytes())
-		default:
+		case context.Canceled:
+			collectors.IncrementCancelRequests()
+
 			w.WriteHeader(http.StatusRequestTimeout)
 		}
 	default:
