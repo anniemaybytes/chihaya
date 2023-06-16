@@ -19,27 +19,17 @@ package server
 
 import (
 	"bytes"
-	"chihaya/database"
-	"encoding/json"
-	"github.com/valyala/fasthttp"
+	"testing"
 	"time"
-
-	"chihaya/log"
 )
 
-func alive(_ *fasthttp.RequestCtx, _ *database.Database, buf *bytes.Buffer) int {
-	type response struct {
-		Now    int64 `json:"now"`
-		Uptime int64 `json:"uptime"`
+func TestFailure(t *testing.T) {
+	buf := bytes.NewBufferString("some existing data")
+
+	failure("error message", buf, time.Second*5)
+
+	testData := []byte("d14:failure reason13:error message8:intervali5e12:min intervali5ee")
+	if !bytes.Equal(buf.Bytes(), testData) {
+		t.Fatalf("Expected %s, got %s", testData, buf.Bytes())
 	}
-
-	res, err := json.Marshal(response{time.Now().UnixMilli(), time.Since(handler.startTime).Milliseconds()})
-	if err != nil {
-		log.Error.Print("Failed to marshal JSON alive response: ", err)
-		return fasthttp.StatusInternalServerError
-	}
-
-	buf.Write(res)
-
-	return fasthttp.StatusOK
 }

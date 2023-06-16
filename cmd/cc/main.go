@@ -133,17 +133,17 @@ func main() {
 			newUserID++
 
 			// Create mapping to get consistent peers
-			anonUserMapping[user.ID] = newUserID
+			anonUserMapping[user.ID.Load()] = newUserID
 
 			// Replaces user id
-			user.ID = newUserID
+			user.ID.Store(newUserID)
 
 			// Replaces hidden flag
-			user.TrackerHide = false
+			user.TrackerHide.Store(false)
 
 			// Replace Up/Down multipliers with baseline
-			user.UpMultiplier = 1.0
-			user.DownMultiplier = 1.0
+			user.UpMultiplier.Store(math.Float64bits(1.0))
+			user.DownMultiplier.Store(math.Float64bits(1.0))
 
 			// Replace passkey with a random provided one of same length
 			for {

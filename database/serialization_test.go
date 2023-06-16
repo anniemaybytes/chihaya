@@ -18,6 +18,7 @@
 package database
 
 import (
+	"math"
 	"net"
 	"reflect"
 	"testing"
@@ -25,6 +26,7 @@ import (
 
 	cdb "chihaya/database/types"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jinzhu/copier"
 )
 
@@ -32,13 +34,14 @@ func TestSerializer(t *testing.T) {
 	testTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
 	testUsers := make(map[string]*cdb.User)
 
-	testUsers["mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ"] = &cdb.User{
-		DisableDownload: false,
-		TrackerHide:     false,
-		ID:              12,
-		UpMultiplier:    1,
-		DownMultiplier:  1,
-	}
+	testUser := &cdb.User{}
+	testUser.ID.Store(12)
+	testUser.DownMultiplier.Store(math.Float64bits(1))
+	testUser.UpMultiplier.Store(math.Float64bits(1))
+	testUser.DisableDownload.Store(false)
+	testUser.TrackerHide.Store(false)
+
+	testUsers["mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ"] = testUser
 
 	testPeer := &cdb.Peer{
 		UserID:       12,
@@ -57,46 +60,62 @@ func TestSerializer(t *testing.T) {
 	testTorrentHash := cdb.TorrentHash{
 		114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56,
 	}
-	testTorrents[testTorrentHash] = &cdb.Torrent{
-		Status:         1,
-		Snatched:       100,
-		ID:             10,
-		LastAction:     time.Now().Unix(),
-		UpMultiplier:   1,
-		DownMultiplier: 1,
+
+	torrent := &cdb.Torrent{
 		Seeders: map[cdb.PeerKey]*cdb.Peer{
 			cdb.NewPeerKey(12, cdb.PeerIDFromRawString("peer_is_twenty_chars")): testPeer,
 		},
 		Leechers: map[cdb.PeerKey]*cdb.Peer{},
 	}
+	torrent.ID.Store(10)
+	torrent.Status.Store(1)
+	torrent.Snatched.Store(100)
+	torrent.LastAction.Store(time.Now().Unix())
+	torrent.DownMultiplier.Store(math.Float64bits(1))
+	torrent.UpMultiplier.Store(math.Float64bits(1))
+	torrent.SeedersLength.Store(uint32(len(torrent.Seeders)))
+
+	torrent.Group.GroupID.Store(1)
+	torrent.Group.TorrentType.Store(cdb.MustTorrentTypeFromString("anime"))
+
+	testTorrents[testTorrentHash] = torrent
 
 	// Prepare empty map to populate with test data
-	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
-	db.Users = make(map[string]*cdb.User)
+	dbTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
+	db.Torrents.Store(&dbTorrents)
 
-	if err := copier.Copy(&db.Torrents, testTorrents); err != nil {
+	dbUsers := make(map[string]*cdb.User)
+	db.Users.Store(&dbUsers)
+
+	if err := copier.Copy(&dbTorrents, testTorrents); err != nil {
 		panic(err)
 	}
 
-	if err := copier.Copy(&db.Users, testUsers); err != nil {
+	if err := copier.Copy(&dbUsers, testUsers); err != nil {
 		panic(err)
 	}
 
 	db.serialize()
 
 	// Reset map to fully test deserialization
-	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
-	db.Users = make(map[string]*cdb.User)
+	dbTorrents = make(map[cdb.TorrentHash]*cdb.Torrent)
+	db.Torrents.Store(&dbTorrents)
+
+	dbUsers = make(map[string]*cdb.User)
+	db.Users.Store(&dbUsers)
 
 	db.deserialize()
 
-	if !reflect.DeepEqual(db.Torrents, testTorrents) {
+	dbTorrents = *db.Torrents.Load()
+	dbUsers = *db.Users.Load()
+
+	if !cmp.Equal(dbTorrents, testTorrents, cdb.TorrentTestCompareOptions...) {
 		t.Fatalf("Torrents (%v) after serialization and deserialization do not match original torrents (%v)!",
-			db.Torrents, testTorrents)
+			dbTorrents, testTorrents)
 	}
 
-	if !reflect.DeepEqual(db.Users, testUsers) {
+	if !reflect.DeepEqual(dbUsers, testUsers) {
 		t.Fatalf("Users (%v) after serialization and deserialization do not match original users (%v)!",
-			db.Users, testUsers)
+			dbUsers, testUsers)
 	}
 }

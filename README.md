@@ -95,9 +95,8 @@ Configuration is done in `config.json`, which you'll need to create with the fol
     "admin_token": "",
     "proxy_header": "",
     "timeout": {
-      "read": 1,
-      "read_header": 2,
-      "write": 1,
+      "read": 300,
+      "write": 500,
       "idle": 30
     }
   },
@@ -143,10 +142,9 @@ Configuration is done in `config.json`, which you'll need to create with the fol
     - `admin_token` - administrative token used in `Authorization` header to access advanced prometheus statistics
     - `proxy_header` - header name to look for user's real IP address, for example `X-Real-Ip`
     - `timeout`
-      - `read_header` - timeout in seconds for reading request headers
-      - `read` - timeout in seconds for reading request; is reset after headers are read
-      - `write` - timeout in seconds for writing response (total time spent)
-      - `idle` - how long (in seconds) to keep connection open for keep-alive requests
+      - `read` - timeout in _milliseconds_ for reading request
+      - `write` - timeout in _milliseconds_ for writing response (per write operation)
+      - `idle` - how long (in _seconds_) to keep connection open for keep-alive requests
 - `announce`
     - `strict_port` - if enabled then announces where client advertises port outside range `1024-65535` will be failed
     - `numwant` - Default number of peers sent on announce if otherwise not explicitly specified by client

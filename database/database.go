@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"github.com/viney-shih/go-lock"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -42,9 +41,6 @@ type Connection struct {
 }
 
 type Database struct {
-	TorrentsLock lock.RWMutex
-	UsersLock    lock.RWMutex
-
 	snatchChannel          chan *bytes.Buffer
 	transferHistoryChannel chan *bytes.Buffer
 	transferIpsChannel     chan *bytes.Buffer
@@ -60,17 +56,17 @@ type Database struct {
 	cleanStalePeersStmt           *sql.Stmt
 	unPruneTorrentStmt            *sql.Stmt
 
-	Users                 map[string]*cdb.User
+	Users                 atomic.Pointer[map[string]*cdb.User]
 	HitAndRuns            atomic.Pointer[map[cdb.UserTorrentPair]struct{}]
-	Torrents              map[cdb.TorrentHash]*cdb.Torrent // SHA-1 hash (20 bytes)
-	TorrentGroupFreeleech atomic.Pointer[map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech]
+	Torrents              atomic.Pointer[map[cdb.TorrentHash]*cdb.Torrent]
+	TorrentGroupFreeleech atomic.Pointer[map[cdb.TorrentGroupKey]*cdb.TorrentGroupFreeleech]
 	Clients               atomic.Pointer[map[uint16]string]
 
 	mainConn *Connection // Used for reloading and misc queries
 
 	bufferPool *util.BufferPool
 
-	transferHistoryLock lock.Mutex
+	transferHistoryLock sync.Mutex
 
 	terminate bool
 	waitGroup sync.WaitGroup
@@ -95,10 +91,6 @@ func (db *Database) Init() {
 	log.Info.Print("Opening database connection...")
 
 	db.mainConn = Open()
-
-	// Initializing locks
-	db.TorrentsLock = lock.NewCASMutex()
-	db.UsersLock = lock.NewCASMutex()
 
 	// Used for recording updates, so the max required size should be < 128 bytes. See queue.go for details
 	db.bufferPool = util.NewBufferPool(128)
@@ -155,8 +147,11 @@ func (db *Database) Init() {
 		panic(err)
 	}
 
-	db.Users = make(map[string]*cdb.User)
-	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
+	dbUsers := make(map[string]*cdb.User)
+	db.Users.Store(&dbUsers)
+
+	dbTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
+	db.Torrents.Store(&dbTorrents)
 
 	dbHitAndRuns := make(map[cdb.UserTorrentPair]struct{})
 	db.HitAndRuns.Store(&dbHitAndRuns)

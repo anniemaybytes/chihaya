@@ -19,60 +19,119 @@ package types
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"math"
+	"sync/atomic"
 )
 
 type User struct {
-	ID uint32
+	ID atomic.Uint32
 
-	DisableDownload bool
+	DisableDownload atomic.Bool
 
-	TrackerHide bool
+	TrackerHide atomic.Bool
 
-	UpMultiplier   float64
-	DownMultiplier float64
+	// UpMultiplier A float64 under the covers
+	UpMultiplier atomic.Uint64
+	// DownMultiplier A float64 under the covers
+	DownMultiplier atomic.Uint64
 }
 
 func (u *User) Load(_ uint64, reader readerAndByteReader) (err error) {
-	if err = binary.Read(reader, binary.LittleEndian, &u.ID); err != nil {
+	var (
+		id                           uint32
+		disableDownload, trackerHide bool
+		upMultiplier, downMultiplier float64
+	)
+
+	if err = binary.Read(reader, binary.LittleEndian, &id); err != nil {
 		return err
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &u.DisableDownload); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &disableDownload); err != nil {
 		return err
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &u.TrackerHide); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &trackerHide); err != nil {
 		return err
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &u.UpMultiplier); err != nil {
+	if err = binary.Read(reader, binary.LittleEndian, &upMultiplier); err != nil {
 		return err
 	}
 
-	return binary.Read(reader, binary.LittleEndian, &u.DownMultiplier)
+	if err = binary.Read(reader, binary.LittleEndian, &downMultiplier); err != nil {
+		return err
+	}
+
+	u.ID.Store(id)
+	u.DisableDownload.Store(disableDownload)
+	u.TrackerHide.Store(trackerHide)
+	u.UpMultiplier.Store(math.Float64bits(upMultiplier))
+	u.DownMultiplier.Store(math.Float64bits(downMultiplier))
+
+	return nil
 }
 
 func (u *User) Append(preAllocatedBuffer []byte) (buf []byte) {
 	buf = preAllocatedBuffer
-	buf = binary.LittleEndian.AppendUint32(buf, u.ID)
+	buf = binary.LittleEndian.AppendUint32(buf, u.ID.Load())
 
-	if u.DisableDownload {
+	if u.DisableDownload.Load() {
 		buf = append(buf, 1)
 	} else {
 		buf = append(buf, 0)
 	}
 
-	if u.TrackerHide {
+	if u.TrackerHide.Load() {
 		buf = append(buf, 1)
 	} else {
 		buf = append(buf, 0)
 	}
 
-	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(u.UpMultiplier))
-	buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(u.DownMultiplier))
+	buf = binary.LittleEndian.AppendUint64(buf, u.UpMultiplier.Load())
+	buf = binary.LittleEndian.AppendUint64(buf, u.DownMultiplier.Load())
 
 	return buf
+}
+
+var encodeJSONUserMap = make(map[string]any)
+
+// MarshalJSON Due to using atomics, JSON will not marshal values within them.
+// This is only safe to call from a single thread at once
+func (u *User) MarshalJSON() (buf []byte, err error) {
+	encodeJSONUserMap["ID"] = u.ID.Load()
+	encodeJSONUserMap["DisableDownload"] = u.DisableDownload.Load()
+	encodeJSONUserMap["TrackerHide"] = u.TrackerHide.Load()
+	encodeJSONUserMap["UpMultiplier"] = math.Float64frombits(u.UpMultiplier.Load())
+	encodeJSONUserMap["DownMultiplier"] = math.Float64frombits(u.UpMultiplier.Load())
+
+	return json.Marshal(encodeJSONUserMap)
+}
+
+type decodeJSONUser struct {
+	ID              uint32
+	DisableDownload bool
+	TrackerHide     bool
+	UpMultiplier    float64
+	DownMultiplier  float64
+}
+
+// UnmarshalJSON Due to using atomics, JSON will not marshal values within them.
+// This is only safe to call from a single thread at once
+func (u *User) UnmarshalJSON(buf []byte) (err error) {
+	var userJSON decodeJSONUser
+	if err = json.Unmarshal(buf, &userJSON); err != nil {
+		return err
+	}
+
+	u.ID.Store(userJSON.ID)
+	u.DisableDownload.Store(userJSON.DisableDownload)
+	u.TrackerHide.Store(userJSON.TrackerHide)
+	u.UpMultiplier.Store(math.Float64bits(userJSON.UpMultiplier))
+	u.DownMultiplier.Store(math.Float64bits(userJSON.DownMultiplier))
+
+	return nil
 }
 
 type UserTorrentPair struct {

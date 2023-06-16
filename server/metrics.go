@@ -19,51 +19,34 @@ package server
 
 import (
 	"bytes"
-	"context"
-	"net/http"
+	cdb "chihaya/database/types"
 	"time"
 
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/database"
 	"chihaya/log"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
+	"github.com/valyala/fasthttp"
 )
 
-var bearerPrefix = "Bearer "
+var bearerPrefix = []byte("Bearer ")
 
-func metrics(ctx context.Context, auth string, db *database.Database, buf *bytes.Buffer) int {
-	if !db.UsersLock.RTryLockWithContext(ctx) {
-		return http.StatusRequestTimeout
-	}
-	defer db.UsersLock.RUnlock()
-
-	if !db.TorrentsLock.RTryLockWithContext(ctx) {
-		return http.StatusRequestTimeout
-	}
-	defer db.TorrentsLock.RUnlock()
+func metrics(ctx *fasthttp.RequestCtx, _ *cdb.User, db *database.Database, buf *bytes.Buffer) int {
+	dbUsers := *db.Users.Load()
+	dbTorrents := *db.Torrents.Load()
 
 	peers := 0
 
-	for _, t := range db.Torrents {
-		func() {
-			t.RLock()
-			defer t.RUnlock()
-			peers += len(t.Leechers) + len(t.Seeders)
-		}()
-	}
-
-	// Early exit before response write
-	select {
-	case <-ctx.Done():
-		return http.StatusRequestTimeout
-	default:
+	for _, t := range dbTorrents {
+		peers += int(t.LeechersLength.Load()) + int(t.SeedersLength.Load())
 	}
 
 	collectors.UpdateUptime(time.Since(handler.startTime).Seconds())
-	collectors.UpdateUsers(len(db.Users))
-	collectors.UpdateTorrents(len(db.Torrents))
+	collectors.UpdateUsers(len(dbUsers))
+	collectors.UpdateTorrents(len(dbTorrents))
 	collectors.UpdateClients(len(*db.Clients.Load()))
 	collectors.UpdateHitAndRuns(len(*db.HitAndRuns.Load()))
 	collectors.UpdatePeers(peers)
@@ -78,10 +61,10 @@ func metrics(ctx context.Context, auth string, db *database.Database, buf *bytes
 		}
 	}
 
-	n := len(bearerPrefix)
-	if len(auth) > n && auth[:n] == bearerPrefix {
+	authString := ctx.Request.Header.PeekBytes([]byte("Authorization"))
+	if len(authString) > len(bearerPrefix) && bytes.Equal(authString[:len(bearerPrefix)], bearerPrefix) {
 		adminToken, exists := config.Section("http").Get("admin_token", "")
-		if exists && auth[n:] == adminToken {
+		if exists && bytes.Equal(authString[len(bearerPrefix):], []byte(adminToken)) {
 			mfs, _ := prometheus.DefaultGatherer.Gather()
 
 			for _, mf := range mfs {
@@ -93,5 +76,5 @@ func metrics(ctx context.Context, auth string, db *database.Database, buf *bytes
 		}
 	}
 
-	return http.StatusOK
+	return fasthttp.StatusOK
 }

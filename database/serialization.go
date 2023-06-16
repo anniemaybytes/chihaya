@@ -68,10 +68,7 @@ func (db *Database) serialize() {
 			torrentFile.Close()
 		}()
 
-		db.TorrentsLock.RLock()
-		defer db.TorrentsLock.RUnlock()
-
-		if err = cdb.WriteTorrents(torrentFile, db.Torrents); err != nil {
+		if err = cdb.WriteTorrents(torrentFile, *db.Torrents.Load()); err != nil {
 			log.Error.Print("Failed to encode torrents for serialization: ", err)
 			return err
 		}
@@ -96,10 +93,7 @@ func (db *Database) serialize() {
 			userFile.Close()
 		}()
 
-		db.UsersLock.RLock()
-		defer db.UsersLock.RUnlock()
-
-		if err = cdb.WriteUsers(userFile, db.Users); err != nil {
+		if err = cdb.WriteUsers(userFile, *db.Users.Load()); err != nil {
 			log.Error.Print("Failed to encode users for serialization: ", err)
 			return err
 		}
@@ -124,6 +118,9 @@ func (db *Database) deserialize() {
 
 	start := time.Now()
 
+	torrents := 0
+	peers := 0
+
 	func() {
 		torrentFile, err := os.OpenFile(torrentBinFilename, os.O_RDONLY, 0)
 		if err != nil {
@@ -134,13 +131,19 @@ func (db *Database) deserialize() {
 		//goland:noinspection GoUnhandledErrorResult
 		defer torrentFile.Close()
 
-		db.TorrentsLock.Lock()
-		defer db.TorrentsLock.Unlock()
-
-		if err = cdb.LoadTorrents(torrentFile, db.Torrents); err != nil {
+		dbTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
+		if err = cdb.LoadTorrents(torrentFile, dbTorrents); err != nil {
 			log.Error.Print("Failed to deserialize torrent cache: ", err)
 			return
 		}
+
+		torrents = len(dbTorrents)
+
+		for _, t := range dbTorrents {
+			peers += int(t.LeechersLength.Load()) + int(t.SeedersLength.Load())
+		}
+
+		db.Torrents.Store(&dbTorrents)
 	}()
 
 	func() {
@@ -153,33 +156,16 @@ func (db *Database) deserialize() {
 		//goland:noinspection GoUnhandledErrorResult
 		defer userFile.Close()
 
-		db.UsersLock.Lock()
-		defer db.UsersLock.Unlock()
-
-		if err = cdb.LoadUsers(userFile, db.Users); err != nil {
+		users := make(map[string]*cdb.User)
+		if err = cdb.LoadUsers(userFile, users); err != nil {
 			log.Error.Print("Failed to deserialize user cache: ", err)
 			return
 		}
+
+		db.Users.Store(&users)
 	}()
 
-	db.TorrentsLock.RLock()
-	defer db.TorrentsLock.RUnlock()
-
-	torrents := len(db.Torrents)
-
-	peers := 0
-
-	for _, t := range db.Torrents {
-		func() {
-			t.RLock()
-			defer t.RUnlock()
-			peers += len(t.Leechers) + len(t.Seeders)
-		}()
-	}
-
-	db.UsersLock.RLock()
-	defer db.UsersLock.RUnlock()
-	users := len(db.Users)
+	users := len(*db.Users.Load())
 
 	log.Info.Printf("Loaded %d users, %d torrents and %d peers (%s)",
 		users, torrents, peers, time.Since(start).String())

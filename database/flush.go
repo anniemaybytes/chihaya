@@ -20,7 +20,6 @@ package database
 import (
 	"bytes"
 	"errors"
-	"github.com/viney-shih/go-lock"
 	"time"
 
 	"chihaya/collectors"
@@ -81,8 +80,6 @@ func (db *Database) startFlushing() {
 	db.transferHistoryChannel = make(chan *bytes.Buffer, transferHistoryFlushBufferSize)
 	db.transferIpsChannel = make(chan *bytes.Buffer, transferIpsFlushBufferSize)
 	db.snatchChannel = make(chan *bytes.Buffer, snatchFlushBufferSize)
-
-	db.transferHistoryLock = lock.NewCASMutex()
 
 	go db.flushTorrents()
 	go db.flushUsers()
@@ -494,45 +491,44 @@ func (db *Database) purgeInactivePeers() {
 		oldestActive := now - int64(peerInactivityInterval)
 
 		// First, remove inactive peers from memory
-		func() {
-			db.TorrentsLock.RLock()
-			defer db.TorrentsLock.RUnlock()
+		dbTorrents := *db.Torrents.Load()
+		for _, torrent := range dbTorrents {
+			func() {
+				torrent.PeerLock() // Take write lock to operate on peer entries
+				defer torrent.PeerUnlock()
 
-			for _, torrent := range db.Torrents {
-				func() {
-					//Take write lock to operate on entries
-					torrent.Lock()
-					defer torrent.Unlock()
+				countThisTorrent := count
 
-					countThisTorrent := count
-
-					for id, peer := range torrent.Leechers {
-						if peer.LastAnnounce < oldestActive {
-							delete(torrent.Leechers, id)
-							count++
-						}
+				for id, peer := range torrent.Leechers {
+					if peer.LastAnnounce < oldestActive {
+						delete(torrent.Leechers, id)
+						count++
 					}
+				}
 
-					if countThisTorrent != count && len(torrent.Leechers) == 0 {
-						/* Deallocate previous map since Go does not free space used on maps when deleting objects.
-						We're doing it only for Leechers as potential advantage from freeing one or two Seeders is
-						virtually nil, while Leechers can incur significant memory leaks due to initial swarm activity. */
-						torrent.Leechers = make(map[cdb.PeerKey]*cdb.Peer)
-					}
+				if countThisTorrent != count && len(torrent.Leechers) == 0 {
+					/* Deallocate previous map since Go does not free space used on maps when deleting objects.
+					We're doing it only for Leechers as potential advantage from freeing one or two Seeders is
+					virtually nil, while Leechers can incur significant memory leaks due to initial swarm activity. */
+					torrent.Leechers = make(map[cdb.PeerKey]*cdb.Peer)
+				}
 
-					for id, peer := range torrent.Seeders {
-						if peer.LastAnnounce < oldestActive {
-							delete(torrent.Seeders, id)
-							count++
-						}
+				for id, peer := range torrent.Seeders {
+					if peer.LastAnnounce < oldestActive {
+						delete(torrent.Seeders, id)
+						count++
 					}
+				}
 
-					if countThisTorrent != count {
-						db.QueueTorrent(torrent, 0)
-					}
-				}()
-			}
-		}()
+				if countThisTorrent != count {
+					// Update lengths of peers
+					torrent.SeedersLength.Store(uint32(len(torrent.Seeders)))
+					torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
+
+					db.QueueTorrent(torrent, 0)
+				}
+			}()
+		}
 
 		elapsedTime := time.Since(start)
 		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)

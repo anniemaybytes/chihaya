@@ -18,12 +18,8 @@
 package server
 
 import (
-	"bytes"
-	"context"
 	"net"
-	"net/http"
 	"path"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +32,7 @@ import (
 	"chihaya/util"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/valyala/fasthttp"
 )
 
 type httpHandler struct {
@@ -52,8 +49,6 @@ type httpHandler struct {
 	requests   atomic.Uint64
 	throughput int
 
-	contextTimeout time.Duration
-
 	waitGroup sync.WaitGroup
 	terminate bool
 }
@@ -63,59 +58,7 @@ var (
 	listener net.Listener
 )
 
-func (handler *httpHandler) respond(ctx context.Context, r *http.Request, buf *bytes.Buffer) int {
-	dir, action := path.Split(r.URL.Path)
-	if action == "" {
-		return http.StatusNotFound
-	}
-
-	/*
-	 * ===================================================
-	 * Handle public endpoints (/:action)
-	 * ===================================================
-	 */
-
-	passkey := path.Dir(dir)[1:]
-	if passkey == "" {
-		switch action {
-		case "alive":
-			return alive(buf)
-		}
-
-		return http.StatusNotFound
-	}
-
-	/*
-	 * ===================================================
-	 * Handle private endpoints (/:passkey/:action)
-	 * ===================================================
-	 */
-
-	user, err := isPasskeyValid(ctx, passkey, handler.db)
-	if err != nil {
-		return http.StatusRequestTimeout
-	} else if user == nil {
-		failure("Your passkey is invalid", buf, 1*time.Hour)
-		return http.StatusOK
-	}
-
-	switch action {
-	case "announce":
-		return announce(ctx, r.URL.RawQuery, r.Header, r.RemoteAddr, user, handler.db, buf)
-	case "scrape":
-		if enabled, _ := config.GetBool("scrape", true); !enabled {
-			return http.StatusNotFound
-		}
-
-		return scrape(ctx, r.URL.RawQuery, user, handler.db, buf)
-	case "metrics":
-		return metrics(ctx, r.Header.Get("Authorization"), handler.db, buf)
-	}
-
-	return http.StatusNotFound
-}
-
-func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (handler *httpHandler) serve(ctx *fasthttp.RequestCtx) {
 	if handler.terminate {
 		return
 	}
@@ -127,59 +70,99 @@ func (handler *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.waitGroup.Add(1)
 	defer handler.waitGroup.Done()
 
-	// Flush buffered data to client
-	defer w.(http.Flusher).Flush()
-
+	// Take buffer from pool and mark buf to be returned after we are done with it
 	buf := handler.bufferPool.Take()
-	// Mark buf to be returned to bufferPool after we are done with it
 	defer handler.bufferPool.Give(buf)
 
 	// Gracefully handle panics so that they're confined to single request and don't crash server
 	defer func() {
 		if err := recover(); err != nil {
-			log.Error.Printf("Recovered from panicking request handler - %v\nURL was: %s", err, r.URL)
+			log.Error.Printf("Recovered from panicking request handler - %v\nURL was: %s", err, ctx.URI().String())
 			log.WriteStack()
 
 			collectors.IncrementErroredRequests()
 
-			if w.Header().Get("Content-Type") == "" {
+			if len(ctx.Response.Header.ContentType()) == 0 {
 				buf.Reset()
-				w.WriteHeader(http.StatusInternalServerError)
+				ctx.Response.SetStatusCode(fasthttp.StatusInternalServerError)
 			}
 		}
 	}()
 
-	// Prepare and start new context with timeout to abort long-running requests
-	ctx, cancel := context.WithTimeout(r.Context(), handler.contextTimeout)
-	defer cancel()
-
 	/* Pass flow to handler; note that handler should be responsible for actually cancelling
 	its own work based on request context cancellation */
-	status := handler.respond(ctx, r, buf)
-
-	select {
-	case <-ctx.Done():
-		switch err := ctx.Err(); err {
-		case context.DeadlineExceeded:
-			collectors.IncrementTimeoutRequests()
-
-			failure("Request context deadline exceeded", buf, 5*time.Minute)
-
-			w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
-			w.Header().Add("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusOK) // Required by torrent clients to interpret failure response
-			_, _ = w.Write(buf.Bytes())
-		case context.Canceled:
-			collectors.IncrementCancelRequests()
-
-			w.WriteHeader(http.StatusRequestTimeout)
+	status := func() int {
+		dir, action := path.Split(string(ctx.Request.URI().Path()))
+		if action == "" {
+			return fasthttp.StatusNotFound
 		}
-	default:
-		w.Header().Add("Content-Length", strconv.Itoa(buf.Len()))
-		w.Header().Add("Content-Type", "text/plain")
-		w.WriteHeader(status)
-		_, _ = w.Write(buf.Bytes())
+
+		/*
+		 * ===================================================
+		 * Handle public endpoints (/:action)
+		 * ===================================================
+		 */
+
+		passkey := path.Dir(dir)[1:]
+		if passkey == "" {
+			switch action {
+			case "alive":
+				return alive(ctx, handler.db, buf)
+			}
+
+			return fasthttp.StatusNotFound
+		}
+
+		/*
+		 * ===================================================
+		 * Handle private endpoints (/:passkey/:action)
+		 * ===================================================
+		 */
+
+		user := isPasskeyValid(passkey, handler.db)
+		if user == nil {
+			failure("Your passkey is invalid", buf, 1*time.Hour)
+			return fasthttp.StatusOK
+		}
+
+		ctx.SetUserValue("user", user) // Pass user in request's context
+
+		switch action {
+		case "announce":
+			return announce(ctx, user, handler.db, buf)
+		case "scrape":
+			if enabled, _ := config.GetBool("scrape", true); !enabled {
+				return fasthttp.StatusNotFound
+			}
+
+			return scrape(ctx, user, handler.db, buf)
+		case "metrics":
+			return metrics(ctx, user, handler.db, buf)
+		}
+
+		return fasthttp.StatusNotFound
+	}()
+
+	ctx.Response.Header.SetContentLength(buf.Len())
+	ctx.Response.Header.SetContentTypeBytes([]byte("text/plain"))
+	ctx.Response.SetStatusCode(status)
+	_, _ = ctx.Write(buf.Bytes())
+}
+
+func (handler *httpHandler) error(ctx *fasthttp.RequestCtx, err error) {
+	ctx.Response.ResetBody()
+	ctx.Response.Header.SetContentLength(0)
+	ctx.Response.Header.SetContentTypeBytes([]byte("text/plain"))
+
+	if _, ok := err.(*fasthttp.ErrSmallBuffer); ok {
+		ctx.Response.SetStatusCode(fasthttp.StatusRequestHeaderFieldsTooLarge)
+		return
+	} else if netErr, ok := err.(*net.OpError); ok && netErr.Timeout() {
+		ctx.Response.SetStatusCode(fasthttp.StatusRequestTimeout)
+		return
 	}
+
+	ctx.Response.SetStatusCode(fasthttp.StatusBadRequest)
 }
 
 func Start() {
@@ -191,26 +174,29 @@ func Start() {
 	handler.bufferPool = bufferPool
 
 	addr, _ := config.Section("http").Get("addr", ":34000")
-	readTimeout, _ := config.Section("http").Section("timeout").GetInt("read", 1)
-	readHeaderTimeout, _ := config.Section("http").Section("timeout").GetInt("read_header", 2)
-	writeTimeout, _ := config.Section("http").Section("timeout").GetInt("write", 3)
+	readTimeout, _ := config.Section("http").Section("timeout").GetInt("read", 300)
+	writeTimeout, _ := config.Section("http").Section("timeout").GetInt("write", 500)
 	idleTimeout, _ := config.Section("http").Section("timeout").GetInt("idle", 30)
 
-	// Set appropriate context timeout based on write timeout; 200ms should be enough as a wiggle room
-	handler.contextTimeout = time.Duration(writeTimeout)*time.Second - 200*time.Millisecond
-
 	// Create new server instance
-	server := &http.Server{
-		Handler:           handler,
-		ReadTimeout:       time.Duration(readTimeout) * time.Second,
-		ReadHeaderTimeout: time.Duration(readHeaderTimeout) * time.Second,
-		WriteTimeout:      time.Duration(writeTimeout) * time.Second,
-		IdleTimeout:       time.Duration(idleTimeout) * time.Second,
+	server := &fasthttp.Server{
+		Handler:                      handler.serve,
+		ErrorHandler:                 handler.error,
+		ReadTimeout:                  time.Duration(readTimeout) * time.Millisecond,
+		WriteTimeout:                 time.Duration(writeTimeout) * time.Millisecond,
+		IdleTimeout:                  time.Duration(idleTimeout) * time.Second,
+		GetOnly:                      true,
+		DisablePreParseMultipartForm: true,
+		NoDefaultServerHeader:        true,
+		NoDefaultDate:                true,
+		NoDefaultContentType:         true,
+		CloseOnShutdown:              true,
 	}
 
 	if idleTimeout <= 0 {
-		log.Warning.Print("Setting idleTimeout <= 0 disables Keep-Alive which might negatively impact performance")
-		server.SetKeepAlivesEnabled(false)
+		log.Warning.Print("Setting http.timeout.idle <= 0 disables Keep-Alive which might negatively impact performance")
+
+		server.DisableKeepalive = true
 	}
 
 	// Start new goroutine to calculate throughput
@@ -263,8 +249,7 @@ func Start() {
 	// Wait for active connections to finish processing
 	handler.waitGroup.Wait()
 
-	// Close server so that it does not Accept(), https://github.com/golang/go/issues/10527
-	_ = server.Close()
+	_ = server.Shutdown()
 
 	log.Info.Print("Now closed and not accepting any new connections")
 

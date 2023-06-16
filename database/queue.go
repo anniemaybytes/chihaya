@@ -38,15 +38,15 @@ func (db *Database) QueueTorrent(torrent *cdb.Torrent, deltaSnatch uint8) {
 	tq := db.bufferPool.Take()
 
 	tq.WriteString("(")
-	tq.WriteString(strconv.FormatUint(uint64(torrent.ID), 10))
+	tq.WriteString(strconv.FormatUint(uint64(torrent.ID.Load()), 10))
 	tq.WriteString(",")
 	tq.WriteString(strconv.FormatUint(uint64(deltaSnatch), 10))
 	tq.WriteString(",")
-	tq.WriteString(strconv.FormatInt(int64(len(torrent.Seeders)), 10))
+	tq.WriteString(strconv.FormatUint(uint64(torrent.SeedersLength.Load()), 10))
 	tq.WriteString(",")
-	tq.WriteString(strconv.FormatInt(int64(len(torrent.Leechers)), 10))
+	tq.WriteString(strconv.FormatUint(uint64(torrent.LeechersLength.Load()), 10))
 	tq.WriteString(",")
-	tq.WriteString(strconv.FormatInt(torrent.LastAction, 10))
+	tq.WriteString(strconv.FormatInt(torrent.LastAction.Load(), 10))
 	tq.WriteString(")")
 
 	select {
@@ -62,7 +62,7 @@ func (db *Database) QueueUser(user *cdb.User, rawDeltaUp, rawDeltaDown, deltaUp,
 	uq := db.bufferPool.Take()
 
 	uq.WriteString("(")
-	uq.WriteString(strconv.FormatUint(uint64(user.ID), 10))
+	uq.WriteString(strconv.FormatUint(uint64(user.ID.Load()), 10))
 	uq.WriteString(",")
 	uq.WriteString(strconv.FormatInt(deltaUp, 10))
 	uq.WriteString(",")
@@ -175,6 +175,6 @@ func (db *Database) QueueSnatch(peer *cdb.Peer, now int64) {
 
 func (db *Database) UnPrune(torrent *cdb.Torrent) {
 	db.mainConn.mutex.Lock()
-	db.mainConn.execute(db.unPruneTorrentStmt, torrent.ID)
+	db.mainConn.execute(db.unPruneTorrentStmt, torrent.ID.Load())
 	db.mainConn.mutex.Unlock()
 }

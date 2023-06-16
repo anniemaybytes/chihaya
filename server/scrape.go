@@ -19,13 +19,12 @@ package server
 
 import (
 	"bytes"
-	"context"
-	"net/http"
-
 	"chihaya/config"
 	"chihaya/database"
 	cdb "chihaya/database/types"
 	"chihaya/server/params"
+
+	"github.com/valyala/fasthttp"
 	"github.com/zeebo/bencode"
 )
 
@@ -36,20 +35,8 @@ func init() {
 	scrapeInterval, _ = intervals.GetInt("scrape", 900)
 }
 
-func writeScrapeInfo(torrent *cdb.Torrent) map[string]interface{} {
-	torrent.RLock()
-	defer torrent.RUnlock()
-
-	ret := make(map[string]interface{})
-	ret["complete"] = len(torrent.Seeders)
-	ret["downloaded"] = torrent.Snatched
-	ret["incomplete"] = len(torrent.Leechers)
-
-	return ret
-}
-
-func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Database, buf *bytes.Buffer) int {
-	qp, err := params.ParseQuery(qs)
+func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf *bytes.Buffer) int {
+	qp, err := params.ParseQuery(string(ctx.Request.URI().QueryString()))
 	if err != nil {
 		panic(err)
 	}
@@ -57,17 +44,19 @@ func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Databas
 	scrapeData := make(map[string]interface{})
 	fileData := make(map[cdb.TorrentHash]interface{})
 
-	if !db.TorrentsLock.RTryLockWithContext(ctx) {
-		return http.StatusRequestTimeout
-	}
-	defer db.TorrentsLock.RUnlock()
+	dbTorrents := *db.Torrents.Load()
 
 	if qp.InfoHashes() != nil {
 		for _, infoHash := range qp.InfoHashes() {
-			torrent, exists := db.Torrents[infoHash]
+			torrent, exists := dbTorrents[infoHash]
 			if exists {
 				if !isDisabledDownload(db, user, torrent) {
-					fileData[infoHash] = writeScrapeInfo(torrent)
+					ret := make(map[string]interface{})
+					ret["complete"] = torrent.SeedersLength.Load()
+					ret["downloaded"] = torrent.Snatched.Load()
+					ret["incomplete"] = torrent.LeechersLength.Load()
+
+					fileData[infoHash] = ret
 				}
 			}
 		}
@@ -83,17 +72,10 @@ func scrape(ctx context.Context, qs string, user *cdb.User, db *database.Databas
 	scrapeData["interval"] = scrapeInterval
 	scrapeData["min interval"] = scrapeInterval
 
-	// Early exit before response write
-	select {
-	case <-ctx.Done():
-		return http.StatusRequestTimeout
-	default:
-	}
-
 	encoder := bencode.NewEncoder(buf)
 	if err = encoder.Encode(scrapeData); err != nil {
 		panic(err)
 	}
 
-	return http.StatusOK
+	return fasthttp.StatusOK
 }

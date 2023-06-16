@@ -18,6 +18,7 @@
 package database
 
 import (
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -65,14 +66,13 @@ func (db *Database) startReloading() {
 }
 
 func (db *Database) loadUsers() {
-	db.UsersLock.Lock()
-	defer db.UsersLock.Unlock()
-
 	db.mainConn.mutex.Lock()
 	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
-	newUsers := make(map[string]*cdb.User, len(db.Users))
+
+	dbUsers := *db.Users.Load()
+	newUsers := make(map[string]*cdb.User, len(dbUsers))
 
 	rows := db.mainConn.query(db.loadUsersStmt)
 	if rows == nil {
@@ -99,30 +99,30 @@ func (db *Database) loadUsers() {
 			log.WriteStack()
 		}
 
-		if old, exists := db.Users[torrentPass]; exists && old != nil {
-			old.ID = id
-			old.DownMultiplier = downMultiplier
-			old.UpMultiplier = upMultiplier
-			old.DisableDownload = disableDownload
-			old.TrackerHide = trackerHide
+		if old, exists := dbUsers[torrentPass]; exists && old != nil {
+			old.ID.Store(id)
+			old.DownMultiplier.Store(math.Float64bits(downMultiplier))
+			old.UpMultiplier.Store(math.Float64bits(upMultiplier))
+			old.DisableDownload.Store(disableDownload)
+			old.TrackerHide.Store(trackerHide)
 
 			newUsers[torrentPass] = old
 		} else {
-			newUsers[torrentPass] = &cdb.User{
-				ID:              id,
-				UpMultiplier:    upMultiplier,
-				DownMultiplier:  downMultiplier,
-				DisableDownload: disableDownload,
-				TrackerHide:     trackerHide,
-			}
+			u := &cdb.User{}
+			u.ID.Store(id)
+			u.DownMultiplier.Store(math.Float64bits(downMultiplier))
+			u.UpMultiplier.Store(math.Float64bits(upMultiplier))
+			u.DisableDownload.Store(disableDownload)
+			u.TrackerHide.Store(trackerHide)
+			newUsers[torrentPass] = u
 		}
 	}
 
-	db.Users = newUsers
+	db.Users.Store(&newUsers)
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("users", elapsedTime)
-	log.Info.Printf("User load complete (%d rows, %s)", len(db.Users), elapsedTime.String())
+	log.Info.Printf("User load complete (%d rows, %s)", len(newUsers), elapsedTime.String())
 }
 
 func (db *Database) loadHitAndRuns() {
@@ -169,90 +169,98 @@ func (db *Database) loadHitAndRuns() {
 func (db *Database) loadTorrents() {
 	var start time.Time
 
-	newTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
+	dbTorrents := *db.Torrents.Load()
 
-	func() {
-		db.TorrentsLock.RLock()
-		defer db.TorrentsLock.RUnlock()
+	newTorrents := make(map[cdb.TorrentHash]*cdb.Torrent, len(dbTorrents))
 
-		db.mainConn.mutex.Lock()
-		defer db.mainConn.mutex.Unlock()
+	db.mainConn.mutex.Lock()
+	defer db.mainConn.mutex.Unlock()
 
-		start = time.Now()
+	start = time.Now()
 
-		rows := db.mainConn.query(db.loadTorrentsStmt)
-		if rows == nil {
-			log.Error.Print("Failed to load torrents from database")
-			log.WriteStack()
+	rows := db.mainConn.query(db.loadTorrentsStmt)
+	if rows == nil {
+		log.Error.Print("Failed to load torrents from database")
+		log.WriteStack()
 
-			return
-		}
+		return
+	}
 
-		defer func() {
-			_ = rows.Close()
-		}()
-
-		for rows.Next() {
-			var (
-				infoHash                     cdb.TorrentHash
-				id                           uint32
-				downMultiplier, upMultiplier float64
-				snatched                     uint16
-				status                       uint8
-				group                        cdb.TorrentGroup
-			)
-
-			if err := rows.Scan(
-				&id,
-				&infoHash,
-				&downMultiplier,
-				&upMultiplier,
-				&snatched,
-				&status,
-				&group.GroupID,
-				&group.TorrentType,
-			); err != nil {
-				log.Error.Printf("Error scanning torrent row: %s", err)
-				log.WriteStack()
-			}
-
-			if old, exists := db.Torrents[infoHash]; exists && old != nil {
-				func() {
-					old.Lock()
-					defer old.Unlock()
-
-					old.ID = id
-					old.DownMultiplier = downMultiplier
-					old.UpMultiplier = upMultiplier
-					old.Snatched = snatched
-					old.Status = status
-					old.Group = group
-				}()
-
-				newTorrents[infoHash] = old
-			} else {
-				newTorrents[infoHash] = &cdb.Torrent{
-					ID:             id,
-					UpMultiplier:   upMultiplier,
-					DownMultiplier: downMultiplier,
-					Snatched:       snatched,
-					Status:         status,
-					Group:          group,
-
-					Seeders:  make(map[cdb.PeerKey]*cdb.Peer),
-					Leechers: make(map[cdb.PeerKey]*cdb.Peer),
-				}
-			}
-		}
+	defer func() {
+		_ = rows.Close()
 	}()
 
-	db.TorrentsLock.Lock()
-	defer db.TorrentsLock.Unlock()
-	db.Torrents = newTorrents
+	for rows.Next() {
+		var (
+			infoHash                     cdb.TorrentHash
+			id                           uint32
+			downMultiplier, upMultiplier float64
+			snatched                     uint16
+			status                       uint8
+			groupID                      uint32
+			torrentType                  string
+		)
+
+		if err := rows.Scan(
+			&id,
+			&infoHash,
+			&downMultiplier,
+			&upMultiplier,
+			&snatched,
+			&status,
+			&groupID,
+			&torrentType,
+		); err != nil {
+			log.Error.Printf("Error scanning torrent row: %s", err)
+			log.WriteStack()
+
+			continue
+		}
+
+		torrentTypeUint64, err := cdb.TorrentTypeFromString(torrentType)
+
+		if err != nil {
+			log.Error.Printf("Error storing torrent row: %s", err)
+			log.WriteStack()
+
+			continue
+		}
+
+		if old, exists := dbTorrents[infoHash]; exists && old != nil {
+			old.ID.Store(id)
+			old.DownMultiplier.Store(math.Float64bits(downMultiplier))
+			old.UpMultiplier.Store(math.Float64bits(upMultiplier))
+			old.Snatched.Store(uint32(snatched))
+			old.Status.Store(uint32(status))
+
+			old.Group.TorrentType.Store(torrentTypeUint64)
+			old.Group.GroupID.Store(groupID)
+
+			newTorrents[infoHash] = old
+		} else {
+			t := &cdb.Torrent{
+				Seeders:  make(map[cdb.PeerKey]*cdb.Peer),
+				Leechers: make(map[cdb.PeerKey]*cdb.Peer),
+			}
+
+			t.ID.Store(id)
+			t.DownMultiplier.Store(math.Float64bits(downMultiplier))
+			t.UpMultiplier.Store(math.Float64bits(upMultiplier))
+			t.Snatched.Store(uint32(snatched))
+			t.Status.Store(uint32(status))
+
+			t.Group.TorrentType.Store(torrentTypeUint64)
+			t.Group.GroupID.Store(groupID)
+
+			newTorrents[infoHash] = t
+		}
+	}
+
+	db.Torrents.Store(&newTorrents)
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("torrents", elapsedTime)
-	log.Info.Printf("Torrent load complete (%d rows, %s)", len(db.Torrents), elapsedTime.String())
+	log.Info.Printf("Torrent load complete (%d rows, %s)", len(newTorrents), elapsedTime.String())
 }
 
 func (db *Database) loadGroupsFreeleech() {
@@ -260,7 +268,7 @@ func (db *Database) loadGroupsFreeleech() {
 	defer db.mainConn.mutex.Unlock()
 
 	start := time.Now()
-	newTorrentGroupFreeleech := make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
+	newTorrentGroupFreeleech := make(map[cdb.TorrentGroupKey]*cdb.TorrentGroupFreeleech)
 
 	rows := db.mainConn.query(db.loadTorrentGroupFreeleechStmt)
 	if rows == nil {
@@ -277,15 +285,26 @@ func (db *Database) loadGroupsFreeleech() {
 	for rows.Next() {
 		var (
 			downMultiplier, upMultiplier float64
-			group                        cdb.TorrentGroup
+			groupID                      uint32
+			torrentType                  string
 		)
 
-		if err := rows.Scan(&group.GroupID, &group.TorrentType, &downMultiplier, &upMultiplier); err != nil {
-			log.Error.Printf("Error scanning torrent row: %s", err)
+		if err := rows.Scan(&groupID, &torrentType, &downMultiplier, &upMultiplier); err != nil {
+			log.Error.Printf("Error scanning torrent group freeleech row: %s", err)
 			log.WriteStack()
+
+			continue
 		}
 
-		newTorrentGroupFreeleech[group] = &cdb.TorrentGroupFreeleech{
+		k, err := cdb.TorrentGroupKeyFromString(torrentType, groupID)
+		if err != nil {
+			log.Error.Printf("Error storing torrent group freeleech row: %s", err)
+			log.WriteStack()
+
+			continue
+		}
+
+		newTorrentGroupFreeleech[k] = &cdb.TorrentGroupFreeleech{
 			UpMultiplier:   upMultiplier,
 			DownMultiplier: downMultiplier,
 		}
@@ -295,7 +314,7 @@ func (db *Database) loadGroupsFreeleech() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("groups_freeleech", elapsedTime)
-	log.Info.Printf("Group freeleech load complete (%d rows, %s)", len(db.Torrents), elapsedTime.String())
+	log.Info.Printf("Group freeleech load complete (%d rows, %s)", len(newTorrentGroupFreeleech), elapsedTime.String())
 }
 
 func (db *Database) loadConfig() {

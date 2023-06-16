@@ -19,7 +19,6 @@ package server
 
 import (
 	"bytes"
-	"context"
 	"time"
 
 	"chihaya/database"
@@ -37,7 +36,7 @@ func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 	buf.Reset()
 
 	encoder := bencode.NewEncoder(buf)
-	if errz := encoder.Encode(buf); errz != nil {
+	if errz := encoder.Encode(data); errz != nil {
 		panic(errz)
 	}
 }
@@ -69,18 +68,13 @@ func clientApproved(peerID string, db *database.Database) (uint16, bool) {
 	return 0, false
 }
 
-func isPasskeyValid(ctx context.Context, passkey string, db *database.Database) (*cdb.User, error) {
-	if !db.UsersLock.RTryLockWithContext(ctx) {
-		return nil, ctx.Err()
-	}
-	defer db.UsersLock.RUnlock()
-
-	user, exists := db.Users[passkey]
+func isPasskeyValid(passkey string, db *database.Database) *cdb.User {
+	user, exists := (*db.Users.Load())[passkey]
 	if !exists {
-		return nil, nil
+		return nil
 	}
 
-	return user, nil
+	return user
 }
 
 func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
@@ -96,5 +90,5 @@ func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
 
 func isDisabledDownload(db *database.Database, user *cdb.User, torrent *cdb.Torrent) bool {
 	// Only disable download if the torrent doesn't have a HnR against it
-	return user.DisableDownload && !hasHitAndRun(db, user.ID, torrent.ID)
+	return user.DisableDownload.Load() && !hasHitAndRun(db, user.ID.Load(), torrent.ID.Load())
 }

@@ -19,6 +19,7 @@ package database
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"reflect"
@@ -28,6 +29,7 @@ import (
 	cdb "chihaya/database/types"
 
 	"github.com/go-testfixtures/testfixtures/v3"
+	"github.com/google/go-cmp/cmp"
 )
 
 var (
@@ -59,47 +61,55 @@ func TestMain(m *testing.M) {
 func TestLoadUsers(t *testing.T) {
 	prepareTestDatabase()
 
-	db.Users = make(map[string]*cdb.User)
+	dbUsers := make(map[string]*cdb.User)
+	db.Users.Store(&dbUsers)
+
+	testUser1 := &cdb.User{}
+	testUser1.ID.Store(1)
+	testUser1.DownMultiplier.Store(math.Float64bits(1))
+	testUser1.UpMultiplier.Store(math.Float64bits(1))
+	testUser1.DisableDownload.Store(false)
+	testUser1.TrackerHide.Store(false)
+
+	testUser2 := &cdb.User{}
+	testUser2.ID.Store(2)
+	testUser2.DownMultiplier.Store(math.Float64bits(2))
+	testUser2.UpMultiplier.Store(math.Float64bits(0.5))
+	testUser2.DisableDownload.Store(true)
+	testUser2.TrackerHide.Store(true)
+
 	users := map[string]*cdb.User{
-		"mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ": {
-			ID:              1,
-			UpMultiplier:    1,
-			DownMultiplier:  1,
-			TrackerHide:     false,
-			DisableDownload: false,
-		},
-		"tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw": {
-			ID:              2,
-			UpMultiplier:    0.5,
-			DownMultiplier:  2,
-			TrackerHide:     true,
-			DisableDownload: true,
-		},
+		"mUztWMpBYNCqzmge6vGeEUGSrctJbgpQ": testUser1,
+		"tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw": testUser2,
 	}
 
 	// Test with fresh data
 	db.loadUsers()
 
-	if len(db.Users) != len(users) {
-		t.Fatal(fixtureFailure("Did not load all users as expected from fixture file", len(users), len(db.Users)))
+	dbUsers = *db.Users.Load()
+
+	if len(dbUsers) != len(users) {
+		t.Fatal(fixtureFailure("Did not load all users as expected from fixture file", len(users), len(dbUsers)))
 	}
 
 	for passkey, user := range users {
-		if !reflect.DeepEqual(user, db.Users[passkey]) {
+		if !reflect.DeepEqual(user, dbUsers[passkey]) {
 			t.Fatal(fixtureFailure(
 				fmt.Sprintf("Did not load user (%s) as expected from fixture file", passkey),
 				user,
-				db.Users[passkey]))
+				dbUsers[passkey]))
 		}
 	}
 
 	// Now test load on top of existing data
-	oldUsers := db.Users
+	oldUsers := dbUsers
 
 	db.loadUsers()
 
-	if !reflect.DeepEqual(oldUsers, db.Users) {
-		t.Fatal(fixtureFailure("Did not reload users as expected from fixture file", oldUsers, db.Users))
+	dbUsers = *db.Users.Load()
+
+	if !reflect.DeepEqual(oldUsers, dbUsers) {
+		t.Fatal(fixtureFailure("Did not reload users as expected from fixture file", oldUsers, dbUsers))
 	}
 }
 
@@ -133,89 +143,92 @@ func TestLoadHitAndRuns(t *testing.T) {
 func TestLoadTorrents(t *testing.T) {
 	prepareTestDatabase()
 
-	db.Torrents = make(map[cdb.TorrentHash]*cdb.Torrent)
+	dbTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
+	db.Torrents.Store(&dbTorrents)
+
+	t1 := &cdb.Torrent{
+		Seeders:  map[cdb.PeerKey]*cdb.Peer{},
+		Leechers: map[cdb.PeerKey]*cdb.Peer{},
+	}
+	t1.ID.Store(1)
+	t1.Status.Store(1)
+	t1.Snatched.Store(2)
+	t1.DownMultiplier.Store(math.Float64bits(1))
+	t1.UpMultiplier.Store(math.Float64bits(1))
+	t1.Group.GroupID.Store(1)
+	t1.Group.TorrentType.Store(cdb.MustTorrentTypeFromString("anime"))
+
+	t2 := &cdb.Torrent{
+		Seeders:  map[cdb.PeerKey]*cdb.Peer{},
+		Leechers: map[cdb.PeerKey]*cdb.Peer{},
+	}
+	t2.ID.Store(2)
+	t2.Status.Store(0)
+	t2.Snatched.Store(0)
+	t2.DownMultiplier.Store(math.Float64bits(2))
+	t2.UpMultiplier.Store(math.Float64bits(0.5))
+	t2.Group.GroupID.Store(1)
+	t2.Group.TorrentType.Store(cdb.MustTorrentTypeFromString("music"))
+
+	t3 := &cdb.Torrent{
+		Seeders:  map[cdb.PeerKey]*cdb.Peer{},
+		Leechers: map[cdb.PeerKey]*cdb.Peer{},
+	}
+	t3.ID.Store(3)
+	t3.Status.Store(0)
+	t3.Snatched.Store(0)
+	t3.DownMultiplier.Store(math.Float64bits(1))
+	t3.UpMultiplier.Store(math.Float64bits(1))
+	t3.Group.GroupID.Store(2)
+	t3.Group.TorrentType.Store(cdb.MustTorrentTypeFromString("anime"))
 
 	torrents := map[cdb.TorrentHash]*cdb.Torrent{
-		{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}: {
-			ID:             1,
-			Status:         1,
-			Snatched:       2,
-			DownMultiplier: 1,
-			UpMultiplier:   1,
-			Seeders:        map[cdb.PeerKey]*cdb.Peer{},
-			Leechers:       map[cdb.PeerKey]*cdb.Peer{},
-			Group: cdb.TorrentGroup{
-				GroupID:     1,
-				TorrentType: "anime",
-			},
-		},
-		{22, 168, 45, 221, 87, 225, 140, 177, 94, 34, 242, 225, 196, 234, 222, 46, 187, 131, 177, 155}: {
-			ID:             2,
-			Status:         0,
-			Snatched:       0,
-			DownMultiplier: 2,
-			UpMultiplier:   0.5,
-			Seeders:        map[cdb.PeerKey]*cdb.Peer{},
-			Leechers:       map[cdb.PeerKey]*cdb.Peer{},
-			Group: cdb.TorrentGroup{
-				GroupID:     1,
-				TorrentType: "music",
-			},
-		},
-		{89, 252, 84, 49, 177, 28, 118, 28, 148, 205, 62, 185, 8, 37, 234, 110, 109, 200, 165, 241}: {
-			ID:             3,
-			Status:         0,
-			Snatched:       0,
-			DownMultiplier: 1,
-			UpMultiplier:   1,
-			Seeders:        map[cdb.PeerKey]*cdb.Peer{},
-			Leechers:       map[cdb.PeerKey]*cdb.Peer{},
-			Group: cdb.TorrentGroup{
-				GroupID:     2,
-				TorrentType: "anime",
-			},
-		},
+		{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}: t1,
+		{22, 168, 45, 221, 87, 225, 140, 177, 94, 34, 242, 225, 196, 234, 222, 46, 187, 131, 177, 155}:    t2,
+		{89, 252, 84, 49, 177, 28, 118, 28, 148, 205, 62, 185, 8, 37, 234, 110, 109, 200, 165, 241}:       t3,
 	}
 
 	// Test with fresh data
 	db.loadTorrents()
 
-	if len(db.Torrents) != len(torrents) {
+	dbTorrents = *db.Torrents.Load()
+
+	if len(dbTorrents) != len(torrents) {
 		t.Fatal(fixtureFailure("Did not load all torrents as expected from fixture file",
 			len(torrents),
-			len(db.Torrents)))
+			len(dbTorrents)))
 	}
 
 	for hash, torrent := range torrents {
-		if !reflect.DeepEqual(torrent, db.Torrents[hash]) {
+		if !cmp.Equal(torrent, dbTorrents[hash], cdb.TorrentTestCompareOptions...) {
+			hashHex, _ := hash.MarshalText()
 			t.Fatal(fixtureFailure(
-				fmt.Sprintf("Did not load torrent (%s) as expected from fixture file", hash),
+				fmt.Sprintf("Did not load torrent (%s) as expected from fixture file", string(hashHex)),
 				torrent,
-				db.Torrents[hash]))
+				dbTorrents[hash]))
 		}
 	}
 
 	// Now test load on top of existing data
-	oldTorrents := db.Torrents
+	oldTorrents := dbTorrents
 
 	db.loadTorrents()
 
-	if !reflect.DeepEqual(oldTorrents, db.Torrents) {
-		t.Fatal(fixtureFailure("Did not reload torrents as expected from fixture file", oldTorrents, db.Torrents))
+	dbTorrents = *db.Torrents.Load()
+
+	if !cmp.Equal(oldTorrents, dbTorrents, cdb.TorrentTestCompareOptions...) {
+		t.Fatal(fixtureFailure("Did not reload torrents as expected from fixture file", oldTorrents, dbTorrents))
 	}
 }
 
 func TestLoadGroupsFreeleech(t *testing.T) {
 	prepareTestDatabase()
 
-	dbMap := make(map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech)
+	dbMap := make(map[cdb.TorrentGroupKey]*cdb.TorrentGroupFreeleech)
 	db.TorrentGroupFreeleech.Store(&dbMap)
 
-	torrentGroupFreeleech := map[cdb.TorrentGroup]*cdb.TorrentGroupFreeleech{
-		{
-			GroupID:     2,
-			TorrentType: "anime",
-		}: {
+	torrentGroupFreeleech := map[cdb.TorrentGroupKey]*cdb.TorrentGroupFreeleech{
+		cdb.MustTorrentGroupKeyFromString("anime", 2): {
 			DownMultiplier: 0,
 			UpMultiplier:   2,
 		},
@@ -297,36 +310,47 @@ func TestLoadClients(t *testing.T) {
 func TestUnPrune(t *testing.T) {
 	prepareTestDatabase()
 
-	h := cdb.TorrentHash{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}
-	torrent := cdb.Torrent{
-		Seeders:        db.Torrents[h].Seeders,
-		Leechers:       db.Torrents[h].Leechers,
-		Group:          db.Torrents[h].Group,
-		ID:             db.Torrents[h].ID,
-		Snatched:       db.Torrents[h].Snatched,
-		Status:         db.Torrents[h].Status,
-		LastAction:     db.Torrents[h].LastAction,
-		UpMultiplier:   db.Torrents[h].UpMultiplier,
-		DownMultiplier: db.Torrents[h].DownMultiplier,
-	}
-	torrent.Status = 0
+	dbTorrents := *db.Torrents.Load()
 
-	db.UnPrune(db.Torrents[h])
+	h := cdb.TorrentHash{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}
+	dbTorrent := dbTorrents[h]
+
+	torrent := cdb.Torrent{
+		Seeders:  dbTorrent.Seeders,
+		Leechers: dbTorrent.Leechers,
+	}
+	torrent.SeedersLength.Store(uint32(len(torrent.Seeders)))
+	torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
+	torrent.ID.Store(dbTorrent.ID.Load())
+	torrent.Status.Store(dbTorrent.Status.Load())
+	torrent.Snatched.Store(dbTorrent.Snatched.Load())
+	torrent.DownMultiplier.Store(dbTorrent.DownMultiplier.Load())
+	torrent.UpMultiplier.Store(dbTorrent.UpMultiplier.Load())
+	torrent.Group.GroupID.Store(dbTorrent.Group.GroupID.Load())
+	torrent.Group.TorrentType.Store(dbTorrent.Group.TorrentType.Load())
+
+	torrent.Status.Store(0)
+
+	db.UnPrune(dbTorrents[h])
 
 	db.loadTorrents()
 
-	if !reflect.DeepEqual(&torrent, db.Torrents[h]) {
+	dbTorrents = *db.Torrents.Load()
+
+	if !cmp.Equal(&torrent, dbTorrents[h], cdb.TorrentTestCompareOptions...) {
 		t.Fatal(fixtureFailure(
 			fmt.Sprintf("Torrent (%x) was not unpruned properly", h),
 			&torrent,
-			db.Torrents[h]))
+			dbTorrents[h]))
 	}
 }
 
 func TestRecordAndFlushUsers(t *testing.T) {
 	prepareTestDatabase()
 
-	testUser := db.Users["tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw"]
+	dbUsers := *db.Users.Load()
+
+	testUser := dbUsers["tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw"]
 
 	var (
 		initUpload      int64
@@ -347,11 +371,11 @@ func TestRecordAndFlushUsers(t *testing.T) {
 
 	deltaRawDownload = 83472
 	deltaRawUpload = 245
-	deltaDownload = int64(float64(deltaRawDownload) * testUser.DownMultiplier)
-	deltaUpload = int64(float64(deltaRawUpload) * testUser.UpMultiplier)
+	deltaDownload = int64(float64(deltaRawDownload) * math.Float64frombits(testUser.DownMultiplier.Load()))
+	deltaUpload = int64(float64(deltaRawUpload) * math.Float64frombits(testUser.UpMultiplier.Load()))
 
 	row := db.mainConn.sqlDb.QueryRow("SELECT Uploaded, Downloaded, rawup, rawdl "+
-		"FROM users_main WHERE ID = ?", testUser.ID)
+		"FROM users_main WHERE ID = ?", testUser.ID.Load())
 
 	err := row.Scan(&initUpload, &initDownload, &initRawUpload, &initRawDownload)
 	if err != nil {
@@ -366,7 +390,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	row = db.mainConn.sqlDb.QueryRow("SELECT Uploaded, Downloaded, rawup, rawdl "+
-		"FROM users_main WHERE ID = ?", testUser.ID)
+		"FROM users_main WHERE ID = ?", testUser.ID.Load())
 
 	err = row.Scan(&upload, &download, &rawUpload, &rawDownload)
 	if err != nil {
@@ -758,22 +782,24 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 	prepareTestDatabase()
 
 	h := cdb.TorrentHash{114, 239, 32, 237, 220, 181, 67, 143, 115, 182, 216, 141, 120, 196, 223, 193, 102, 123, 137, 56}
-	torrent := db.Torrents[h]
-	torrent.LastAction = time.Now().Unix()
+	torrent := (*db.Torrents.Load())[h]
+	torrent.LastAction.Store(time.Now().Unix())
 	torrent.Seeders[cdb.NewPeerKey(1, cdb.PeerIDFromRawString("test_peer_id_num_one"))] = &cdb.Peer{
 		UserID:       1,
-		TorrentID:    torrent.ID,
+		TorrentID:    torrent.ID.Load(),
 		ClientID:     1,
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
 	torrent.Leechers[cdb.NewPeerKey(3, cdb.PeerIDFromRawString("test_peer_id_num_two"))] = &cdb.Peer{
 		UserID:       3,
-		TorrentID:    torrent.ID,
+		TorrentID:    torrent.ID.Load(),
 		ClientID:     2,
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
+	torrent.SeedersLength.Store(uint32(len(torrent.Seeders)))
+	torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
 
 	db.QueueTorrent(torrent, 5)
 
@@ -790,25 +816,25 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 	)
 
 	row := db.mainConn.sqlDb.QueryRow("SELECT Snatched, last_action, Seeders, Leechers "+
-		"FROM torrents WHERE ID = ?", torrent.ID)
+		"FROM torrents WHERE ID = ?", torrent.ID.Load())
 	err := row.Scan(&snatched, &lastAction, &numSeeders, &numLeechers)
 
 	if err != nil {
 		panic(err)
 	}
 
-	if torrent.Snatched+5 != snatched {
+	if uint16(torrent.Snatched.Load())+5 != snatched {
 		t.Fatal(fixtureFailure(
 			fmt.Sprintf("Snatches incorrectly updated in the database for torrent %x", h),
-			torrent.Snatched+5,
+			torrent.Snatched.Load()+5,
 			snatched,
 		))
 	}
 
-	if torrent.LastAction != lastAction {
+	if torrent.LastAction.Load() != lastAction {
 		t.Fatal(fixtureFailure(
 			fmt.Sprintf("Last incorrectly updated in the database for torrent %x", h),
-			torrent.LastAction,
+			torrent.LastAction.Load(),
 			lastAction,
 		))
 	}
@@ -824,6 +850,22 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 	if len(torrent.Leechers) != numLeechers {
 		t.Fatal(fixtureFailure(
 			fmt.Sprintf("Leechers incorrectly updated in the database for torrent %x", h),
+			len(torrent.Leechers),
+			numLeechers,
+		))
+	}
+
+	if int(torrent.SeedersLength.Load()) != numSeeders {
+		t.Fatal(fixtureFailure(
+			fmt.Sprintf("SeedersLength incorrectly updated in the database for torrent %x", h),
+			len(torrent.Seeders),
+			numSeeders,
+		))
+	}
+
+	if int(torrent.LeechersLength.Load()) != numLeechers {
+		t.Fatal(fixtureFailure(
+			fmt.Sprintf("LeechersLength incorrectly updated in the database for torrent %x", h),
 			len(torrent.Leechers),
 			numLeechers,
 		))
