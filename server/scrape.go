@@ -36,7 +36,7 @@ func init() {
 }
 
 func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf *bytes.Buffer) int {
-	qp, err := params.ParseQuery(string(ctx.Request.URI().QueryString()))
+	qp, err := params.ParseQuery(ctx.Request.URI().QueryArgs())
 	if err != nil {
 		panic(err)
 	}
@@ -46,8 +46,8 @@ func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf
 
 	dbTorrents := *db.Torrents.Load()
 
-	if qp.InfoHashes() != nil {
-		for _, infoHash := range qp.InfoHashes() {
+	if len(qp.Params.InfoHashes) > 0 {
+		for _, infoHash := range qp.Params.InfoHashes {
 			torrent, exists := dbTorrents[infoHash]
 			if exists {
 				if !isDisabledDownload(db, user, torrent) {

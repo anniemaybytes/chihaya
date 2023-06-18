@@ -15,103 +15,156 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package params is based on https://github.com/chihaya/chihaya/blob/e6e7269/bittorrent/params.go
 package params
 
 import (
-	"net/url"
+	"bytes"
 	"strconv"
-	"strings"
 
 	cdb "chihaya/database/types"
+
+	"github.com/valyala/fasthttp"
 )
 
 type QueryParam struct {
-	query      string
-	params     map[string]string
-	infoHashes []cdb.TorrentHash
-}
+	Params struct {
+		Uploaded   uint64
+		Downloaded uint64
+		Left       uint64
 
-func ParseQuery(query string) (qp *QueryParam, err error) {
-	qp = &QueryParam{
-		query:      query,
-		infoHashes: nil,
-		params:     make(map[string]string),
+		Port    uint16
+		NumWant uint16
+
+		PeerID string
+		IPv4   string
+		IP     string
+		Event  string
+
+		testGarbageUnescape string // for testing purposes
+
+		Compact  bool
+		NoPeerID bool
+
+		InfoHashes []cdb.TorrentHash
 	}
 
-	for query != "" {
-		key := query
-		if i := strings.Index(key, "&"); i >= 0 {
-			key, query = key[:i], key[i+1:]
-		} else {
-			query = ""
-		}
+	Exists struct {
+		Uploaded   bool
+		Downloaded bool
+		Left       bool
 
-		if key == "" {
-			continue
-		}
+		Port    bool
+		NumWant bool
 
-		value := ""
-		if i := strings.Index(key, "="); i >= 0 {
-			key, value = key[:i], key[i+1:]
-		}
+		PeerID bool
+		IPv4   bool
+		IP     bool
+		Event  bool
 
-		key, err = url.QueryUnescape(key)
+		testGarbageUnescape bool // for testing purposes
+
+		Compact  bool
+		NoPeerID bool
+
+		InfoHashes bool
+	}
+}
+
+var uploadedKey = []byte("uploaded")
+var downloadedKey = []byte("downloaded")
+var leftKey = []byte("left")
+
+var portKey = []byte("port")
+var numWant = []byte("numwant")
+
+var peerIDKey = []byte("peer_id")
+var ipv4Key = []byte("ipv4")
+var ipKey = []byte("ip")
+var eventKey = []byte("event")
+
+var testGarbageUnescapeKey = []byte("!@#") // for testing purposes
+
+var infoHashKey = []byte("info_hash")
+
+var compactKey = []byte("compact")
+var noPeerIDKey = []byte("no_peer_id")
+
+func ParseQuery(queryArgs *fasthttp.Args) (qp QueryParam, err error) {
+	queryArgs.VisitAll(func(key, value []byte) {
 		if err != nil {
-			panic(err)
+			return
 		}
 
-		value, err = url.QueryUnescape(value)
-		if err != nil {
-			panic(err)
-		}
-
-		if key == "info_hash" {
-			if len(value) == cdb.TorrentHashSize {
-				qp.infoHashes = append(qp.infoHashes, cdb.TorrentHashFromBytes([]byte(value)))
+		key = bytes.ToLower(key)
+		switch true {
+		case bytes.Equal(key, uploadedKey):
+			n, errz := strconv.ParseUint(string(value), 10, 0)
+			if errz != nil {
+				err = errz
+				return
 			}
-		} else {
-			qp.params[strings.ToLower(key)] = value
+			qp.Params.Uploaded = n
+			qp.Exists.Uploaded = true
+		case bytes.Equal(key, downloadedKey):
+			n, errz := strconv.ParseUint(string(value), 10, 0)
+			if errz != nil {
+				err = errz
+				return
+			}
+			qp.Params.Downloaded = n
+			qp.Exists.Downloaded = true
+		case bytes.Equal(key, leftKey):
+			n, errz := strconv.ParseUint(string(value), 10, 0)
+			if errz != nil {
+				err = errz
+				return
+			}
+			qp.Params.Left = n
+			qp.Exists.Left = true
+		case bytes.Equal(key, portKey):
+			n, errz := strconv.ParseUint(string(value), 10, 16)
+			if errz != nil {
+				err = errz
+				return
+			}
+			qp.Params.Port = uint16(n)
+			qp.Exists.Port = true
+		case bytes.Equal(key, numWant):
+			n, errz := strconv.ParseUint(string(value), 10, 16)
+			if errz != nil {
+				err = errz
+				return
+			}
+			qp.Params.NumWant = uint16(n)
+			qp.Exists.NumWant = true
+		case bytes.Equal(key, peerIDKey):
+			qp.Params.PeerID = string(value)
+			qp.Exists.PeerID = true
+		case bytes.Equal(key, ipv4Key):
+			qp.Params.IPv4 = string(value)
+			qp.Exists.IPv4 = true
+		case bytes.Equal(key, ipKey):
+			qp.Params.IP = string(value)
+			qp.Exists.IP = true
+		case bytes.Equal(key, eventKey):
+			qp.Params.Event = string(value)
+			qp.Exists.Event = true
+		case bytes.Equal(key, testGarbageUnescapeKey): // for testing purposes
+			qp.Params.testGarbageUnescape = string(value)
+			qp.Exists.testGarbageUnescape = true
+		case bytes.Equal(key, infoHashKey):
+			if len(value) == cdb.TorrentHashSize {
+				qp.Params.InfoHashes = append(qp.Params.InfoHashes, cdb.TorrentHashFromBytes(value))
+				qp.Exists.InfoHashes = true
+			}
+		case bytes.Equal(key, compactKey):
+			qp.Params.Compact = bytes.Equal(value, []byte{'1'})
+			qp.Exists.Compact = true
+		case bytes.Equal(key, noPeerIDKey):
+			qp.Params.NoPeerID = bytes.Equal(value, []byte{'1'})
+			qp.Exists.NoPeerID = true
 		}
-	}
+	})
 
-	return qp, nil
-}
-
-func (qp *QueryParam) getUint(which string, bitSize int) (ret uint64, exists bool) {
-	str, exists := qp.params[which]
-	if exists {
-		var err error
-
-		ret, err = strconv.ParseUint(str, 10, bitSize)
-		if err != nil {
-			exists = false
-		}
-	}
-
-	return
-}
-
-func (qp *QueryParam) Get(which string) (ret string, exists bool) {
-	ret, exists = qp.params[which]
-	return
-}
-
-func (qp *QueryParam) GetUint64(which string) (ret uint64, exists bool) {
-	return qp.getUint(which, 64)
-}
-
-func (qp *QueryParam) GetUint16(which string) (ret uint16, exists bool) {
-	tmp, exists := qp.getUint(which, 16)
-	ret = uint16(tmp)
-
-	return
-}
-
-func (qp *QueryParam) InfoHashes() []cdb.TorrentHash {
-	return qp.infoHashes
-}
-
-func (qp *QueryParam) RawQuery() string {
-	return qp.query
+	return qp, err
 }

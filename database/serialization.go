@@ -116,10 +116,11 @@ func (db *Database) deserialize() {
 	torrentBinFilename := fmt.Sprintf("%s.bin", cdb.TorrentCacheFile)
 	userBinFilename := fmt.Sprintf("%s.bin", cdb.UserCacheFile)
 
-	start := time.Now()
-
-	torrents := 0
-	peers := 0
+	var (
+		start    = time.Now()
+		torrents = 0
+		peers    = 0
+	)
 
 	func() {
 		torrentFile, err := os.OpenFile(torrentBinFilename, os.O_RDONLY, 0)

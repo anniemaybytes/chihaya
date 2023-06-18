@@ -111,65 +111,58 @@ func getPublicIPV4(ipAddr string, exists bool) (string, bool) {
 }
 
 func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf *bytes.Buffer) int {
-	qp, err := params.ParseQuery(string(ctx.Request.URI().QueryString()))
+	qp, err := params.ParseQuery(ctx.Request.URI().QueryArgs())
 	if err != nil {
 		panic(err)
 	}
 
-	// Mandatory parameters
-	infoHashes := qp.InfoHashes()
-	peerID, _ := qp.Get("peer_id")
-	port, portExists := qp.GetUint16("port")
-	uploaded, uploadedExists := qp.GetUint64("uploaded")
-	downloaded, downloadedExists := qp.GetUint64("downloaded")
-	left, leftExists := qp.GetUint64("left")
-
-	if infoHashes == nil {
+	if len(qp.Params.InfoHashes) == 0 {
 		failure("Malformed request - missing info_hash", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
-	} else if len(infoHashes) > 1 {
+	} else if len(qp.Params.InfoHashes) > 1 {
 		failure("Malformed request - can only announce singular info_hash", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if peerID == "" {
+	if len(qp.Params.PeerID) == 0 {
 		failure("Malformed request - missing peer_id", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if len(peerID) != 20 {
+	if len(qp.Params.PeerID) != 20 {
 		failure("Malformed request - invalid peer_id", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if !portExists {
+	if !qp.Exists.Port {
 		failure("Malformed request - missing port", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if strictPort && port < 1024 || port > 65535 {
-		failure(fmt.Sprintf("Malformed request - port outside of acceptable range (port: %d)", port), buf, 1*time.Hour)
+	if strictPort && qp.Params.Port < 1024 || qp.Params.Port > 65535 {
+		failure(fmt.Sprintf("Malformed request - port outside of acceptable range (port: %d)", qp.Params.Port),
+			buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if !uploadedExists {
+	if !qp.Exists.Uploaded {
 		failure("Malformed request - missing uploaded", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if !downloadedExists {
+	if !qp.Exists.Downloaded {
 		failure("Malformed request - missing downloaded", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if !leftExists {
+	if !qp.Exists.Left {
 		failure("Malformed request - missing left", buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
 	ipAddr := func() string {
-		ipV4, existsV4 := getPublicIPV4(qp.Get("ipv4")) // First try to get IPv4 address if client sent it
-		ip, exists := getPublicIPV4(qp.Get("ip"))       // ... then try to get public IP if sent by client
+		ipV4, existsV4 := getPublicIPV4(qp.Params.IPv4, qp.Exists.IPv4) // First try to get IPv4 address if client sent it
+		ip, exists := getPublicIPV4(qp.Params.IP, qp.Exists.IP)         // ... then try to get public IP if sent by client
 
 		// Fail if ip and ipv4 are not same, and both are provided
 		if (existsV4 && exists) && (ip != ipV4) {
@@ -209,13 +202,13 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	clientID, matched := clientApproved(peerID, db)
+	clientID, matched := clientApproved(qp.Params.PeerID, db)
 	if !matched {
-		failure(fmt.Sprintf("Your client is not approved (peer_id: %s)", peerID), buf, 1*time.Hour)
+		failure(fmt.Sprintf("Your client is not approved (peer_id: %s)", qp.Params.PeerID), buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	torrent, exists := (*db.Torrents.Load())[infoHashes[0]]
+	torrent, exists := (*db.Torrents.Load())[qp.Params.InfoHashes[0]]
 	if !exists {
 		failure("This torrent does not exist", buf, 5*time.Minute)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
@@ -225,7 +218,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	torrent.PeerLock()
 	defer torrent.PeerUnlock()
 
-	if torrentStatus := torrent.Status.Load(); torrentStatus == 1 && left == 0 {
+	if torrentStatus := torrent.Status.Load(); torrentStatus == 1 && qp.Params.Left == 0 {
 		log.Info.Printf("Unpruning torrent %d", torrent.ID.Load())
 
 		torrent.Status.Store(0)
@@ -235,31 +228,31 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		boolean type so there is no risk of data loss. */
 		go db.UnPrune(torrent)
 	} else if torrentStatus != 0 {
-		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrentStatus, left), buf, 15*time.Minute)
+		failure(fmt.Sprintf("This torrent does not exist (torrentStatus: %d, left: %d)", torrentStatus, qp.Params.Left),
+			buf, 15*time.Minute)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	numWant, exists := qp.GetUint16("numwant")
-	if !exists {
-		numWant = uint16(defaultNumWant)
-	} else if numWant > uint16(maxNumWant) {
-		numWant = uint16(maxNumWant)
+	if !qp.Exists.NumWant {
+		qp.Params.NumWant = uint16(defaultNumWant)
+	} else if qp.Params.NumWant > uint16(maxNumWant) {
+		qp.Params.NumWant = uint16(maxNumWant)
 	}
 
 	var (
 		peer    *cdb.Peer
-		now     = time.Now().Unix()
+		peerKey = cdb.NewPeerKey(user.ID.Load(), cdb.PeerIDFromRawString(qp.Params.PeerID))
+
+		now = time.Now().Unix()
+
 		newPeer = false
 		seeding = false
 		active  = true
+
+		completed = qp.Params.Event == "completed"
 	)
 
-	event, _ := qp.Get("event")
-	completed := event == "completed"
-
-	peerKey := cdb.NewPeerKey(user.ID.Load(), cdb.PeerIDFromRawString(peerID))
-
-	if left > 0 {
+	if qp.Params.Left > 0 {
 		if isDisabledDownload(db, user, torrent) {
 			failure("Your download privileges are disabled", buf, 1*time.Hour)
 			return fasthttp.StatusOK // Required by torrent clients to interpret failure response
@@ -321,24 +314,25 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		peer.TorrentID = torrent.ID.Load()
 		peer.StartTime = now
 		peer.LastAnnounce = now
-		peer.Uploaded = uploaded
-		peer.Downloaded = downloaded
+		peer.Uploaded = qp.Params.Uploaded
+		peer.Downloaded = qp.Params.Downloaded
 	}
 
-	rawDeltaUpload := int64(uploaded) - int64(peer.Uploaded)
-	rawDeltaDownload := int64(downloaded) - int64(peer.Downloaded)
-
 	// If a user restarts a torrent, their delta may be negative, attenuating this to 0 should be fine for stats purposes
+	rawDeltaUpload := int64(qp.Params.Uploaded) - int64(peer.Uploaded)
 	if rawDeltaUpload < 0 {
 		rawDeltaUpload = 0
 	}
 
+	rawDeltaDownload := int64(qp.Params.Downloaded) - int64(peer.Downloaded)
 	if rawDeltaDownload < 0 {
 		rawDeltaDownload = 0
 	}
 
-	torrentGroupDownMultiplier := 1.0
-	torrentGroupUpMultiplier := 1.0
+	var (
+		torrentGroupDownMultiplier = 1.0
+		torrentGroupUpMultiplier   = 1.0
+	)
 
 	if torrentGroupFreeleech, exists := (*db.TorrentGroupFreeleech.Load())[torrent.Group.Key()]; exists {
 		torrentGroupDownMultiplier = torrentGroupFreeleech.DownMultiplier
@@ -361,9 +355,10 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			math.Abs(torrentGroupUpMultiplier) *
 			math.Abs(math.Float64frombits(torrent.UpMultiplier.Load())),
 	)
-	peer.Uploaded = uploaded
-	peer.Downloaded = downloaded
-	peer.Left = left
+
+	peer.Uploaded = qp.Params.Uploaded
+	peer.Downloaded = qp.Params.Downloaded
+	peer.Left = qp.Params.Left
 	peer.Seeding = seeding
 	deltaTime := now - peer.LastAnnounce
 
@@ -389,7 +384,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 
 	var deltaSnatch uint8
 
-	if event == "stopped" {
+	if qp.Params.Event == "stopped" {
 		/* We can remove the peer from the list and still have their stats be recorded,
 		since we still have a reference to their object. After flushing, all references
 		should be gone, allowing the peer to be GC'd. */
@@ -408,9 +403,9 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	}
 
 	if user.TrackerHide.Load() {
-		peer.Addr = cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, port) // 127.0.0.1
+		peer.Addr = cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, qp.Params.Port) // 127.0.0.1
 	} else {
-		peer.Addr = cdb.NewPeerAddressFromIPPort(ipBytes, port)
+		peer.Addr = cdb.NewPeerAddressFromIPPort(ipBytes, qp.Params.Port)
 	}
 
 	peer.ClientID = clientID
@@ -425,14 +420,14 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		peer.TorrentID,
 		user.ID.Load(),
 		ipAddr,
-		port,
-		event,
+		qp.Params.Port,
+		qp.Params.Event,
 		seeding,
 		rawDeltaUpload,
 		rawDeltaDownload,
-		uploaded,
-		downloaded,
-		left)
+		qp.Params.Uploaded,
+		qp.Params.Downloaded,
+		qp.Params.Left)
 
 	// Generate response
 	seedCount := int(torrent.SeedersLength.Load())
@@ -451,18 +446,15 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	announceDrift := util.UnsafeRand(0, maxAccounceDrift)
 	response["interval"] = announceInterval + announceDrift
 
-	if numWant > 0 && active {
-		compactString, exists := qp.Get("compact")
-		compact := !exists || compactString != "0" // Defaults to being compact
-
-		noPeerIDString, exists := qp.Get("no_peer_id")
-		noPeerID := exists && noPeerIDString == "1"
+	if qp.Params.NumWant > 0 && active {
+		compact := !qp.Exists.Compact || !qp.Params.Compact
+		noPeerID := qp.Exists.NoPeerID && qp.Params.NoPeerID
 
 		var peerCount int
 		if seeding {
-			peerCount = util.Min(int(numWant), leechCount)
+			peerCount = util.Min(int(qp.Params.NumWant), leechCount)
 		} else {
-			peerCount = util.Min(int(numWant), leechCount+seedCount-1)
+			peerCount = util.Min(int(qp.Params.NumWant), leechCount+seedCount-1)
 		}
 
 		peersToSend := make([]*cdb.Peer, 0, peerCount)
@@ -474,7 +466,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		 */
 		if seeding {
 			for _, leech := range torrent.Leechers {
-				if len(peersToSend) >= int(numWant) {
+				if len(peersToSend) >= int(qp.Params.NumWant) {
 					break
 				}
 
@@ -489,7 +481,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			exclusively acting as peers. */
 			uniqueSeeders := make(map[uint32]*cdb.Peer)
 			for _, seed := range torrent.Seeders {
-				if len(peersToSend) >= int(numWant) {
+				if len(peersToSend) >= int(qp.Params.NumWant) {
 					break
 				}
 				if seed.UserID == peer.UserID {
@@ -501,7 +493,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 				}
 			}
 			for _, leech := range torrent.Leechers {
-				if len(peersToSend) >= int(numWant) {
+				if len(peersToSend) >= int(qp.Params.NumWant) {
 					break
 				}
 				if leech.UserID == peer.UserID {
@@ -535,7 +527,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	}
 
 	encoder := bencode.NewEncoder(buf)
-	if err = encoder.Encode(response); err != nil {
+	if err := encoder.Encode(response); err != nil {
 		panic(err)
 	}
 

@@ -27,6 +27,8 @@ import (
 
 	cdb "chihaya/database/types"
 	"chihaya/util"
+
+	"github.com/valyala/fasthttp"
 )
 
 var infoHashes []cdb.TorrentHash
@@ -44,83 +46,95 @@ func TestMain(m *testing.M) {
 }
 
 func TestParseQuery(t *testing.T) {
-	query := ""
+	var queryParsed QueryParam
+	queryParsed.Params.Event, queryParsed.Exists.Event = "completed", true
+	queryParsed.Params.Port, queryParsed.Exists.Port = 25362, true
+	queryParsed.Params.PeerID, queryParsed.Exists.PeerID = "-CH010-VnpZR7uz31I1A", true
+	queryParsed.Params.Left, queryParsed.Exists.Left = 0, true
+
+	query := fmt.Sprintf("event=%s&port=%d&peer_id=%s&left=%d",
+		queryParsed.Params.Event,
+		queryParsed.Params.Port,
+		queryParsed.Params.PeerID,
+		queryParsed.Params.Left,
+	)
 
 	for _, infoHash := range infoHashes {
-		query += "info_hash=" + url.QueryEscape(string(infoHash[:])) + "&"
+		queryParsed.Params.InfoHashes = append(queryParsed.Params.InfoHashes, infoHash)
+		queryParsed.Exists.InfoHashes = true
+		query += "&info_hash=" + url.QueryEscape(string(infoHash[:]))
 	}
 
-	queryMap := make(map[string]string)
-	queryMap["event"] = "completed"
-	queryMap["port"] = "25362"
-	queryMap["peer_id"] = "-CH010-VnpZR7uz31I1A"
-	queryMap["left"] = "0"
+	args := fasthttp.Args{}
+	args.Parse(query)
 
-	for k, v := range queryMap {
-		query += k + "=" + v + "&"
-	}
-
-	query = query[:len(query)-1]
-
-	qp, err := ParseQuery(query)
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(qp.params, queryMap) {
-		t.Fatalf("Parsed query map (%v) is not deeply equal as original (%v)!", qp.params, queryMap)
-	}
-
-	if !reflect.DeepEqual(qp.infoHashes, infoHashes) {
-		t.Fatalf("Parsed info hashes (%v) are not deeply equal as original (%v)!", qp.infoHashes, infoHashes)
+	if !reflect.DeepEqual(qp, queryParsed) {
+		t.Fatalf("Parsed query map (%v) is not deeply equal as original (%v)!", qp, queryParsed)
 	}
 }
 
 func TestBrokenParseQuery(t *testing.T) {
-	brokenQueryMap := make(map[string]string)
-	brokenQueryMap["event"] = "started"
-	brokenQueryMap["bug"] = ""
-	brokenQueryMap["yes"] = ""
+	var brokenQueryParsed QueryParam
+	brokenQueryParsed.Params.Event, brokenQueryParsed.Exists.Event = "started", true
+	brokenQueryParsed.Params.IPv4, brokenQueryParsed.Exists.IPv4 = "", true
+	brokenQueryParsed.Params.IP, brokenQueryParsed.Exists.IP = "", true
 
-	qp, err := ParseQuery("event=started&bug=&yes=")
+	args := fasthttp.Args{}
+	args.Parse("event=started&ipv4=&ip=")
+
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(qp.params, brokenQueryMap) {
-		t.Fatalf("Parsed query map (%v) is not deeply equal as original (%v)!", qp.params, brokenQueryMap)
+	if !reflect.DeepEqual(qp, brokenQueryParsed) {
+		t.Fatalf("Parsed query map (%v) is not deeply equal as original (%v)!", qp, brokenQueryParsed)
 	}
 }
 
 func TestLowerKey(t *testing.T) {
-	qp, err := ParseQuery("EvEnT=c0mPl3tED")
+	args := fasthttp.Args{}
+	args.Parse("EvEnT=c0mPl3tED")
+
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if param, exists := qp.Get("event"); !exists || param != "c0mPl3tED" {
+	if param, exists := qp.Params.Event, qp.Exists.Event; !exists || param != "c0mPl3tED" {
 		t.Fatalf("Got parsed value %s but expected c0mPl3tED for \"event\"!", param)
 	}
 }
 
 func TestUnescape(t *testing.T) {
-	qp, err := ParseQuery("%21%40%23=%24%25%5E")
+	args := fasthttp.Args{}
+	args.Parse("%21%40%23=%24%25%5E")
+
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if param, exists := qp.Get("!@#"); !exists || param != "$%^" {
+	if param, exists := qp.Params.testGarbageUnescape, qp.Exists.testGarbageUnescape; !exists || param != "$%^" {
 		t.Fatal(fmt.Sprintf("Got parsed value %s but expected", param), "$%^ for \"!@#\"!")
 	}
 }
 
-func TestGet(t *testing.T) {
-	qp, err := ParseQuery("event=completed")
+func TestString(t *testing.T) {
+	args := fasthttp.Args{}
+	args.Parse("event=completed")
+
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if param, exists := qp.Get("event"); !exists || param != "completed" {
+	if param, exists := qp.Params.Event, qp.Exists.Event; !exists || param != "completed" {
 		t.Fatalf("Got parsed value %s but expected completed for \"event\"!", param)
 	}
 }
@@ -128,12 +142,15 @@ func TestGet(t *testing.T) {
 func TestGetUint64(t *testing.T) {
 	val := uint64(1<<62 + 42)
 
-	qp, err := ParseQuery("left=" + strconv.FormatUint(val, 10))
+	args := fasthttp.Args{}
+	args.Parse("left=" + strconv.FormatUint(val, 10))
+
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if parsedVal, exists := qp.GetUint64("left"); !exists || parsedVal != val {
+	if parsedVal, exists := qp.Params.Left, qp.Exists.Left; !exists || parsedVal != val {
 		t.Fatalf("Got parsed value %v but expected %v for \"left\"!", parsedVal, val)
 	}
 }
@@ -141,12 +158,15 @@ func TestGetUint64(t *testing.T) {
 func TestGetUint16(t *testing.T) {
 	val := uint16(1<<15 + 4242)
 
-	qp, err := ParseQuery("port=" + strconv.FormatUint(uint64(val), 10))
+	args := fasthttp.Args{}
+	args.Parse("port=" + strconv.FormatUint(uint64(val), 10))
+
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if parsedVal, exists := qp.GetUint16("port"); !exists || parsedVal != val {
+	if parsedVal, exists := qp.Params.Port, qp.Exists.Port; !exists || parsedVal != val {
 		t.Fatalf("Got parsed value %v but expected %v for \"port\"!", parsedVal, val)
 	}
 }
@@ -160,25 +180,15 @@ func TestInfoHashes(t *testing.T) {
 
 	query = query[:len(query)-1]
 
-	qp, err := ParseQuery(query)
+	args := fasthttp.Args{}
+	args.Parse(query)
+
+	qp, err := ParseQuery(&args)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(qp.InfoHashes(), infoHashes) {
-		t.Fatalf("Parsed info hashes (%v) are not deeply equal as original (%v)!", qp.InfoHashes(), infoHashes)
-	}
-}
-
-func TestRawQuery(t *testing.T) {
-	q := "event=completed&port=25541&left=0&uploaded=0&downloaded=0"
-
-	qp, err := ParseQuery(q)
-	if err != nil {
-		panic(err)
-	}
-
-	if rq := qp.RawQuery(); rq != q {
-		t.Fatalf("Got raw query %s but expected %s", rq, q)
+	if !reflect.DeepEqual(qp.Params.InfoHashes, infoHashes) {
+		t.Fatalf("Parsed info hashes (%v) are not deeply equal as original (%v)!", qp.Params.InfoHashes, infoHashes)
 	}
 }
