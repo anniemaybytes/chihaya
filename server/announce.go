@@ -318,6 +318,9 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		peer.Downloaded = qp.Params.Downloaded
 	}
 
+	peer.Addr = cdb.NewPeerAddressFromIPPort(ipBytes, qp.Params.Port)
+	peer.ClientID = clientID
+
 	// If a user restarts a torrent, their delta may be negative, attenuating this to 0 should be fine for stats purposes
 	rawDeltaUpload := int64(qp.Params.Uploaded) - int64(peer.Uploaded)
 	if rawDeltaUpload < 0 {
@@ -360,8 +363,8 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	peer.Downloaded = qp.Params.Downloaded
 	peer.Left = qp.Params.Left
 	peer.Seeding = seeding
-	deltaTime := now - peer.LastAnnounce
 
+	deltaTime := now - peer.LastAnnounce
 	if deltaTime > int64(peerInactivityInterval) {
 		deltaTime = 0
 	}
@@ -376,6 +379,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	}
 
 	peer.LastAnnounce = now
+
 	/* Update torrent last_action only if announced action is seeding.
 	This allows dead torrents without seeder but with leecher to be proeprly pruned */
 	if seeding {
@@ -398,36 +402,25 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 
 		active = false
 	} else if completed {
-		go db.QueueSnatch(peer, now)
 		deltaSnatch = 1
+
+		db.QueueSnatch(peer, now) // Non-blocking
 	}
 
+	persistAddr := peer.Addr // This is done here so that we don't have to keep two instances of Addr for each Peer
 	if user.TrackerHide.Load() {
-		peer.Addr = cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, qp.Params.Port) // 127.0.0.1
-	} else {
-		peer.Addr = cdb.NewPeerAddressFromIPPort(ipBytes, qp.Params.Port)
+		persistAddr = cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, qp.Params.Port)
 	}
-
-	peer.ClientID = clientID
 
 	// Underlying queue operations are non-blocking by spawning new goroutine if channel is already full
 	db.QueueTorrent(torrent, deltaSnatch)
 	db.QueueTransferHistory(peer, rawDeltaUpload, rawDeltaDownload, deltaTime, deltaSeedTime, deltaSnatch, active)
 	db.QueueUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
-	db.QueueTransferIP(peer, rawDeltaUpload, rawDeltaDownload)
+	db.QueueTransferIP(peer, persistAddr, rawDeltaUpload, rawDeltaDownload)
 
-	go record.Record(
-		peer.TorrentID,
-		user.ID.Load(),
-		ipAddr,
-		qp.Params.Port,
-		qp.Params.Event,
-		seeding,
-		rawDeltaUpload,
-		rawDeltaDownload,
-		qp.Params.Uploaded,
-		qp.Params.Downloaded,
-		qp.Params.Left)
+	// Record must be done in separate goroutine for now; todo: rewrite this so it doesn't tank performance
+	go record.Record(peer.TorrentID, user.ID.Load(), peer.Addr, qp.Params.Event, seeding, rawDeltaUpload, rawDeltaDownload,
+		qp.Params.Uploaded, qp.Params.Downloaded, qp.Params.Left)
 
 	// Generate response
 	seedCount := int(torrent.SeedersLength.Load())

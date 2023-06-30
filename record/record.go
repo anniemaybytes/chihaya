@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"chihaya/config"
+	cdb "chihaya/database/types"
 	"chihaya/log"
 	"chihaya/util"
 )
@@ -80,18 +81,8 @@ func Init() {
 	initialized = true
 }
 
-func Record(
-	tid,
-	uid uint32,
-	ip string,
-	port uint16,
-	event string,
-	seeding bool,
-	deltaUp,
-	deltaDown int64,
-	up,
-	down,
-	left uint64) {
+func Record(tid, uid uint32, addr cdb.PeerAddress, event string, seeding bool, deltaUp, deltaDown int64,
+	up, down, left uint64) {
 	if enabled, _ := config.GetBool("record", enabled); !enabled {
 		return
 	}
@@ -113,9 +104,9 @@ func Record(
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(uint64(uid), 10))
 	buf.WriteString(",\"")
-	buf.WriteString(ip)
+	buf.WriteString(addr.IPString())
 	buf.WriteString("\",")
-	buf.WriteString(strconv.FormatUint(uint64(port), 10))
+	buf.WriteString(strconv.FormatUint(uint64(addr.Port()), 10))
 	buf.WriteString(",\"")
 	buf.WriteString(event)
 	buf.WriteString("\",")

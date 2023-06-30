@@ -636,7 +636,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		panic(err)
 	}
 
-	db.QueueTransferIP(testPeer, deltaUpload, deltaDownload)
+	db.QueueTransferIP(testPeer, testPeer.Addr, deltaUpload, deltaDownload)
 
 	for len(db.transferIpsChannel) > 0 {
 		time.Sleep(time.Second)
@@ -710,7 +710,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		LastAnnounce: time.Now().Unix(),
 	}
 
-	db.QueueTransferIP(testPeer, 0, 0)
+	db.QueueTransferIP(testPeer, testPeer.Addr, 0, 0)
 
 	for len(db.transferIpsChannel) > 0 {
 		time.Sleep(time.Second)

@@ -121,7 +121,7 @@ func (db *Database) QueueTransferHistory(peer *cdb.Peer, rawDeltaUp, rawDeltaDow
 	}
 }
 
-func (db *Database) QueueTransferIP(peer *cdb.Peer, rawDeltaUp, rawDeltaDown int64) {
+func (db *Database) QueueTransferIP(peer *cdb.Peer, persistAddr cdb.PeerAddress, rawDeltaUp, rawDeltaDown int64) {
 	ti := db.bufferPool.Take()
 
 	ti.WriteString("(")
@@ -131,9 +131,9 @@ func (db *Database) QueueTransferIP(peer *cdb.Peer, rawDeltaUp, rawDeltaDown int
 	ti.WriteString(",")
 	ti.WriteString(strconv.FormatUint(uint64(peer.ClientID), 10))
 	ti.WriteString(",")
-	ti.WriteString(strconv.FormatUint(uint64(peer.Addr.IPNumeric()), 10))
+	ti.WriteString(strconv.FormatUint(uint64(persistAddr.IPNumeric()), 10))
 	ti.WriteString(",")
-	ti.WriteString(strconv.FormatUint(uint64(peer.Addr.Port()), 10))
+	ti.WriteString(strconv.FormatUint(uint64(persistAddr.Port()), 10))
 	ti.WriteString(",")
 	ti.WriteString(strconv.FormatInt(rawDeltaUp, 10))
 	ti.WriteString(",")

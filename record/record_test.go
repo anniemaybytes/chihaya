@@ -19,11 +19,13 @@ package record
 
 import (
 	"bufio"
+	"net"
 	"os"
 	"strconv"
 	"testing"
 	"time"
 
+	cdb "chihaya/database/types"
 	"chihaya/util"
 )
 
@@ -101,8 +103,7 @@ func TestRecord(t *testing.T) {
 		Record(
 			item.tid,
 			item.uid,
-			item.ip,
-			item.port,
+			cdb.NewPeerAddressFromIPPort(net.ParseIP(item.ip).To4(), item.port),
 			item.event,
 			item.seeding,
 			item.deltaUp,
