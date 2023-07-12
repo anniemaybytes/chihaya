@@ -1,20 +1,19 @@
 {
   "extends": [
-    "config:base",
+    "config:recommended",
     "docker:disableMajor"
   ],
   "labels": [
     "kind/deps"
   ],
   "vulnerabilityAlerts": {
+    "enabled": true,
     "labels": [
       "kind/security"
     ]
   },
-  "stabilityDays": 1,
+  "minimumReleaseAge": "3 days",
   "semanticCommits": "disabled",
-  "ignorePaths": [],
-  "ignoreDeps": [],
   "postUpdateOptions": [
     "gomodTidy"
   ],
@@ -27,6 +26,14 @@
         "schedule:weekends"
       ],
       "automerge": true
+    },
+    {
+        "matchPackageNames": [
+            "mariadb"
+        ],
+        "extends": [
+            "docker:enableMajor"
+        ]
     }
   ]
 }
