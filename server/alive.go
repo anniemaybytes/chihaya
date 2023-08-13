@@ -19,15 +19,16 @@ package server
 
 import (
 	"bytes"
-	"chihaya/database"
 	"encoding/json"
-	"github.com/valyala/fasthttp"
+	"log/slog"
 	"time"
 
-	"chihaya/log"
+	"chihaya/database"
+
+	"github.com/valyala/fasthttp"
 )
 
-func alive(_ *fasthttp.RequestCtx, _ *database.Database, buf *bytes.Buffer) int {
+func alive(ctx *fasthttp.RequestCtx, _ *database.Database, buf *bytes.Buffer) int {
 	type response struct {
 		Now    int64 `json:"now"`
 		Uptime int64 `json:"uptime"`
@@ -35,7 +36,7 @@ func alive(_ *fasthttp.RequestCtx, _ *database.Database, buf *bytes.Buffer) int 
 
 	res, err := json.Marshal(response{time.Now().UnixMilli(), time.Since(handler.startTime).Milliseconds()})
 	if err != nil {
-		log.Error.Print("Failed to marshal JSON alive response: ", err)
+		slog.Error("failed to marshal json response", "err", err, "url", ctx.URI())
 		return fasthttp.StatusInternalServerError
 	}
 

@@ -24,12 +24,12 @@ import (
 
 func TestUnsafeRand(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		min := rand.Intn(1000)
-		max := rand.Intn(1000) + min
-		randomInt := UnsafeRand(min, max)
+		minInt := rand.Intn(1000)
+		maxInt := rand.Intn(1000) + minInt
+		randomInt := UnsafeRand(minInt, maxInt)
 
-		if randomInt < min || randomInt > max {
-			t.Fatalf("Integer %d is outside specified range (%d - %d)", randomInt, min, max)
+		if randomInt < minInt || randomInt > maxInt {
+			t.Fatalf("Integer %d is outside specified range (%d - %d)", randomInt, minInt, maxInt)
 		}
 	}
 }

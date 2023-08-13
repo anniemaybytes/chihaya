@@ -25,7 +25,6 @@ import (
 
 	"chihaya/config"
 	cdb "chihaya/database/types"
-	"chihaya/log"
 	"chihaya/util"
 )
 
@@ -88,8 +87,7 @@ func Record(tid, uid uint32, addr cdb.PeerAddress, event string, seeding bool, d
 	}
 
 	if !initialized {
-		log.Fatal.Fatalln("Can not Record without prior initialization")
-		return
+		panic("can not Record without prior initialization")
 	}
 
 	if up == 0 && down == 0 {

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"runtime"
@@ -53,6 +54,9 @@ func main() {
 		return
 	}
 
+	// Reconfigure logger
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	switch os.Args[1] {
 	case "dump":
 		dump(func(reader io.Reader) (map[cdb.TorrentHash]*cdb.Torrent, error) {
@@ -81,7 +85,7 @@ func main() {
 
 		return
 	case "anonymize":
-		fmt.Print("Anonymizing binary cache data, please wait...")
+		slog.Info("anonymizing binary cache data...")
 
 		u := make(map[string]*cdb.User)
 		t := make(map[cdb.TorrentHash]*cdb.Torrent)
@@ -220,7 +224,7 @@ func main() {
 			panic(err)
 		}
 
-		fmt.Println("...Done!")
+		slog.Info("anonymized binary cache written")
 
 		return
 	default:
@@ -229,7 +233,9 @@ func main() {
 }
 
 func dump[cdb any](readFunc func(reader io.Reader) (cdb, error), f string) {
-	fmt.Printf("Dumping data for %s, this might take a while...", f)
+	logger := slog.Default().With("cdb", f)
+
+	logger.Info("dumping data...")
 
 	binFile, err := os.OpenFile(fmt.Sprintf("%s.bin", f), os.O_RDONLY, 0600)
 	if err != nil {
@@ -257,11 +263,13 @@ func dump[cdb any](readFunc func(reader io.Reader) (cdb, error), f string) {
 	_ = binFile.Close()
 	_ = jsonFile.Close()
 
-	fmt.Println("...Done!")
+	logger.Info("finished")
 }
 
 func restore[cdb any](writeFunc func(writer io.Writer, v cdb) error, f string) {
-	fmt.Printf("Restoring data for %s, this might take a while...", f)
+	logger := slog.Default().With("cdb", f)
+
+	logger.Info("restoring data...")
 
 	jsonFile, err := os.OpenFile(fmt.Sprintf("%s.json", f), os.O_RDONLY, 0600)
 	if err != nil {
@@ -285,5 +293,5 @@ func restore[cdb any](writeFunc func(writer io.Writer, v cdb) error, f string) {
 	_ = jsonFile.Close()
 	_ = binFile.Close()
 
-	fmt.Println("...Done!")
+	logger.Info("finished")
 }

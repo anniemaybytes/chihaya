@@ -18,6 +18,7 @@
 package database
 
 import (
+	"log/slog"
 	"math"
 	"sync/atomic"
 	"time"
@@ -25,13 +26,13 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
-	"chihaya/log"
 )
+
+// GlobalFreeleech indicates whether site is now in freeleech mode (takes precedence over torrent-specific multipliers)
+var GlobalFreeleech atomic.Bool
 
 var (
 	reloadInterval int
-	// GlobalFreeleech indicates whether site is now in freeleech mode (takes precedence over torrent-specific multipliers)
-	GlobalFreeleech atomic.Bool
 )
 
 func init() {
@@ -76,9 +77,7 @@ func (db *Database) loadUsers() {
 
 	rows := db.mainConn.query(db.loadUsersStmt)
 	if rows == nil {
-		log.Error.Print("Failed to load hit and runs from database")
-		log.WriteStack()
-
+		slog.Error("failed to reload from database", "source", "users")
 		return
 	}
 
@@ -95,8 +94,8 @@ func (db *Database) loadUsers() {
 		)
 
 		if err := rows.Scan(&id, &torrentPass, &downMultiplier, &upMultiplier, &disableDownload, &trackerHide); err != nil {
-			log.Error.Printf("Error scanning user row: %s", err)
-			log.WriteStack()
+			slog.Warn("error scanning row", "source", "users", "err", err)
+			continue
 		}
 
 		if old, exists := dbUsers[torrentPass]; exists && old != nil {
@@ -122,7 +121,7 @@ func (db *Database) loadUsers() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("users", elapsedTime)
-	log.Info.Printf("User load complete (%d rows, %s)", len(newUsers), elapsedTime.String())
+	slog.Info("reload from database", "source", "users", "rows", len(newUsers), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadHitAndRuns() {
@@ -134,9 +133,7 @@ func (db *Database) loadHitAndRuns() {
 
 	rows := db.mainConn.query(db.loadHnrStmt)
 	if rows == nil {
-		log.Error.Print("Failed to load hit and runs from database")
-		log.WriteStack()
-
+		slog.Error("failed to reload from database", "source", "hit_and_runs")
 		return
 	}
 
@@ -148,8 +145,8 @@ func (db *Database) loadHitAndRuns() {
 		var uid, fid uint32
 
 		if err := rows.Scan(&uid, &fid); err != nil {
-			log.Error.Printf("Error scanning hit and run row: %s", err)
-			log.WriteStack()
+			slog.Warn("error scanning row", "source", "hit_and_runs", "err", err)
+			continue
 		}
 
 		hnr := cdb.UserTorrentPair{
@@ -163,7 +160,7 @@ func (db *Database) loadHitAndRuns() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
-	log.Info.Printf("Hit and run load complete (%d rows, %s)", len(newHnr), elapsedTime.String())
+	slog.Info("reload from database", "source", "hit_and_runs", "rows", len(newHnr), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadTorrents() {
@@ -180,9 +177,7 @@ func (db *Database) loadTorrents() {
 
 	rows := db.mainConn.query(db.loadTorrentsStmt)
 	if rows == nil {
-		log.Error.Print("Failed to load torrents from database")
-		log.WriteStack()
-
+		slog.Error("failed to reload from database", "torrents", "hit_and_runs")
 		return
 	}
 
@@ -211,18 +206,13 @@ func (db *Database) loadTorrents() {
 			&groupID,
 			&torrentType,
 		); err != nil {
-			log.Error.Printf("Error scanning torrent row: %s", err)
-			log.WriteStack()
-
+			slog.Warn("error scanning row", "source", "torrents", "err", err)
 			continue
 		}
 
 		torrentTypeUint64, err := cdb.TorrentTypeFromString(torrentType)
-
 		if err != nil {
-			log.Error.Printf("Error storing torrent row: %s", err)
-			log.WriteStack()
-
+			slog.Warn("error storing row", "source", "torrents", "err", err)
 			continue
 		}
 
@@ -260,7 +250,7 @@ func (db *Database) loadTorrents() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("torrents", elapsedTime)
-	log.Info.Printf("Torrent load complete (%d rows, %s)", len(newTorrents), elapsedTime.String())
+	slog.Info("reload from database", "source", "torrents", "rows", len(newTorrents), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadGroupsFreeleech() {
@@ -272,9 +262,7 @@ func (db *Database) loadGroupsFreeleech() {
 
 	rows := db.mainConn.query(db.loadTorrentGroupFreeleechStmt)
 	if rows == nil {
-		log.Error.Print("Failed to load torrent group freeleech data from database")
-		log.WriteStack()
-
+		slog.Error("failed to reload from database", "torrents_group_freeleech", "hit_and_runs")
 		return
 	}
 
@@ -290,17 +278,13 @@ func (db *Database) loadGroupsFreeleech() {
 		)
 
 		if err := rows.Scan(&groupID, &torrentType, &downMultiplier, &upMultiplier); err != nil {
-			log.Error.Printf("Error scanning torrent group freeleech row: %s", err)
-			log.WriteStack()
-
+			slog.Warn("error scanning row", "source", "torrents_group_freeleech", "err", err)
 			continue
 		}
 
 		k, err := cdb.TorrentGroupKeyFromString(torrentType, groupID)
 		if err != nil {
-			log.Error.Printf("Error storing torrent group freeleech row: %s", err)
-			log.WriteStack()
-
+			slog.Warn("error storing row", "source", "torrents_group_freeleech", "err", err)
 			continue
 		}
 
@@ -314,7 +298,8 @@ func (db *Database) loadGroupsFreeleech() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("groups_freeleech", elapsedTime)
-	log.Info.Printf("Group freeleech load complete (%d rows, %s)", len(newTorrentGroupFreeleech), elapsedTime.String())
+	slog.Info("reload from database", "source", "torrents_group_freeleech",
+		"rows", len(newTorrentGroupFreeleech), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadConfig() {
@@ -323,9 +308,7 @@ func (db *Database) loadConfig() {
 
 	rows := db.mainConn.query(db.loadFreeleechStmt)
 	if rows == nil {
-		log.Error.Print("Failed to load config from database")
-		log.WriteStack()
-
+		slog.Error("failed to reload from database", "source", "config")
 		return
 	}
 
@@ -337,8 +320,8 @@ func (db *Database) loadConfig() {
 		var globalFreelech bool
 
 		if err := rows.Scan(&globalFreelech); err != nil {
-			log.Error.Printf("Error scanning config row: %s", err)
-			log.WriteStack()
+			slog.Warn("error scanning row", "source", "config", "err", err)
+			continue
 		}
 
 		GlobalFreeleech.Store(globalFreelech)
@@ -354,9 +337,7 @@ func (db *Database) loadClients() {
 
 	rows := db.mainConn.query(db.loadClientsStmt)
 	if rows == nil {
-		log.Error.Print("Failed to load clients from database")
-		log.WriteStack()
-
+		slog.Error("failed to reload from database", "source", "approved_clients")
 		return
 	}
 
@@ -371,8 +352,7 @@ func (db *Database) loadClients() {
 		)
 
 		if err := rows.Scan(&id, &peerID); err != nil {
-			log.Error.Printf("Error scanning client list row: %s", err)
-			log.WriteStack()
+			slog.Warn("error scanning row", "source", "approved_clients", "err", err)
 		}
 
 		newClients[id] = peerID
@@ -382,5 +362,5 @@ func (db *Database) loadClients() {
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateReloadTime("clients", elapsedTime)
-	log.Info.Printf("Client list load complete (%d rows, %s)", len(newClients), elapsedTime.String())
+	slog.Info("reload from database", "source", "approved_clients", "rows", len(newClients), "elapsed", elapsedTime)
 }

@@ -19,13 +19,13 @@ package database
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
-	"chihaya/log"
 )
 
 var serializeInterval int
@@ -45,7 +45,7 @@ func (db *Database) startSerializing() {
 }
 
 func (db *Database) serialize() {
-	log.Info.Printf("Serializing database to cache file")
+	slog.Info("serializing database to cache file")
 
 	torrentBinFilename := fmt.Sprintf("%s.bin", cdb.TorrentCacheFile)
 	userBinFilename := fmt.Sprintf("%s.bin", cdb.UserCacheFile)
@@ -58,7 +58,7 @@ func (db *Database) serialize() {
 	if func() error {
 		torrentFile, err := os.OpenFile(torrentTmpFilename, os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
-			log.Error.Print("Couldn't open file for writing: ", err)
+			slog.Error("couldn't open file for writing", "err", err, "cdb", cdb.TorrentCacheFile)
 			return err
 		}
 
@@ -69,21 +69,21 @@ func (db *Database) serialize() {
 		}()
 
 		if err = cdb.WriteTorrents(torrentFile, *db.Torrents.Load()); err != nil {
-			log.Error.Print("Failed to encode torrents for serialization: ", err)
+			slog.Error("failed to encode cdb for serialization", "err", err, "cdb", cdb.TorrentCacheFile)
 			return err
 		}
 
 		return nil
 	}() == nil {
 		if err := os.Rename(torrentTmpFilename, torrentBinFilename); err != nil {
-			log.Error.Print("Couldn't write new torrent cache: ", err)
+			slog.Error("couldn't write new cache file", "err", err, "cdb", cdb.TorrentCacheFile)
 		}
 	}
 
 	if func() error {
 		userFile, err := os.OpenFile(userTmpFilename, os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
-			log.Error.Print("Couldn't open file for writing: ", err)
+			slog.Error("couldn't open file for writing", "err", err, "cdb", cdb.UserCacheFile)
 			return err
 		}
 
@@ -94,24 +94,24 @@ func (db *Database) serialize() {
 		}()
 
 		if err = cdb.WriteUsers(userFile, *db.Users.Load()); err != nil {
-			log.Error.Print("Failed to encode users for serialization: ", err)
+			slog.Error("failed to encode cdb for serialization", "err", err, "cdb", cdb.UserCacheFile)
 			return err
 		}
 
 		return nil
 	}() == nil {
 		if err := os.Rename(userTmpFilename, userBinFilename); err != nil {
-			log.Error.Print("Couldn't write new user cache: ", err)
+			slog.Error("couldn't write new cache file", "err", err, "cdb", cdb.UserCacheFile)
 		}
 	}
 
 	elapsedTime := time.Since(start)
 	collectors.UpdateSerializationTime(elapsedTime)
-	log.Info.Printf("Done serializing (%s)", elapsedTime.String())
+	slog.Info("done serializing", "elapsed", elapsedTime)
 }
 
 func (db *Database) deserialize() {
-	log.Info.Print("Deserializing database from cache file...")
+	slog.Info("deserializing database from cache file")
 
 	torrentBinFilename := fmt.Sprintf("%s.bin", cdb.TorrentCacheFile)
 	userBinFilename := fmt.Sprintf("%s.bin", cdb.UserCacheFile)
@@ -120,12 +120,13 @@ func (db *Database) deserialize() {
 		start    = time.Now()
 		torrents = 0
 		peers    = 0
+		users    = 0
 	)
 
 	func() {
 		torrentFile, err := os.OpenFile(torrentBinFilename, os.O_RDONLY, 0)
 		if err != nil {
-			log.Warning.Print("Torrent cache missing: ", err)
+			slog.Warn("cache file missing", "err", err, "cdb", cdb.TorrentCacheFile)
 			return
 		}
 
@@ -134,7 +135,7 @@ func (db *Database) deserialize() {
 
 		dbTorrents := make(map[cdb.TorrentHash]*cdb.Torrent)
 		if err = cdb.LoadTorrents(torrentFile, dbTorrents); err != nil {
-			log.Error.Print("Failed to deserialize torrent cache: ", err)
+			slog.Warn("failed to deserialize cache", "err", err, "cdb", cdb.TorrentCacheFile)
 			return
 		}
 
@@ -150,24 +151,24 @@ func (db *Database) deserialize() {
 	func() {
 		userFile, err := os.OpenFile(userBinFilename, os.O_RDONLY, 0)
 		if err != nil {
-			log.Warning.Print("User cache missing: ", err)
+			slog.Warn("cache file missing", "err", err, "cdb", cdb.UserCacheFile)
 			return
 		}
 
 		//goland:noinspection GoUnhandledErrorResult
 		defer userFile.Close()
 
-		users := make(map[string]*cdb.User)
-		if err = cdb.LoadUsers(userFile, users); err != nil {
-			log.Error.Print("Failed to deserialize user cache: ", err)
+		dbUsers := make(map[string]*cdb.User)
+		if err = cdb.LoadUsers(userFile, dbUsers); err != nil {
+			slog.Warn("failed to deserialize cache", "err", err, "cdb", cdb.UserCacheFile)
 			return
 		}
 
-		db.Users.Store(&users)
+		users = len(dbUsers)
+
+		db.Users.Store(&dbUsers)
 	}()
 
-	users := len(*db.Users.Load())
-
-	log.Info.Printf("Loaded %d users, %d torrents and %d peers (%s)",
-		users, torrents, peers, time.Since(start).String())
+	slog.Info("deserialization complete", "elapsed", time.Since(start),
+		"users", users, "torrents", torrents, "peers", peers)
 }

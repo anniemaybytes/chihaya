@@ -3,6 +3,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## Unreleased
+### Fixed
+- Fix panic when attempting to shutdown chihaya before main server loop has started
+- Do not allocate new bytes buffer for each bencode operation
+- Fix `TestSerializer` not failing when serialization errors out
+- Fix potential race condition for global variable in `record.Record`
+
+### Changed
+- Refactor cc utility to use `io.Writer` and `io.Reader`
+- Improve Recorder section of README
+- Use `sync.Pool` as backend instead of channels for `util/BufferPool`
+- Replace runtime CPU profiler with `net/http/pprof` debug server
+- Make `HitAndRuns`, `TorrentGroupFreeleech`, `Clients` and `GlobalFreeleech` use `atomic` primitives
+- Use `[]byte` instead of string to prevent lookups in heap or via golang internal `aeshash`
+- Move closing of flush channels to separate function
+- Replace gob serialization with custom binary marshalling
+- Change `Peer.Addr` to fixed array
+- Re-allocate empty maps for Leechers to reduce memory usage
+- Optimize Peer in-memory size
+- Cleanup bencode utility
+- Rename `database/Record*` -> `database/Queue*`
+- Simplify request handling by processing them directly, and pass contextTimeout to handler response
+- Make Queue methods optional async, with fast pathway without goroutine spawn
+- Update schema.sql for `STRICT_TRANS_TABLES`
+- Replace `Users`/`Torrents` locks with `atomic.Pointer`
+- Replace `net/http` with https://github.com/valyala/fasthttp
+- Refactor query parsing into a struct via `fasthttp`
+- Do not spawn new goroutine for `QueueSnatch`
+
+### Added
+- Introduce and use non-crypto Rand for tests and announce interval drift
+- Enable mutex and blocks profiling when running with -P flag
+- Introduce anonymize command to anonymize binary cache dumps
+- Enable PGO builds for chihaya
+- Separate metrics for `context.DeadlineExceeded` and `context.Cancelled`
+- Add test case for `server/util.failure`
+
 ## v10.5.0
 ### Changed
 - Adjust histogram buckets to better capture wider range of data

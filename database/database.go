@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -29,7 +30,6 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
-	"chihaya/log"
 	"chihaya/util"
 
 	"github.com/go-sql-driver/mysql"
@@ -88,7 +88,7 @@ var defaultDsn = map[string]string{
 func (db *Database) Init() {
 	db.terminate = false
 
-	log.Info.Print("Opening database connection...")
+	slog.Info("opening database connection")
 
 	db.mainConn = Open()
 
@@ -112,7 +112,8 @@ func (db *Database) Init() {
 	}
 
 	db.loadTorrentsStmt, err = db.mainConn.sqlDb.Prepare(
-		"SELECT ID, info_hash, DownMultiplier, UpMultiplier, Snatched, Status, GroupID, TorrentType FROM torrents")
+		"SELECT ID, info_hash, DownMultiplier, UpMultiplier, Snatched, Status, GroupID, TorrentType FROM torrents " +
+			"WHERE TorrentType != 'internal'")
 	if err != nil {
 		panic(err)
 	}
@@ -162,7 +163,7 @@ func (db *Database) Init() {
 	db.deserialize()
 
 	// Run initial load to populate data in memory before we start accepting connections
-	log.Info.Print("Populating initial data into memory, please wait...")
+	slog.Info("populating initial data into memory")
 	db.loadUsers()
 	db.loadHitAndRuns()
 	db.loadTorrents()
@@ -170,23 +171,23 @@ func (db *Database) Init() {
 	db.loadConfig()
 	db.loadClients()
 
-	log.Info.Print("Starting goroutines...")
+	slog.Info("starting goroutines")
 	db.startReloading()
 	db.startSerializing()
 	db.startFlushing()
 }
 
 func (db *Database) Terminate() {
-	log.Info.Print("Terminating database connection...")
+	slog.Info("terminating database connection")
 
 	db.terminate = true
 
-	log.Info.Print("Closing all flush channels...")
+	slog.Info("closing all flush channels")
 	db.closeFlushChannels()
 
 	go func() {
 		time.Sleep(10 * time.Second)
-		log.Info.Print("Waiting for database flushing to finish. This can take a few minutes, please be patient!")
+		slog.Info("waiting for database flushing to finish")
 	}()
 
 	db.waitGroup.Wait()
@@ -228,11 +229,11 @@ func Open() *Connection {
 
 	sqlDb, err := sql.Open("mysql", databaseDsn)
 	if err != nil {
-		log.Fatal.Fatalf("Couldn't connect to database - %s", err)
+		panic(err)
 	}
 
 	if err = sqlDb.Ping(); err != nil {
-		log.Fatal.Fatalf("Couldn't ping database - %s", err)
+		panic(err)
 	}
 
 	return &Connection{
@@ -278,11 +279,11 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 	for tries = 1; tries <= maxDeadlockRetries; tries++ {
 		result, err = exec()
 		if err != nil {
+			//goland:noinspection GoTypeAssertionOnErrors
 			if merr, isMysqlError := err.(*mysql.MySQLError); isMysqlError {
 				if merr.Number == 1213 || merr.Number == 1205 {
 					wait = time.Duration(deadlockWaitTime*tries) * time.Second
-					log.Warning.Printf("Deadlock found! Retrying in %s (%d/%d)", wait.String(), tries,
-						maxDeadlockRetries)
+					slog.Warn("dedlock found", "wait", wait.String(), "try", tries, "max", maxDeadlockRetries)
 
 					if tries == 1 {
 						collectors.IncrementDeadlockCount()
@@ -294,12 +295,9 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 					continue
 				}
 
-				log.Error.Printf("SQL error %d: %s", merr.Number, merr.Message)
-				log.WriteStack()
-
+				slog.Error("sql error found", "err", merr.Number, "msg", merr.Message)
 				collectors.IncrementSQLErrorCount()
 			} else {
-				log.Panic.Printf("Error executing SQL: %s", err)
 				panic(err)
 			}
 		}
@@ -307,8 +305,7 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 		return
 	}
 
-	log.Error.Printf("Deadlocked %d times, giving up!", tries)
-	log.WriteStack()
+	slog.Error("deadlock retries exceeded", "tries", tries)
 	collectors.IncrementDeadlockAborted()
 
 	return

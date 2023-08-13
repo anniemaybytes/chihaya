@@ -15,26 +15,29 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package log
+package util
 
 import (
-	"log"
-	"os"
-	"runtime/debug"
+	"testing"
 )
 
-var flags = log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix
+func TestBtoa(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		var b bool
 
-//goland:noinspection GoUnusedGlobalVariable
-var (
-	Verbose = log.New(os.Stdout, "[V] ", flags)
-	Info    = log.New(os.Stdout, "[I] ", flags)
-	Warning = log.New(os.Stderr, "[W] ", flags)
-	Error   = log.New(os.Stderr, "[E] ", flags)
-	Fatal   = log.New(os.Stderr, "[F] ", flags)
-	Panic   = log.New(os.Stderr, "[P] ", flags)
-)
+		var actualResult string
 
-func WriteStack() {
-	debug.PrintStack()
+		if UnsafeIntn(2) == 1 {
+			b = true
+			actualResult = "1"
+		} else {
+			b = false
+			actualResult = "0"
+		}
+
+		gotResult := Btoa(b)
+		if actualResult != gotResult {
+			t.Fatalf("Got wrong string (%s) for bool %t!", gotResult, b)
+		}
+	}
 }

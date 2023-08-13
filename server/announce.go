@@ -20,6 +20,7 @@ package server
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"math"
 	"net"
 	"strings"
@@ -28,7 +29,6 @@ import (
 	"chihaya/config"
 	"chihaya/database"
 	cdb "chihaya/database/types"
-	"chihaya/log"
 	"chihaya/record"
 	"chihaya/server/params"
 	"chihaya/util"
@@ -72,8 +72,7 @@ func init() {
 	} {
 		_, block, err := net.ParseCIDR(cidr)
 		if err != nil {
-			log.Error.Printf("IP parse error on %q: %v", cidr, err)
-			log.WriteStack()
+			slog.Error("failed to parse cidr", "cidr", cidr, "err", err)
 		} else {
 			privateIPBlocks = append(privateIPBlocks, block)
 		}
@@ -219,7 +218,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	defer torrent.PeerUnlock()
 
 	if torrentStatus := torrent.Status.Load(); torrentStatus == 1 && qp.Params.Left == 0 {
-		log.Info.Printf("Unpruning torrent %d", torrent.ID.Load())
+		slog.Info("unpruning torrent", "fid", torrent.ID.Load())
 
 		torrent.Status.Store(0)
 
@@ -445,9 +444,9 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 
 		var peerCount int
 		if seeding {
-			peerCount = util.Min(int(qp.Params.NumWant), leechCount)
+			peerCount = min(int(qp.Params.NumWant), leechCount)
 		} else {
-			peerCount = util.Min(int(qp.Params.NumWant), leechCount+seedCount-1)
+			peerCount = min(int(qp.Params.NumWant), leechCount+seedCount-1)
 		}
 
 		peersToSend := make([]*cdb.Peer, 0, peerCount)

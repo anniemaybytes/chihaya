@@ -25,7 +25,6 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/database"
-	"chihaya/log"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
@@ -56,7 +55,6 @@ func metrics(ctx *fasthttp.RequestCtx, _ *cdb.User, db *database.Database, buf *
 	mfs, _ := handler.normalRegisterer.(prometheus.Gatherer).Gather()
 	for _, mf := range mfs {
 		if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
-			log.Panic.Printf("Error in converting metrics to text: %v", err)
 			panic(err)
 		}
 	}
@@ -69,7 +67,6 @@ func metrics(ctx *fasthttp.RequestCtx, _ *cdb.User, db *database.Database, buf *
 
 			for _, mf := range mfs {
 				if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
-					log.Panic.Printf("Error in converting metrics to text: %v", err)
 					panic(err)
 				}
 			}

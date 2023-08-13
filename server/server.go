@@ -18,6 +18,7 @@
 package server
 
 import (
+	"log/slog"
 	"net"
 	"path"
 	"sync"
@@ -27,7 +28,6 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/database"
-	"chihaya/log"
 	"chihaya/record"
 	"chihaya/util"
 
@@ -77,8 +77,7 @@ func (handler *httpHandler) serve(ctx *fasthttp.RequestCtx) {
 	// Gracefully handle panics so that they're confined to single request and don't crash server
 	defer func() {
 		if err := recover(); err != nil {
-			log.Error.Printf("Recovered from panicking request handler - %v\nURL was: %s", err, ctx.URI().String())
-			log.WriteStack()
+			slog.Error("recovered from panicking request handler", "err", err, "url", ctx.URI())
 
 			collectors.IncrementErroredRequests()
 
@@ -154,6 +153,7 @@ func (handler *httpHandler) error(ctx *fasthttp.RequestCtx, err error) {
 	ctx.Response.Header.SetContentLength(0)
 	ctx.Response.Header.SetContentTypeBytes([]byte("text/plain"))
 
+	//goland:noinspection GoTypeAssertionOnErrors
 	if _, ok := err.(*fasthttp.ErrSmallBuffer); ok {
 		ctx.Response.SetStatusCode(fasthttp.StatusRequestHeaderFieldsTooLarge)
 		return
@@ -194,8 +194,6 @@ func Start() {
 	}
 
 	if idleTimeout <= 0 {
-		log.Warning.Print("Setting http.timeout.idle <= 0 disables Keep-Alive which might negatively impact performance")
-
 		server.DisableKeepalive = true
 	}
 
@@ -212,7 +210,7 @@ func Start() {
 			requests := handler.requests.Load()
 
 			handler.throughput = int(float64(requests-lastRequests)/duration.Seconds()*60 + 0.5)
-			log.Info.Printf("Current throughput: %d rpm", handler.throughput)
+			slog.Info("current throughput", "rpm", handler.throughput)
 
 			lastTime = now
 			lastRequests = requests
@@ -240,7 +238,7 @@ func Start() {
 		panic(err)
 	}
 
-	log.Info.Printf("Ready and accepting new connections on %s", addr)
+	slog.Info("ready and accepting new connections", "addr", addr)
 
 	/* Start serving new request. Behind the scenes, this works by spawning a new goroutine for each client.
 	This is pretty fast and scalable since goroutines are nice and efficient. Blocks until TCP listener is closed. */
@@ -251,12 +249,12 @@ func Start() {
 
 	_ = server.Shutdown()
 
-	log.Info.Print("Now closed and not accepting any new connections")
+	slog.Info("now closed and not accepting any new connections")
 
 	// Close database connection
 	handler.db.Terminate()
 
-	log.Info.Print("Shutdown complete")
+	slog.Info("shutdown complete")
 }
 
 func Stop() {

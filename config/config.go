@@ -19,10 +19,9 @@ package config
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
 	"sync"
-
-	"chihaya/log"
 )
 
 var (
@@ -86,7 +85,7 @@ func (m Map) Section(s string) Map {
 func readConfig() {
 	f, err := os.Open(configFile)
 	if err != nil {
-		log.Warning.Printf("Unable to open config file, defaults will be used: %v", err)
+		slog.Warn("unable to open config file, defaults will be used", "err", err)
 		return
 	}
 
@@ -94,7 +93,7 @@ func readConfig() {
 	decoder.UseNumber()
 
 	if err = decoder.Decode(&config); err != nil {
-		log.Error.Printf("Can not parse config file, defaults will be used: %v", err)
+		slog.Error("can not parse config file, defaults will be used", "err", err)
 		return
 	}
 }

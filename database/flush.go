@@ -20,18 +20,20 @@ package database
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
-	"chihaya/log"
 )
 
 var (
 	peerInactivityInterval     int
 	purgeInactivePeersInterval int
 	flushSleepInterval         int
+	logFlushes                 bool
 )
 
 func init() {
@@ -39,13 +41,9 @@ func init() {
 
 	peerInactivityInterval, _ = intervals.GetInt("peer_inactivity", 3900)
 	purgeInactivePeersInterval, _ = intervals.GetInt("purge_inactive_peers", 120)
+	flushSleepInterval, _ = intervals.GetInt("flush", 5)
 
-	result, exists := intervals.GetInt("flush", 5)
-	if !exists {
-		log.Warning.Print("FlushSleepInterval is undefined; default of 5 seconds might negatively affect performance")
-	}
-
-	flushSleepInterval = result
+	logFlushes, _ = config.GetBool("log_flushes", true)
 }
 
 /*
@@ -136,7 +134,7 @@ func (db *Database) flushTorrents() {
 		for count = 0; count < length; count++ {
 			b := <-db.torrentChannel
 			if b == nil {
-				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
+				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
 			}
 
 			query.Write(b.Bytes())
@@ -148,9 +146,8 @@ func (db *Database) flushTorrents() {
 		}
 
 		if count > 0 {
-			logFlushes, _ := config.GetBool("log_flushes", true)
 			if logFlushes && !db.terminate {
-				log.Info.Printf("{torrents} Flushing %d", count)
+				slog.Info("flushing", "channel", "torrents", "count", count)
 			}
 
 			startTime := time.Now()
@@ -222,7 +219,7 @@ func (db *Database) flushUsers() {
 		for count = 0; count < length; count++ {
 			b := <-db.userChannel
 			if b == nil {
-				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
+				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
 			}
 
 			query.Write(b.Bytes())
@@ -234,9 +231,8 @@ func (db *Database) flushUsers() {
 		}
 
 		if count > 0 {
-			logFlushes, _ := config.GetBool("log_flushes", true)
 			if logFlushes && !db.terminate {
-				log.Info.Printf("{users_main} Flushing %d", count)
+				slog.Info("flushing", "channel", "users", "count", count)
 			}
 
 			startTime := time.Now()
@@ -298,7 +294,7 @@ func (db *Database) flushTransferHistory() {
 			for count = 0; count < length; count++ {
 				b := <-db.transferHistoryChannel
 				if b == nil {
-					log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
+					panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
 				}
 
 				query.Write(b.Bytes())
@@ -310,9 +306,8 @@ func (db *Database) flushTransferHistory() {
 			}
 
 			if count > 0 {
-				logFlushes, _ := config.GetBool("log_flushes", true)
 				if logFlushes && !db.terminate {
-					log.Info.Printf("{transfer_history} Flushing %d", count)
+					slog.Info("flushing", "channel", "transfer_history", "count", count)
 				}
 
 				startTime := time.Now()
@@ -372,7 +367,7 @@ func (db *Database) flushTransferIps() {
 		for count = 0; count < length; count++ {
 			b := <-db.transferIpsChannel
 			if b == nil {
-				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
+				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
 			}
 
 			query.Write(b.Bytes())
@@ -384,9 +379,8 @@ func (db *Database) flushTransferIps() {
 		}
 
 		if count > 0 {
-			logFlushes, _ := config.GetBool("log_flushes", true)
 			if logFlushes && !db.terminate {
-				log.Info.Printf("{transfer_ips} Flushing %d", count)
+				slog.Info("flushing", "channel", "transfer_ips", "count", count)
 			}
 
 			startTime := time.Now()
@@ -435,7 +429,7 @@ func (db *Database) flushSnatches() {
 		for count = 0; count < length; count++ {
 			b := <-db.snatchChannel
 			if b == nil {
-				log.Panic.Panicf("Got nil while receiving from non-empty channel: %d < %d", count, length)
+				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
 			}
 
 			query.Write(b.Bytes())
@@ -447,9 +441,8 @@ func (db *Database) flushSnatches() {
 		}
 
 		if count > 0 {
-			logFlushes, _ := config.GetBool("log_flushes", true)
 			if logFlushes && !db.terminate {
-				log.Info.Printf("{snatches} Flushing %d", count)
+				slog.Info("flushing", "channel", "snatches", "count", count)
 			}
 
 			startTime := time.Now()
@@ -532,7 +525,7 @@ func (db *Database) purgeInactivePeers() {
 
 		elapsedTime := time.Since(start)
 		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
-		log.Info.Printf("Purged %d inactive peers from memory (%s)", count, elapsedTime.String())
+		slog.Info("purged inactive peers from memory", "count", count, "elapsed", elapsedTime)
 
 		// Set peers as inactive in the database
 		func() {
@@ -550,12 +543,8 @@ func (db *Database) purgeInactivePeers() {
 			result := db.mainConn.execute(db.cleanStalePeersStmt, oldestActive)
 
 			if result != nil {
-				rows, err := result.RowsAffected()
-				if err != nil {
-					log.Info.Printf("Updated %d inactive peers in database (%s)", rows, time.Since(start).String())
-				} else {
-					log.Info.Printf("Updated inactive peers in database (%s)", time.Since(start).String())
-				}
+				rows, _ := result.RowsAffected()
+				slog.Info("updated inactive peers in database", "rows", rows, "elapsed", elapsedTime)
 			}
 		}()
 

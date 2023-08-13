@@ -20,6 +20,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	_ "net/http/pprof" //nolint:gosec
@@ -28,7 +29,6 @@ import (
 	"runtime"
 	"syscall"
 
-	"chihaya/log"
 	"chihaya/server"
 )
 
@@ -61,6 +61,9 @@ func main() {
 		return
 	}
 
+	// Reconfigure logger
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	if len(pprof) > 0 {
 		// Both are disabled by default; sample 1% of events
 		runtime.SetMutexProfileFraction(100)
@@ -69,7 +72,7 @@ func main() {
 		go func() {
 			l, err := net.Listen("tcp", pprof)
 			if err != nil {
-				log.Error.Printf("Failed to start special pprof debug server: %v", err)
+				slog.Error("failed to start special pprof debug server", "err", err)
 				return
 			}
 
@@ -78,7 +81,7 @@ func main() {
 				Handler: http.DefaultServeMux,
 			}
 
-			log.Warning.Printf("Started special pprof debug server on %s", l.Addr())
+			slog.Warn("started special pprof debug server", "addr", l.Addr())
 
 			_ = s.Serve(l)
 		}()
@@ -89,13 +92,13 @@ func main() {
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		<-c
 
-		log.Info.Print("Caught interrupt, shutting down...")
+		slog.Info("caught interrupt, shutting down...")
 
 		server.Stop()
 		<-c
 		os.Exit(0)
 	}()
 
-	log.Info.Print("Starting main server loop...")
+	slog.Info("starting main server loop...")
 	server.Start()
 }
