@@ -6,10 +6,10 @@ require (
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/go-testfixtures/testfixtures/v3 v3.9.0
 	github.com/google/go-cmp v0.5.9
-	github.com/jinzhu/copier v0.3.5
+	github.com/jinzhu/copier v0.4.0
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/common v0.44.0
-	github.com/valyala/fasthttp v1.48.0
+	github.com/valyala/fasthttp v1.49.0
 	github.com/zeebo/bencode v1.0.0
 )
 
