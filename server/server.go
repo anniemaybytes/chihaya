@@ -28,7 +28,6 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	"chihaya/database"
-	"chihaya/record"
 	"chihaya/util"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -217,9 +216,8 @@ func Start() {
 		}
 	}()
 
-	// Initialize database and recorder
+	// Initialize database
 	handler.db.Init()
-	record.Init()
 
 	// Register default prometheus collector
 	handler.normalRegisterer = prometheus.NewRegistry()

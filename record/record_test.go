@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,119 +31,104 @@ import (
 )
 
 type record struct {
-	seeding            bool
-	port               uint16
-	uid                uint32
-	tid                uint32
-	up, down, left     uint64
-	deltaUp, deltaDown int64
-	event, ip          string
+	port           uint16
+	uid, tid       uint32
+	up, down, left uint64
+	event, ip      string
 }
 
 func TestMain(m *testing.M) {
-	tempPath, err := os.MkdirTemp(os.TempDir(), "chihaya_record-*")
+	path, err := os.MkdirTemp(os.TempDir(), "chihaya_record-*")
 	if err != nil {
 		panic(err)
 	}
 
-	if err = os.Chmod(tempPath, 0755); err != nil {
+	if err = os.Chmod(path, 0755); err != nil {
 		panic(err)
 	}
 
-	if err = os.Chdir(tempPath); err != nil {
+	if err = os.Chdir(path); err != nil {
 		panic(err)
 	}
 
 	enabled = true // force-enable for tests
-
-	Init()
 
 	os.Exit(m.Run())
 }
 
 func TestRecord(t *testing.T) {
 	var (
-		recordValues    []record
-		expectedOutputs []string
+		values  []record
+		outputs = []string{header}
 	)
 
 	for i := 0; i < 10; i++ {
-		tmp := record{
-			true,
+		entry := record{
 			uint16(util.UnsafeUint32()),
 			util.UnsafeUint32(),
 			util.UnsafeUint32(),
 			util.UnsafeUint64(),
 			util.UnsafeUint64(),
 			util.UnsafeUint64(),
-			int64(util.UnsafeUint64()),
-			int64(util.UnsafeUint64()),
 			"completed",
 			"127.0.0.1",
 		}
-		recordValues = append(recordValues, tmp)
-		expectedOutputs = append(
-			expectedOutputs,
-			"["+
-				strconv.FormatUint(uint64(tmp.tid), 10)+","+
-				strconv.FormatUint(uint64(tmp.uid), 10)+","+
-				"\""+tmp.ip+"\","+
-				strconv.FormatUint(uint64(tmp.port), 10)+","+
-				"\""+tmp.event+"\""+","+
-				"1,"+
-				strconv.FormatInt(tmp.deltaUp, 10)+","+
-				strconv.FormatInt(tmp.deltaDown, 10)+","+
-				strconv.FormatUint(tmp.up, 10)+","+
-				strconv.FormatUint(tmp.down, 10)+","+
-				strconv.FormatUint(tmp.left, 10)+
-				"]",
+		values = append(values, entry)
+		outputs = append(
+			outputs,
+			strings.Join([]string{
+				strconv.FormatUint(uint64(entry.tid), 10),
+				strconv.FormatUint(uint64(entry.uid), 10),
+				entry.ip + ":" + strconv.FormatUint(uint64(entry.port), 10),
+				entry.event,
+				strconv.FormatUint(entry.up, 10),
+				strconv.FormatUint(entry.down, 10),
+				strconv.FormatUint(entry.left, 10),
+			}, ","),
 		)
 	}
 
-	for _, item := range recordValues {
+	for _, entry := range values {
 		Record(
-			item.tid,
-			item.uid,
-			cdb.NewPeerAddressFromIPPort(net.ParseIP(item.ip).To4(), item.port),
-			item.event,
-			item.seeding,
-			item.deltaUp,
-			item.deltaDown,
-			item.up,
-			item.down,
-			item.left)
+			entry.tid,
+			entry.uid,
+			cdb.NewPeerAddressFromIPPort(net.ParseIP(entry.ip).To4(), entry.port),
+			entry.event,
+			entry.up,
+			entry.down,
+			entry.left)
 	}
 
 	time.Sleep(200 * time.Millisecond)
 
 	// In theory, below line can fail if this line was called in a different hour than when the file was made
 	// In practice, this would never occur since the file should be made fast enough for it to be in same error.
-	recordFile, err := getFile(time.Now())
+	file, err := os.OpenFile(filename(time.Now()), os.O_RDONLY, 0644)
 	if err != nil {
 		t.Fatalf("Faced error in opening file: %s", err)
 	}
 
-	recordScanner := bufio.NewScanner(recordFile)
-	recordScanner.Split(bufio.ScanLines)
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
 
 	var recordLines []string
 
-	for recordScanner.Scan() {
-		recordLines = append(recordLines, recordScanner.Text())
+	for scanner.Scan() {
+		recordLines = append(recordLines, scanner.Text())
 	}
 
-	if err := recordScanner.Err(); err != nil {
+	if err := scanner.Err(); err != nil {
 		t.Fatalf("Faced error in reading: %s", err)
 	}
 
-	if len(expectedOutputs) != len(recordLines) {
+	if len(outputs) != len(recordLines) {
 		t.Fatalf("The number of records do not match with what is expected! (expected %d, got %d)",
-			len(expectedOutputs), len(recordLines))
+			len(outputs), len(recordLines))
 	}
 
 	for index, recordLine := range recordLines { // noinspection GoNilness
-		if expectedOutputs[index] != recordLine {
-			t.Fatalf("Expected %s but got %s in record!", expectedOutputs[index], recordLine)
+		if outputs[index] != recordLine {
+			t.Fatalf("Expected %s but got %s in record!", outputs[index], recordLine)
 		}
 	}
 }

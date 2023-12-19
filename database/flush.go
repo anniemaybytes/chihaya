@@ -20,13 +20,13 @@ package database
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"log/slog"
 	"time"
 
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
+	"chihaya/util"
 )
 
 var (
@@ -69,7 +69,8 @@ var (
 	transferIpsFlushBufferSize     int
 	snatchFlushBufferSize          int
 
-	errDbTerminate = errors.New("shutting down database connection")
+	errDbTerminate       = errors.New("shutting down database connection")
+	errGotNilFromChannel = errors.New("got nil while receiving from non-empty channel")
 )
 
 func (db *Database) startFlushing() {
@@ -109,32 +110,16 @@ func (db *Database) flushTorrents() {
 		count int
 	)
 
-	conn := Open()
-
 	for {
 		query.Reset()
-		query.WriteString("CREATE TEMPORARY TABLE IF NOT EXISTS flush_torrents (" +
-			"ID int unsigned NOT NULL, " +
-			"Snatched int unsigned NOT NULL DEFAULT 0, " +
-			"Seeders int unsigned NOT NULL DEFAULT 0, " +
-			"Leechers int unsigned NOT NULL DEFAULT 0, " +
-			"last_action int NOT NULL DEFAULT 0, " +
-			"PRIMARY KEY (ID)) ENGINE=MEMORY")
-		conn.exec(&query)
-
-		query.Reset()
-		query.WriteString("TRUNCATE flush_torrents")
-		conn.exec(&query)
-
-		query.Reset()
-		query.WriteString("INSERT INTO flush_torrents VALUES ")
+		query.WriteString("INSERT IGNORE INTO torrents (ID, Snatched, Seeders, Leechers, last_action) VALUES ")
 
 		length := len(db.torrentChannel)
 
 		for count = 0; count < length; count++ {
 			b := <-db.torrentChannel
 			if b == nil {
-				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
+				panic(errGotNilFromChannel)
 			}
 
 			query.Write(b.Bytes())
@@ -146,7 +131,7 @@ func (db *Database) flushTorrents() {
 		}
 
 		if count > 0 {
-			if logFlushes && !db.terminate {
+			if logFlushes && !db.terminate.Load() {
 				slog.Info("flushing", "channel", "torrents", "count", count)
 			}
 
@@ -155,34 +140,22 @@ func (db *Database) flushTorrents() {
 			query.WriteString(" ON DUPLICATE KEY UPDATE Snatched = Snatched + VALUE(Snatched), " +
 				"Seeders = VALUE(Seeders), Leechers = VALUE(Leechers), " +
 				"last_action = IF(last_action < VALUE(last_action), VALUE(last_action), last_action)")
-			conn.exec(&query)
+			db.exec(&query)
 
-			query.Reset()
-			query.WriteString("UPDATE torrents t, flush_torrents ft SET " +
-				"t.Snatched = t.Snatched + ft.Snatched, " +
-				"t.Seeders = ft.Seeders, " +
-				"t.Leechers = ft.Leechers, " +
-				"t.last_action = IF(t.last_action < ft.last_action, ft.last_action, t.last_action)" +
-				"WHERE t.ID = ft.ID")
-			conn.exec(&query)
-
-			if !db.terminate {
-				elapsedTime := time.Since(startTime)
-				collectors.UpdateFlushTime("torrents", elapsedTime)
+			if !db.terminate.Load() {
+				collectors.UpdateFlushTime("torrents", time.Since(startTime))
 				collectors.UpdateChannelsLen("torrents", count)
 			}
 
 			if length < (torrentFlushBufferSize >> 1) {
 				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
-		} else if db.terminate {
+		} else if db.terminate.Load() {
 			break
 		} else {
 			time.Sleep(time.Second)
 		}
 	}
-
-	_ = conn.Close()
 }
 
 func (db *Database) flushUsers() {
@@ -194,32 +167,16 @@ func (db *Database) flushUsers() {
 		count int
 	)
 
-	conn := Open()
-
 	for {
 		query.Reset()
-		query.WriteString("CREATE TEMPORARY TABLE IF NOT EXISTS flush_users (" +
-			"ID int unsigned NOT NULL, " +
-			"Uploaded bigint unsigned NOT NULL DEFAULT 0, " +
-			"Downloaded bigint unsigned NOT NULL DEFAULT 0, " +
-			"rawdl bigint unsigned NOT NULL DEFAULT 0, " +
-			"rawup bigint unsigned NOT NULL DEFAULT 0, " +
-			"PRIMARY KEY (ID)) ENGINE=MEMORY")
-		conn.exec(&query)
-
-		query.Reset()
-		query.WriteString("TRUNCATE flush_users")
-		conn.exec(&query)
-
-		query.Reset()
-		query.WriteString("INSERT INTO flush_users VALUES ")
+		query.WriteString("INSERT IGNORE INTO users_main (ID, Uploaded, Downloaded, rawdl, rawup) VALUES ")
 
 		length := len(db.userChannel)
 
 		for count = 0; count < length; count++ {
 			b := <-db.userChannel
 			if b == nil {
-				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
+				panic(errGotNilFromChannel)
 			}
 
 			query.Write(b.Bytes())
@@ -231,7 +188,7 @@ func (db *Database) flushUsers() {
 		}
 
 		if count > 0 {
-			if logFlushes && !db.terminate {
+			if logFlushes && !db.terminate.Load() {
 				slog.Info("flushing", "channel", "users", "count", count)
 			}
 
@@ -239,34 +196,22 @@ func (db *Database) flushUsers() {
 
 			query.WriteString(" ON DUPLICATE KEY UPDATE Uploaded = Uploaded + VALUE(Uploaded), " +
 				"Downloaded = Downloaded + VALUE(Downloaded), rawdl = rawdl + VALUE(rawdl), rawup = rawup + VALUE(rawup)")
-			conn.exec(&query)
+			db.exec(&query)
 
-			query.Reset()
-			query.WriteString("UPDATE users_main u, flush_users fu SET " +
-				"u.Uploaded = u.Uploaded + fu.Uploaded, " +
-				"u.Downloaded = u.Downloaded + fu.Downloaded, " +
-				"u.rawdl = u.rawdl + fu.rawdl, " +
-				"u.rawup = u.rawup + fu.rawup " +
-				"WHERE u.ID = fu.ID")
-			conn.exec(&query)
-
-			if !db.terminate {
-				elapsedTime := time.Since(startTime)
-				collectors.UpdateFlushTime("users", elapsedTime)
+			if !db.terminate.Load() {
+				collectors.UpdateFlushTime("users", time.Since(startTime))
 				collectors.UpdateChannelsLen("users", count)
 			}
 
 			if length < (userFlushBufferSize >> 1) {
 				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
-		} else if db.terminate {
+		} else if db.terminate.Load() {
 			break
 		} else {
 			time.Sleep(time.Second)
 		}
 	}
-
-	_ = conn.Close()
 }
 
 func (db *Database) flushTransferHistory() {
@@ -277,8 +222,6 @@ func (db *Database) flushTransferHistory() {
 		query bytes.Buffer
 		count int
 	)
-
-	conn := Open()
 
 	for {
 		length, err := func() (int, error) {
@@ -294,7 +237,7 @@ func (db *Database) flushTransferHistory() {
 			for count = 0; count < length; count++ {
 				b := <-db.transferHistoryChannel
 				if b == nil {
-					panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
+					panic(errGotNilFromChannel)
 				}
 
 				query.Write(b.Bytes())
@@ -306,7 +249,7 @@ func (db *Database) flushTransferHistory() {
 			}
 
 			if count > 0 {
-				if logFlushes && !db.terminate {
+				if logFlushes && !db.terminate.Load() {
 					slog.Info("flushing", "channel", "transfer_history", "count", count)
 				}
 
@@ -318,16 +261,15 @@ func (db *Database) flushTransferHistory() {
 					"seedtime = seedtime + VALUE(seedtime), last_announce = VALUE(last_announce), " +
 					"active = VALUE(active), snatched = snatched + VALUE(snatched);")
 
-				conn.exec(&query)
+				db.exec(&query)
 
-				if !db.terminate {
-					elapsedTime := time.Since(startTime)
-					collectors.UpdateFlushTime("transfer_history", elapsedTime)
+				if !db.terminate.Load() {
+					collectors.UpdateFlushTime("transfer_history", time.Since(startTime))
 					collectors.UpdateChannelsLen("transfer_history", count)
 				}
 
 				return length, nil
-			} else if db.terminate {
+			} else if db.terminate.Load() {
 				return 0, errDbTerminate
 			}
 
@@ -342,8 +284,6 @@ func (db *Database) flushTransferHistory() {
 			time.Sleep(time.Second)
 		}
 	}
-
-	_ = conn.Close()
 }
 
 func (db *Database) flushTransferIps() {
@@ -355,8 +295,6 @@ func (db *Database) flushTransferIps() {
 		count int
 	)
 
-	conn := Open()
-
 	for {
 		query.Reset()
 		query.WriteString("INSERT INTO transfer_ips (uid, fid, client_id, ip, port, uploaded, downloaded, " +
@@ -367,7 +305,7 @@ func (db *Database) flushTransferIps() {
 		for count = 0; count < length; count++ {
 			b := <-db.transferIpsChannel
 			if b == nil {
-				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
+				panic(errGotNilFromChannel)
 			}
 
 			query.Write(b.Bytes())
@@ -379,7 +317,7 @@ func (db *Database) flushTransferIps() {
 		}
 
 		if count > 0 {
-			if logFlushes && !db.terminate {
+			if logFlushes && !db.terminate.Load() {
 				slog.Info("flushing", "channel", "transfer_ips", "count", count)
 			}
 
@@ -388,25 +326,22 @@ func (db *Database) flushTransferIps() {
 			// todo: port should be part of PK
 			query.WriteString("\nON DUPLICATE KEY UPDATE port = VALUE(port), downloaded = downloaded + VALUE(downloaded), " +
 				"uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce)")
-			conn.exec(&query)
+			db.exec(&query)
 
-			if !db.terminate {
-				elapsedTime := time.Since(startTime)
-				collectors.UpdateFlushTime("transfer_ips", elapsedTime)
+			if !db.terminate.Load() {
+				collectors.UpdateFlushTime("transfer_ips", time.Since(startTime))
 				collectors.UpdateChannelsLen("transfer_ips", count)
 			}
 
 			if length < (transferIpsFlushBufferSize >> 1) {
 				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
-		} else if db.terminate {
+		} else if db.terminate.Load() {
 			break
 		} else {
 			time.Sleep(time.Second)
 		}
 	}
-
-	_ = conn.Close()
 }
 
 func (db *Database) flushSnatches() {
@@ -418,8 +353,6 @@ func (db *Database) flushSnatches() {
 		count int
 	)
 
-	conn := Open()
-
 	for {
 		query.Reset()
 		query.WriteString("INSERT INTO transfer_history (uid, fid, snatched_time) VALUES\n")
@@ -429,7 +362,7 @@ func (db *Database) flushSnatches() {
 		for count = 0; count < length; count++ {
 			b := <-db.snatchChannel
 			if b == nil {
-				panic(fmt.Sprintf("fot nil while receiving from non-empty channel: %d < %d", count, length))
+				panic(errGotNilFromChannel)
 			}
 
 			query.Write(b.Bytes())
@@ -441,47 +374,42 @@ func (db *Database) flushSnatches() {
 		}
 
 		if count > 0 {
-			if logFlushes && !db.terminate {
+			if logFlushes && !db.terminate.Load() {
 				slog.Info("flushing", "channel", "snatches", "count", count)
 			}
 
 			startTime := time.Now()
 
 			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time)")
-			conn.exec(&query)
+			db.exec(&query)
 
-			if !db.terminate {
-				elapsedTime := time.Since(startTime)
-				collectors.UpdateFlushTime("snatches", elapsedTime)
+			if !db.terminate.Load() {
+				collectors.UpdateFlushTime("snatches", time.Since(startTime))
 				collectors.UpdateChannelsLen("snatches", count)
 			}
 
 			if length < (snatchFlushBufferSize >> 1) {
 				time.Sleep(time.Duration(flushSleepInterval) * time.Second)
 			}
-		} else if db.terminate {
+		} else if db.terminate.Load() {
 			break
 		} else {
 			time.Sleep(time.Second)
 		}
 	}
-
-	_ = conn.Close()
 }
 
 func (db *Database) purgeInactivePeers() {
 	var (
-		start time.Time
-		now   int64
-		count int
+		startTime time.Time
+		count     int
 	)
 
-	for !db.terminate {
-		start = time.Now()
-		now = start.Unix()
+	util.ContextTick(db.ctx, time.Duration(purgeInactivePeersInterval)*time.Second, func() {
+		startTime = time.Now()
 		count = 0
 
-		oldestActive := now - int64(peerInactivityInterval)
+		oldestActive := time.Now().Unix() - int64(peerInactivityInterval)
 
 		// First, remove inactive peers from memory
 		dbTorrents := *db.Torrents.Load()
@@ -523,7 +451,7 @@ func (db *Database) purgeInactivePeers() {
 			}()
 		}
 
-		elapsedTime := time.Since(start)
+		elapsedTime := time.Since(startTime)
 		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
 		slog.Info("purged inactive peers from memory", "count", count, "elapsed", elapsedTime)
 
@@ -536,18 +464,13 @@ func (db *Database) purgeInactivePeers() {
 			db.transferHistoryLock.Lock()
 			defer db.transferHistoryLock.Unlock()
 
-			db.mainConn.mutex.Lock()
-			defer db.mainConn.mutex.Unlock()
+			startTime = time.Now()
 
-			start = time.Now()
-			result := db.mainConn.execute(db.cleanStalePeersStmt, oldestActive)
-
+			result := db.execute(db.cleanStalePeersStmt, oldestActive)
 			if result != nil {
 				rows, _ := result.RowsAffected()
-				slog.Info("updated inactive peers in database", "rows", rows, "elapsed", elapsedTime)
+				slog.Info("updated inactive peers in database", "rows", rows, "elapsed", time.Since(startTime))
 			}
 		}()
-
-		time.Sleep(time.Duration(purgeInactivePeersInterval) * time.Second)
-	}
+	})
 }

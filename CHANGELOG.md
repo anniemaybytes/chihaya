@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## Unreleased
+## v11.0.0
 ### Fixed
 - Fix panic when attempting to shutdown chihaya before main server loop has started
 - Do not allocate new bytes buffer for each bencode operation
@@ -31,6 +31,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Replace `net/http` with https://github.com/valyala/fasthttp
 - Refactor query parsing into a struct via `fasthttp`
 - Do not spawn new goroutine for `QueueSnatch`
+- Keep single sql.DB instead of multiple custom Connection
+- Remove usage of `TEMPORARY` tables for flushes
+- Alter config to take database DSN directly
+- Make recorder output `csv` instead of `json`
 
 ### Added
 - Introduce and use non-crypto Rand for tests and announce interval drift

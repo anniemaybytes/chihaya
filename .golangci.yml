@@ -31,8 +31,15 @@ linters:
         - nolintlint
         - goerr113
 
+linters-settings:
+    nolintlint:
+        require-explanation: false
+        require-specific: true
+
 issues:
     exclude-rules:
-        - path: util/unsafe_rand(_test)?\.go
+        - path: (.+)_test\.go
           linters:
               - gosec
+              - goconst
+              - unparam

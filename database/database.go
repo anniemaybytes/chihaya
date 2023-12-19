@@ -19,8 +19,8 @@ package database
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
 	"os"
 	"sync"
@@ -34,11 +34,6 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 )
-
-type Connection struct {
-	sqlDb *sql.DB
-	mutex sync.Mutex
-}
 
 type Database struct {
 	snatchChannel          chan *bytes.Buffer
@@ -62,13 +57,15 @@ type Database struct {
 	TorrentGroupFreeleech atomic.Pointer[map[cdb.TorrentGroupKey]*cdb.TorrentGroupFreeleech]
 	Clients               atomic.Pointer[map[uint16]string]
 
-	mainConn *Connection // Used for reloading and misc queries
-
 	bufferPool *util.BufferPool
 
 	transferHistoryLock sync.Mutex
 
-	terminate bool
+	conn *sql.DB
+
+	terminate atomic.Bool
+	ctx       context.Context
+	ctxCancel func()
 	waitGroup sync.WaitGroup
 }
 
@@ -77,72 +74,67 @@ var (
 	maxDeadlockRetries int
 )
 
-var defaultDsn = map[string]string{
-	"username": "chihaya",
-	"password": "",
-	"proto":    "tcp",
-	"addr":     "127.0.0.1:3306",
-	"database": "chihaya",
-}
+const defaultDsn = "chihaya:@tcp(127.0.0.1:3306)/chihaya"
 
 func (db *Database) Init() {
-	db.terminate = false
+	db.terminate.Store(false)
+	db.ctx, db.ctxCancel = context.WithCancel(context.Background())
 
 	slog.Info("opening database connection")
 
-	db.mainConn = Open()
+	db.conn = Open()
 
 	// Used for recording updates, so the max required size should be < 128 bytes. See queue.go for details
 	db.bufferPool = util.NewBufferPool(128)
 
 	var err error
 
-	db.loadUsersStmt, err = db.mainConn.sqlDb.Prepare(
+	db.loadUsersStmt, err = db.conn.Prepare(
 		"SELECT ID, torrent_pass, DownMultiplier, UpMultiplier, DisableDownload, TrackerHide " +
 			"FROM users_main WHERE Enabled = '1'")
 	if err != nil {
 		panic(err)
 	}
 
-	db.loadHnrStmt, err = db.mainConn.sqlDb.Prepare(
+	db.loadHnrStmt, err = db.conn.Prepare(
 		"SELECT h.uid, h.fid FROM transfer_history AS h " +
 			"JOIN users_main AS u ON u.ID = h.uid WHERE h.hnr = 1 AND u.Enabled = '1'")
 	if err != nil {
 		panic(err)
 	}
 
-	db.loadTorrentsStmt, err = db.mainConn.sqlDb.Prepare(
+	db.loadTorrentsStmt, err = db.conn.Prepare(
 		"SELECT ID, info_hash, DownMultiplier, UpMultiplier, Snatched, Status, GroupID, TorrentType FROM torrents " +
 			"WHERE TorrentType != 'internal'")
 	if err != nil {
 		panic(err)
 	}
 
-	db.loadTorrentGroupFreeleechStmt, err = db.mainConn.sqlDb.Prepare(
+	db.loadTorrentGroupFreeleechStmt, err = db.conn.Prepare(
 		"SELECT GroupID, `Type`, DownMultiplier, UpMultiplier FROM torrent_group_freeleech")
 	if err != nil {
 		panic(err)
 	}
 
-	db.loadClientsStmt, err = db.mainConn.sqlDb.Prepare(
+	db.loadClientsStmt, err = db.conn.Prepare(
 		"SELECT id, peer_id FROM approved_clients WHERE archived = 0")
 	if err != nil {
 		panic(err)
 	}
 
-	db.loadFreeleechStmt, err = db.mainConn.sqlDb.Prepare(
+	db.loadFreeleechStmt, err = db.conn.Prepare(
 		"SELECT mod_setting FROM mod_core WHERE mod_option = 'global_freeleech'")
 	if err != nil {
 		panic(err)
 	}
 
-	db.cleanStalePeersStmt, err = db.mainConn.sqlDb.Prepare(
+	db.cleanStalePeersStmt, err = db.conn.Prepare(
 		"UPDATE transfer_history SET active = 0 WHERE last_announce < ? AND active = 1")
 	if err != nil {
 		panic(err)
 	}
 
-	db.unPruneTorrentStmt, err = db.mainConn.sqlDb.Prepare(
+	db.unPruneTorrentStmt, err = db.conn.Prepare(
 		"UPDATE torrents SET Status = 0 WHERE ID = ?")
 	if err != nil {
 		panic(err)
@@ -180,7 +172,8 @@ func (db *Database) Init() {
 func (db *Database) Terminate() {
 	slog.Info("terminating database connection")
 
-	db.terminate = true
+	db.terminate.Store(true)
+	db.ctxCancel()
 
 	slog.Info("closing all flush channels")
 	db.closeFlushChannels()
@@ -191,13 +184,11 @@ func (db *Database) Terminate() {
 	}()
 
 	db.waitGroup.Wait()
-	db.mainConn.mutex.Lock()
-	_ = db.mainConn.Close()
-	db.mainConn.mutex.Unlock()
+	_ = db.conn.Close()
 	db.serialize()
 }
 
-func Open() *Connection {
+func Open() *sql.DB {
 	databaseConfig := config.Section("database")
 	deadlockWaitTime, _ = databaseConfig.GetInt("deadlock_pause", 1)
 	maxDeadlockRetries, _ = databaseConfig.GetInt("deadlock_retries", 5)
@@ -213,18 +204,7 @@ func Open() *Connection {
 	// First try to load the DSN from environment. USeful for tests.
 	databaseDsn := os.Getenv("DB_DSN")
 	if databaseDsn == "" {
-		dbUsername, _ := databaseConfig.Get("username", defaultDsn["username"])
-		dbPassword, _ := databaseConfig.Get("password", defaultDsn["password"])
-		dbProto, _ := databaseConfig.Get("proto", defaultDsn["proto"])
-		dbAddr, _ := databaseConfig.Get("addr", defaultDsn["addr"])
-		dbDatabase, _ := databaseConfig.Get("database", defaultDsn["database"])
-		databaseDsn = fmt.Sprintf("%s:%s@%s(%s)/%s",
-			dbUsername,
-			dbPassword,
-			dbProto,
-			dbAddr,
-			dbDatabase,
-		)
+		databaseDsn, _ = databaseConfig.Get("dsn", defaultDsn)
 	}
 
 	sqlDb, err := sql.Open("mysql", databaseDsn)
@@ -236,16 +216,10 @@ func Open() *Connection {
 		panic(err)
 	}
 
-	return &Connection{
-		sqlDb: sqlDb,
-	}
+	return sqlDb
 }
 
-func (db *Connection) Close() error {
-	return db.sqlDb.Close()
-}
-
-func (db *Connection) query(stmt *sql.Stmt, args ...interface{}) *sql.Rows { //nolint:unparam
+func (db *Database) query(stmt *sql.Stmt, args ...interface{}) *sql.Rows { //nolint:unparam
 	rows, _ := perform(func() (interface{}, error) {
 		return stmt.Query(args...)
 	}).(*sql.Rows)
@@ -253,7 +227,7 @@ func (db *Connection) query(stmt *sql.Stmt, args ...interface{}) *sql.Rows { //n
 	return rows
 }
 
-func (db *Connection) execute(stmt *sql.Stmt, args ...interface{}) sql.Result {
+func (db *Database) execute(stmt *sql.Stmt, args ...interface{}) sql.Result {
 	result, _ := perform(func() (interface{}, error) {
 		return stmt.Exec(args...)
 	}).(sql.Result)
@@ -261,9 +235,9 @@ func (db *Connection) execute(stmt *sql.Stmt, args ...interface{}) sql.Result {
 	return result
 }
 
-func (db *Connection) exec(query *bytes.Buffer, args ...interface{}) sql.Result { //nolint:unparam
+func (db *Database) exec(query *bytes.Buffer, args ...interface{}) sql.Result { //nolint:unparam
 	result, _ := perform(func() (interface{}, error) {
-		return db.sqlDb.Exec(query.String(), args...)
+		return db.conn.Exec(query.String(), args...)
 	}).(sql.Result)
 
 	return result

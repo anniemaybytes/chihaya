@@ -27,7 +27,7 @@ var randomSourcePool sync.Pool
 
 func init() {
 	randomSourcePool.New = func() any {
-		return unsafeRandom.New(unsafeRandom.NewSource(time.Now().UnixNano()))
+		return unsafeRandom.New(unsafeRandom.NewSource(time.Now().UnixNano())) //nolint:gosec
 	}
 }
 

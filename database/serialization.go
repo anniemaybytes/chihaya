@@ -26,6 +26,7 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
+	"chihaya/util"
 )
 
 var serializeInterval int
@@ -37,10 +38,9 @@ func init() {
 
 func (db *Database) startSerializing() {
 	go func() {
-		for !db.terminate {
-			time.Sleep(time.Duration(serializeInterval) * time.Second)
+		util.ContextTick(db.ctx, time.Duration(serializeInterval)*time.Second, func() {
 			db.serialize()
-		}
+		})
 	}()
 }
 

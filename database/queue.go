@@ -174,7 +174,5 @@ func (db *Database) QueueSnatch(peer *cdb.Peer, now int64) {
 }
 
 func (db *Database) UnPrune(torrent *cdb.Torrent) {
-	db.mainConn.mutex.Lock()
-	db.mainConn.execute(db.unPruneTorrentStmt, torrent.ID.Load())
-	db.mainConn.mutex.Unlock()
+	db.execute(db.unPruneTorrentStmt, torrent.ID.Load())
 }

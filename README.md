@@ -58,12 +58,7 @@ Configuration is done in `config.json`, which you'll need to create with the fol
 ```json
 {
   "database": {
-    "username": "chihaya",
-    "password": "",
-    "database": "chihaya",
-    "proto": "tcp",
-    "addr": "127.0.0.1:3306",
-
+    "dsn": "chihaya:@tcp(127.0.0.1:3306)/chihaya",
     "deadlock_pause": 1,
     "deadlock_retries": 5
   },
@@ -114,11 +109,7 @@ Configuration is done in `config.json`, which you'll need to create with the fol
 ```
 
 - `database`
-    - `username` - username to use when connecting to database
-    - `password` - password for user specified
-    - `database` - database name
-    - `proto` - protocol to use when connecting to database, can be `unix` or `tcp`
-    - `addr` - address to find database at, either absolute path for `unix` or `ip:port` for `tcp`
+    - `dsn` - data source name at which to find database
     - `deadlock_pause` - time in seconds to wait between retries on deadlock, ramps up linearly with each attempt from this value
     - `deadlock_retries` - how many times should we retry on deadlock
 - `channels` - channel holds raw data for injection to SQL statement on flush
@@ -157,39 +148,8 @@ Recorder
 -------------
 
 If `record` is true, chihaya will save all successful announce events to a file under 
-`events` directory. The files will have a format of `events_YYYY-MM-DDTHH.json` and are
-split every hour for easier analysis. Every line in a file should be treated as a separate
-JSON object. Below is a definition on how to read the data:
-
-```text
-[
-    torrent_id,
-    user_id,
-    ip_addr,
-    port,
-    event,
-    seeding,
-    delta_up,
-    delta_down,
-    up,
-    down,
-    left
-] 
-```
-
-- `torrent_id` - the ID of torrent being announced
-- `user_id` - the ID of user making the announce
-- `ip_addr` - IP address of peer (this might _not_ be an address from which request was sent)
-- `port` - port the peer listens on as resolved by tracker; this might be an invalid or
-closed port, the tracker performs no validation on it
-- `event` - the event as given by client; for regular announces it is empty
-- `seeding` - whether tracker recognizes peer as seeder or leecher, either `1` or `0`
-- `delta_up` - delta of uploaded between announces for this peer, in bytes
-- `delta_down` - delta of downloaded between announces for this peer, in bytes
-- `up` - number of `uploaded` bytes, as reported by client for this announce
-- `down` - number of `downloaded` bytes, as reported by client for this announce
-- `left` - number of `left` bytes, as reported by client for this announce; if this is more
-than 0 then tracker sees this peer as leecher and `seeding` should be `0`
+`events` directory. The files will have a format of `events_YYYY-MM-DDTHH.csv` and are
+split hourly for easier analysis.
 
 Database scheme
 -------------

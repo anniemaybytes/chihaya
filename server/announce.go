@@ -418,8 +418,8 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	db.QueueTransferIP(peer, persistAddr, rawDeltaUpload, rawDeltaDownload)
 
 	// Record must be done in separate goroutine for now; todo: rewrite this so it doesn't tank performance
-	go record.Record(peer.TorrentID, user.ID.Load(), peer.Addr, qp.Params.Event, seeding, rawDeltaUpload, rawDeltaDownload,
-		qp.Params.Uploaded, qp.Params.Downloaded, qp.Params.Left)
+	go record.Record(peer.TorrentID, user.ID.Load(), peer.Addr, qp.Params.Event, qp.Params.Uploaded,
+		qp.Params.Downloaded, qp.Params.Left)
 
 	// Generate response
 	seedCount := int(torrent.SeedersLength.Load())

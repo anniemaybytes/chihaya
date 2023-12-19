@@ -26,6 +26,7 @@ import (
 	"chihaya/collectors"
 	"chihaya/config"
 	cdb "chihaya/database/types"
+	"chihaya/util"
 )
 
 // GlobalFreeleech indicates whether site is now in freeleech mode (takes precedence over torrent-specific multipliers)
@@ -51,31 +52,27 @@ func init() {
  */
 func (db *Database) startReloading() {
 	go func() {
-		for !db.terminate {
-			time.Sleep(time.Duration(reloadInterval) * time.Second)
-
+		util.ContextTick(db.ctx, time.Duration(reloadInterval)*time.Second, func() {
 			db.waitGroup.Add(1)
+			defer db.waitGroup.Done()
+
 			db.loadUsers()
 			db.loadHitAndRuns()
 			db.loadTorrents()
 			db.loadGroupsFreeleech()
 			db.loadConfig()
 			db.loadClients()
-			db.waitGroup.Done()
-		}
+		})
 	}()
 }
 
 func (db *Database) loadUsers() {
-	db.mainConn.mutex.Lock()
-	defer db.mainConn.mutex.Unlock()
-
-	start := time.Now()
+	startTime := time.Now()
 
 	dbUsers := *db.Users.Load()
 	newUsers := make(map[string]*cdb.User, len(dbUsers))
 
-	rows := db.mainConn.query(db.loadUsersStmt)
+	rows := db.query(db.loadUsersStmt)
 	if rows == nil {
 		slog.Error("failed to reload from database", "source", "users")
 		return
@@ -119,19 +116,17 @@ func (db *Database) loadUsers() {
 
 	db.Users.Store(&newUsers)
 
-	elapsedTime := time.Since(start)
+	elapsedTime := time.Since(startTime)
 	collectors.UpdateReloadTime("users", elapsedTime)
 	slog.Info("reload from database", "source", "users", "rows", len(newUsers), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadHitAndRuns() {
-	db.mainConn.mutex.Lock()
-	defer db.mainConn.mutex.Unlock()
+	startTime := time.Now()
 
-	start := time.Now()
 	newHnr := make(map[cdb.UserTorrentPair]struct{})
 
-	rows := db.mainConn.query(db.loadHnrStmt)
+	rows := db.query(db.loadHnrStmt)
 	if rows == nil {
 		slog.Error("failed to reload from database", "source", "hit_and_runs")
 		return
@@ -158,24 +153,18 @@ func (db *Database) loadHitAndRuns() {
 
 	db.HitAndRuns.Store(&newHnr)
 
-	elapsedTime := time.Since(start)
+	elapsedTime := time.Since(startTime)
 	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
 	slog.Info("reload from database", "source", "hit_and_runs", "rows", len(newHnr), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadTorrents() {
-	var start time.Time
+	startTime := time.Now()
 
 	dbTorrents := *db.Torrents.Load()
-
 	newTorrents := make(map[cdb.TorrentHash]*cdb.Torrent, len(dbTorrents))
 
-	db.mainConn.mutex.Lock()
-	defer db.mainConn.mutex.Unlock()
-
-	start = time.Now()
-
-	rows := db.mainConn.query(db.loadTorrentsStmt)
+	rows := db.query(db.loadTorrentsStmt)
 	if rows == nil {
 		slog.Error("failed to reload from database", "torrents", "hit_and_runs")
 		return
@@ -248,19 +237,17 @@ func (db *Database) loadTorrents() {
 
 	db.Torrents.Store(&newTorrents)
 
-	elapsedTime := time.Since(start)
+	elapsedTime := time.Since(startTime)
 	collectors.UpdateReloadTime("torrents", elapsedTime)
 	slog.Info("reload from database", "source", "torrents", "rows", len(newTorrents), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadGroupsFreeleech() {
-	db.mainConn.mutex.Lock()
-	defer db.mainConn.mutex.Unlock()
+	startTime := time.Now()
 
-	start := time.Now()
 	newTorrentGroupFreeleech := make(map[cdb.TorrentGroupKey]*cdb.TorrentGroupFreeleech)
 
-	rows := db.mainConn.query(db.loadTorrentGroupFreeleechStmt)
+	rows := db.query(db.loadTorrentGroupFreeleechStmt)
 	if rows == nil {
 		slog.Error("failed to reload from database", "torrents_group_freeleech", "hit_and_runs")
 		return
@@ -296,17 +283,14 @@ func (db *Database) loadGroupsFreeleech() {
 
 	db.TorrentGroupFreeleech.Store(&newTorrentGroupFreeleech)
 
-	elapsedTime := time.Since(start)
+	elapsedTime := time.Since(startTime)
 	collectors.UpdateReloadTime("groups_freeleech", elapsedTime)
 	slog.Info("reload from database", "source", "torrents_group_freeleech",
 		"rows", len(newTorrentGroupFreeleech), "elapsed", elapsedTime)
 }
 
 func (db *Database) loadConfig() {
-	db.mainConn.mutex.Lock()
-	defer db.mainConn.mutex.Unlock()
-
-	rows := db.mainConn.query(db.loadFreeleechStmt)
+	rows := db.query(db.loadFreeleechStmt)
 	if rows == nil {
 		slog.Error("failed to reload from database", "source", "config")
 		return
@@ -329,13 +313,11 @@ func (db *Database) loadConfig() {
 }
 
 func (db *Database) loadClients() {
-	db.mainConn.mutex.Lock()
-	defer db.mainConn.mutex.Unlock()
+	startTime := time.Now()
 
-	start := time.Now()
 	newClients := make(map[uint16]string)
 
-	rows := db.mainConn.query(db.loadClientsStmt)
+	rows := db.query(db.loadClientsStmt)
 	if rows == nil {
 		slog.Error("failed to reload from database", "source", "approved_clients")
 		return
@@ -360,7 +342,7 @@ func (db *Database) loadClients() {
 
 	db.Clients.Store(&newClients)
 
-	elapsedTime := time.Since(start)
+	elapsedTime := time.Since(startTime)
 	collectors.UpdateReloadTime("clients", elapsedTime)
 	slog.Info("reload from database", "source", "approved_clients", "rows", len(newClients), "elapsed", elapsedTime)
 }

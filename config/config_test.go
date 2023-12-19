@@ -40,18 +40,16 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	f, err := os.OpenFile("config.json", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(configFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		panic(err)
 	}
 
 	configTest = make(Map)
 	dbConfig := map[string]interface{}{
-		"username": "chihaya",
-		"password": "",
-		"proto":    "tcp",
-		"addr":     "127.0.0.1:3306",
-		"database": "chihaya",
+		"dsn":              "chihaya:@tcp(127.0.0.1:3306)/chihaya",
+		"deadlock_pause":   json.Number("1"),
+		"deadlock_retries": json.Number("5"),
 	}
 	configTest["database"] = dbConfig
 	configTest["addr"] = ":34000"
@@ -148,5 +146,5 @@ func TestSection(t *testing.T) {
 }
 
 func cleanup() {
-	_ = os.Remove("config.json")
+	_ = os.Remove(configFile)
 }

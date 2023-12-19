@@ -19,30 +19,27 @@ package record
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
 
 	"chihaya/config"
 	cdb "chihaya/database/types"
-	"chihaya/util"
 )
 
 var (
-	enabled     = false // global for testing purposes
+	enabled     = false // overrides default, for testing purposes only
 	initialized = false
+	header      = "UserID,TorrentID,Addr,Event,Uploaded,Downloaded,Left"
 	channel     chan []byte
 )
 
-func getFile(t time.Time) (*os.File, error) {
-	return os.OpenFile("events/events_"+t.Format("2006-01-02T15")+".json", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
+func filename(t time.Time) string {
+	return "events/events_" + t.Format("2006-01-02T15") + ".csv"
 }
 
-func Init() {
-	if enabled, _ := config.GetBool("record", enabled); !enabled {
-		return
-	}
-
+func initialize() {
 	if err := os.Mkdir("events", 0755); err != nil && !os.IsExist(err) {
 		panic(err)
 	}
@@ -50,8 +47,12 @@ func Init() {
 	start := time.Now()
 	channel = make(chan []byte)
 
-	file, err := getFile(start)
+	file, err := os.OpenFile(filename(start), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
+		panic(err)
+	}
+
+	if _, err = fmt.Fprintln(file, header); err != nil {
 		panic(err)
 	}
 
@@ -65,8 +66,12 @@ func Init() {
 					panic(err)
 				}
 
-				file, err = getFile(start)
+				file, err = os.OpenFile(filename(start), os.O_WRONLY|os.O_CREATE, 0644)
 				if err != nil {
+					panic(err)
+				}
+
+				if _, err = fmt.Fprintln(file, header); err != nil {
 					panic(err)
 				}
 			}
@@ -80,14 +85,13 @@ func Init() {
 	initialized = true
 }
 
-func Record(tid, uid uint32, addr cdb.PeerAddress, event string, seeding bool, deltaUp, deltaDown int64,
-	up, down, left uint64) {
+func Record(tid, uid uint32, addr cdb.PeerAddress, event string, up, down, left uint64) {
 	if enabled, _ := config.GetBool("record", enabled); !enabled {
 		return
 	}
 
 	if !initialized {
-		panic("can not Record without prior initialization")
+		initialize()
 	}
 
 	if up == 0 && down == 0 {
@@ -97,29 +101,20 @@ func Record(tid, uid uint32, addr cdb.PeerAddress, event string, seeding bool, d
 	b := make([]byte, 0, 64)
 	buf := bytes.NewBuffer(b)
 
-	buf.WriteString("[")
 	buf.WriteString(strconv.FormatUint(uint64(tid), 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(uint64(uid), 10))
-	buf.WriteString(",\"")
-	buf.WriteString(addr.IPString())
-	buf.WriteString("\",")
-	buf.WriteString(strconv.FormatUint(uint64(addr.Port()), 10))
-	buf.WriteString(",\"")
+	buf.WriteString(",")
+	buf.WriteString(addr.IPString() + ":" + strconv.FormatUint(uint64(addr.Port()), 10))
+	buf.WriteString(",")
 	buf.WriteString(event)
-	buf.WriteString("\",")
-	buf.WriteString(util.Btoa(seeding))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatInt(deltaUp, 10))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatInt(deltaDown, 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(up, 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(down, 10))
 	buf.WriteString(",")
 	buf.WriteString(strconv.FormatUint(left, 10))
-	buf.WriteString("]\n")
+	buf.WriteByte('\n')
 
 	channel <- buf.Bytes()
 }

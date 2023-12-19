@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 	db.Init()
 
 	fixtures, err = testfixtures.New(
-		testfixtures.Database(db.mainConn.sqlDb),
+		testfixtures.Database(db.conn),
 		testfixtures.Dialect("mariadb"),
 		testfixtures.Directory("fixtures"),
 		testfixtures.DangerousSkipTestDatabaseCheck(),
@@ -374,7 +374,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 	deltaDownload = int64(float64(deltaRawDownload) * math.Float64frombits(testUser.DownMultiplier.Load()))
 	deltaUpload = int64(float64(deltaRawUpload) * math.Float64frombits(testUser.UpMultiplier.Load()))
 
-	row := db.mainConn.sqlDb.QueryRow("SELECT Uploaded, Downloaded, rawup, rawdl "+
+	row := db.conn.QueryRow("SELECT Uploaded, Downloaded, rawup, rawdl "+
 		"FROM users_main WHERE ID = ?", testUser.ID.Load())
 
 	err := row.Scan(&initUpload, &initDownload, &initRawUpload, &initRawDownload)
@@ -389,7 +389,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 	}
 	time.Sleep(200 * time.Millisecond)
 
-	row = db.mainConn.sqlDb.QueryRow("SELECT Uploaded, Downloaded, rawup, rawdl "+
+	row = db.conn.QueryRow("SELECT Uploaded, Downloaded, rawup, rawdl "+
 		"FROM users_main WHERE ID = ?", testUser.ID.Load())
 
 	err = row.Scan(&upload, &download, &rawUpload, &rawDownload)
@@ -470,7 +470,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 	deltaActiveTime = 267
 	deltaSeedTime = 15
 
-	row := db.mainConn.sqlDb.QueryRow("SELECT uploaded, downloaded, activetime, seedtime, active, snatched "+
+	row := db.conn.QueryRow("SELECT uploaded, downloaded, activetime, seedtime, active, snatched "+
 		"FROM transfer_history WHERE uid = ? AND fid = ?", testPeer.UserID, testPeer.TorrentID)
 
 	err := row.Scan(&initRawUpload, &initRawDownload, &initActiveTime, &initSeedTime, &initActive, &initSnatch)
@@ -491,7 +491,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 	}
 	time.Sleep(200 * time.Millisecond)
 
-	row = db.mainConn.sqlDb.QueryRow("SELECT uploaded, downloaded, activetime, seedtime, active, snatched "+
+	row = db.conn.QueryRow("SELECT uploaded, downloaded, activetime, seedtime, active, snatched "+
 		"FROM transfer_history WHERE uid = ? AND fid = ?", testPeer.UserID, testPeer.TorrentID)
 
 	err = row.Scan(&rawUpload, &rawDownload, &activeTime, &seedTime, &active, &snatch)
@@ -552,7 +552,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 
 	var gotStartTime int64
 
-	row = db.mainConn.sqlDb.QueryRow("SELECT seeding, starttime, last_announce, remaining "+
+	row = db.conn.QueryRow("SELECT seeding, starttime, last_announce, remaining "+
 		"FROM transfer_history WHERE uid = ? AND fid = ?", gotPeer.UserID, gotPeer.TorrentID)
 
 	err = row.Scan(&gotPeer.Seeding, &gotStartTime, &gotPeer.LastAnnounce, &gotPeer.Left)
@@ -590,7 +590,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 	}
 	time.Sleep(200 * time.Millisecond)
 
-	row = db.mainConn.sqlDb.QueryRow("SELECT seeding, starttime, last_announce, remaining "+
+	row = db.conn.QueryRow("SELECT seeding, starttime, last_announce, remaining "+
 		"FROM transfer_history WHERE uid = ? AND fid = ?", gotPeer.UserID, gotPeer.TorrentID)
 
 	err = row.Scan(&gotPeer.Seeding, &gotPeer.StartTime, &gotPeer.LastAnnounce, &gotPeer.Left)
@@ -627,7 +627,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 	deltaDownload = 236
 	deltaUpload = 3262
 
-	row := db.mainConn.sqlDb.QueryRow("SELECT uploaded, downloaded "+
+	row := db.conn.QueryRow("SELECT uploaded, downloaded "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
 		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
@@ -643,7 +643,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 	}
 	time.Sleep(200 * time.Millisecond)
 
-	row = db.mainConn.sqlDb.QueryRow("SELECT uploaded, downloaded "+
+	row = db.conn.QueryRow("SELECT uploaded, downloaded "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
 		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
@@ -679,7 +679,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 
 	var gotStartTime int64
 
-	row = db.mainConn.sqlDb.QueryRow("SELECT port, starttime, last_announce "+
+	row = db.conn.QueryRow("SELECT port, starttime, last_announce "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
 		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
@@ -724,7 +724,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		Addr:      cdb.NewPeerAddressFromIPPort(testPeer.Addr.IP(), 0),
 	}
 
-	row = db.mainConn.sqlDb.QueryRow("SELECT port, starttime, last_announce "+
+	row = db.conn.QueryRow("SELECT port, starttime, last_announce "+
 		"FROM transfer_ips WHERE uid = ? AND fid = ? AND ip = ? AND client_id = ?",
 		testPeer.UserID, testPeer.TorrentID, testPeer.Addr.IPNumeric(), testPeer.ClientID)
 
@@ -762,7 +762,7 @@ func TestRecordAndFlushSnatch(t *testing.T) {
 	}
 	time.Sleep(200 * time.Millisecond)
 
-	row := db.mainConn.sqlDb.QueryRow("SELECT snatched_time "+
+	row := db.conn.QueryRow("SELECT snatched_time "+
 		"FROM transfer_history WHERE uid = ? AND fid = ?", testPeer.UserID, testPeer.TorrentID)
 
 	err := row.Scan(&snatchTime)
@@ -815,7 +815,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 		numSeeders  int
 	)
 
-	row := db.mainConn.sqlDb.QueryRow("SELECT Snatched, last_action, Seeders, Leechers "+
+	row := db.conn.QueryRow("SELECT Snatched, last_action, Seeders, Leechers "+
 		"FROM torrents WHERE ID = ?", torrent.ID.Load())
 	err := row.Scan(&snatched, &lastAction, &numSeeders, &numLeechers)
 
