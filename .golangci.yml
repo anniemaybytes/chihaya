@@ -35,6 +35,9 @@ linters-settings:
     nolintlint:
         require-explanation: false
         require-specific: true
+    wsl:
+        strict-append: false
+        force-err-cuddling: true
 
 issues:
     exclude-rules:

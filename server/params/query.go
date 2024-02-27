@@ -96,29 +96,33 @@ func ParseQuery(queryArgs *fasthttp.Args) (qp QueryParam, err error) {
 		}
 
 		key = bytes.ToLower(key)
+
 		switch true {
 		case bytes.Equal(key, uploadedKey):
-			n, errz := strconv.ParseUint(string(value), 10, 0)
+			n, errz := strconv.ParseUint(string(value), 10, 64)
 			if errz != nil {
 				err = errz
 				return
 			}
+
 			qp.Params.Uploaded = n
 			qp.Exists.Uploaded = true
 		case bytes.Equal(key, downloadedKey):
-			n, errz := strconv.ParseUint(string(value), 10, 0)
+			n, errz := strconv.ParseUint(string(value), 10, 64)
 			if errz != nil {
 				err = errz
 				return
 			}
+
 			qp.Params.Downloaded = n
 			qp.Exists.Downloaded = true
 		case bytes.Equal(key, leftKey):
-			n, errz := strconv.ParseUint(string(value), 10, 0)
+			n, errz := strconv.ParseUint(string(value), 10, 64)
 			if errz != nil {
 				err = errz
 				return
 			}
+
 			qp.Params.Left = n
 			qp.Exists.Left = true
 		case bytes.Equal(key, portKey):
@@ -127,6 +131,7 @@ func ParseQuery(queryArgs *fasthttp.Args) (qp QueryParam, err error) {
 				err = errz
 				return
 			}
+
 			qp.Params.Port = uint16(n)
 			qp.Exists.Port = true
 		case bytes.Equal(key, numWant):
@@ -135,6 +140,7 @@ func ParseQuery(queryArgs *fasthttp.Args) (qp QueryParam, err error) {
 				err = errz
 				return
 			}
+
 			qp.Params.NumWant = uint16(n)
 			qp.Exists.NumWant = true
 		case bytes.Equal(key, peerIDKey):

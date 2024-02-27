@@ -94,7 +94,6 @@ func LoadTorrents(r io.Reader, torrents map[TorrentHash]*Torrent) error {
 	reader := bufio.NewReader(r)
 
 	n, version, err := LoadSerializeHeader(reader, TorrentCacheVersion)
-
 	if err != nil {
 		return err
 	}
@@ -150,7 +149,6 @@ func LoadUsers(r io.Reader, users map[string]*User) error {
 	reader := bufio.NewReader(r)
 
 	n, version, err := LoadSerializeHeader(reader, UserCacheVersion)
-
 	if err != nil {
 		return err
 	}

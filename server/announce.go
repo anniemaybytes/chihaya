@@ -281,6 +281,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			torrent.SeedersLength.Store(uint32(len(torrent.Seeders)))
 			torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
 		}
+
 		seeding = true
 	} else {
 		peer, exists = torrent.Seeders[peerKey]
@@ -303,6 +304,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 				torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
 			}
 		}
+
 		seeding = true
 	}
 
@@ -472,25 +474,31 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			/* Send only one peer per user. This is to ensure that users seeding at multiple locations don't end up
 			exclusively acting as peers. */
 			uniqueSeeders := make(map[uint32]*cdb.Peer)
+
 			for _, seed := range torrent.Seeders {
 				if len(peersToSend) >= int(qp.Params.NumWant) {
 					break
 				}
+
 				if seed.UserID == peer.UserID {
 					continue
 				}
+
 				if _, exists = uniqueSeeders[seed.UserID]; !exists {
 					uniqueSeeders[seed.UserID] = seed
 					peersToSend = append(peersToSend, seed)
 				}
 			}
+
 			for _, leech := range torrent.Leechers {
 				if len(peersToSend) >= int(qp.Params.NumWant) {
 					break
 				}
+
 				if leech.UserID == peer.UserID {
 					continue
 				}
+
 				peersToSend = append(peersToSend, leech)
 			}
 		}
@@ -505,15 +513,18 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			response["peers"] = peerBuff
 		} else {
 			peerList := make([]map[string]interface{}, len(peersToSend))
+
 			for i, other := range peersToSend {
 				peerMap := make(map[string]interface{})
 				peerMap["ip"] = other.Addr.IPString()
 				peerMap["port"] = other.Addr.Port()
-				if !noPeerID {
+				if !noPeerID { //nolint:wsl
 					peerMap["peer id"] = other.ID[:]
 				}
+
 				peerList[i] = peerMap
 			}
+
 			response["peers"] = peerList
 		}
 	}

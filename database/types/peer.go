@@ -98,9 +98,11 @@ func (id *PeerID) Scan(src any) error {
 		if len(buf) == 0 {
 			return errNilPeerID
 		}
+
 		if len(buf) != 20 {
 			return errWrongPeerIDSize
 		}
+
 		copy((*id)[:], buf)
 
 		return nil

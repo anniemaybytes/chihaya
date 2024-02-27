@@ -423,6 +423,7 @@ func (db *Database) purgeInactivePeers() {
 				for id, peer := range torrent.Leechers {
 					if peer.LastAnnounce < oldestActive {
 						delete(torrent.Leechers, id)
+
 						count++
 					}
 				}
@@ -437,6 +438,7 @@ func (db *Database) purgeInactivePeers() {
 				for id, peer := range torrent.Seeders {
 					if peer.LastAnnounce < oldestActive {
 						delete(torrent.Seeders, id)
+
 						count++
 					}
 				}

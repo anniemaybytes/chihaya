@@ -59,9 +59,11 @@ func (h *TorrentHash) Scan(src any) error {
 		if len(buf) == 0 {
 			return errNilHash
 		}
+
 		if len(buf) != TorrentHashSize {
 			return errWrongHashSize
 		}
+
 		copy((*h)[:], buf)
 
 		return nil

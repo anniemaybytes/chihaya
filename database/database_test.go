@@ -817,8 +817,8 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 
 	row := db.conn.QueryRow("SELECT Snatched, last_action, Seeders, Leechers "+
 		"FROM torrents WHERE ID = ?", torrent.ID.Load())
-	err := row.Scan(&snatched, &lastAction, &numSeeders, &numLeechers)
 
+	err := row.Scan(&snatched, &lastAction, &numSeeders, &numLeechers)
 	if err != nil {
 		panic(err)
 	}

@@ -64,6 +64,7 @@ func main() {
 			if err := cdb.LoadTorrents(reader, t); err != nil {
 				return nil, err
 			}
+
 			return t, nil
 		}, cdb.TorrentCacheFile)
 		dump(func(reader io.Reader) (map[string]*cdb.User, error) {
@@ -71,6 +72,7 @@ func main() {
 			if err := cdb.LoadUsers(reader, u); err != nil {
 				return nil, err
 			}
+
 			return u, nil
 		}, cdb.UserCacheFile)
 
