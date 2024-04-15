@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.56.2-alpine
+        image: golangci/golangci-lint:v1.57.2-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all --timeout 3m0s -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.56.2-alpine
+        image: golangci/golangci-lint:v1.57.2-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -98,7 +98,7 @@ steps:
             tags:
                 - "${DRONE_DEPLOY_TO}"
         commands:
-            - export PLUGIN_REPO=$DOCKER_REGISTRY/chihaya
+            - export PLUGIN_REPO=$DOCKER_REGISTRY/animebytes/chihaya
             - /usr/local/bin/dockerd-entrypoint.sh /bin/drone-docker
 
 trigger:
