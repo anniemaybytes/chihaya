@@ -7,9 +7,9 @@ require (
 	github.com/go-testfixtures/testfixtures/v3 v3.10.0
 	github.com/google/go-cmp v0.6.0
 	github.com/jinzhu/copier v0.4.0
-	github.com/prometheus/client_golang v1.19.0
-	github.com/prometheus/common v0.52.3
-	github.com/valyala/fasthttp v1.52.0
+	github.com/prometheus/client_golang v1.19.1
+	github.com/prometheus/common v0.53.0
+	github.com/valyala/fasthttp v1.53.0
 	github.com/zeebo/bencode v1.0.0
 )
 
@@ -23,7 +23,7 @@ require (
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/klauspost/compress v1.17.6 // indirect
+	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/paulmach/orb v0.11.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
