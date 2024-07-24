@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.58.1-alpine
+        image: golangci/golangci-lint:v1.59.1-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all --timeout 3m0s -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.58.1-alpine
+        image: golangci/golangci-lint:v1.59.1-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -30,7 +30,7 @@ type: docker
 
 services:
     -   name: mariadb
-        image: mariadb:11.3
+        image: mariadb:11.4
         pull: always
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: yes
@@ -51,7 +51,7 @@ steps:
         environment:
             CGO_ENABLED: 0
             GO111MODULE: on
-            DB_DSN: "drone:w33lkn0wn@(mariadb)/chihaya_test"
+            DB_DSN: "drone:w33lkn0wn@(mariadb)/chihaya_test?multiStatements=true"
         commands:
             - apk add mariadb-client
             - mysql -udrone -pw33lkn0wn -hmariadb chihaya_test < database/schema.sql

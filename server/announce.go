@@ -109,6 +109,7 @@ func getPublicIPV4(ipAddr string, exists bool) (string, bool) {
 	return ipAddr, !private
 }
 
+//nolint:gocyclo // can't really by simplified other than by splitting into chunks
 func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf *bytes.Buffer) int {
 	qp, err := params.ParseQuery(ctx.Request.URI().QueryArgs())
 	if err != nil {

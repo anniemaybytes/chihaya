@@ -201,7 +201,7 @@ func Open() *sql.DB {
 	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatch", 25)
 
 	// DSN Format: username:password@protocol(address)/dbname?param=value
-	// First try to load the DSN from environment. USeful for tests.
+	// First try to load the DSN from environment. Useful for tests.
 	databaseDsn := os.Getenv("DB_DSN")
 	if databaseDsn == "" {
 		databaseDsn, _ = databaseConfig.Get("dsn", defaultDsn)

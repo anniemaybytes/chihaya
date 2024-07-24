@@ -12,7 +12,6 @@ linters:
         - gosimple
         - ineffassign
         - typecheck
-        - megacheck
         - whitespace
         - wsl
         - goconst
@@ -20,8 +19,6 @@ linters:
         - bodyclose
         - revive
         - gosec
-        - unconvert
-        - goconst
         - dupl
         - misspell
         - lll
@@ -29,7 +26,11 @@ linters:
         - dogsled
         - prealloc
         - nolintlint
-        - goerr113
+        - err113
+        - gocyclo
+        - importas
+        - makezero
+        - predeclared
 
 linters-settings:
     nolintlint:
@@ -38,6 +39,8 @@ linters-settings:
     wsl:
         strict-append: false
         force-err-cuddling: true
+    misspell:
+        locale: US
 
 issues:
     exclude-rules:

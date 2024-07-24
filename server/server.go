@@ -87,7 +87,7 @@ func (handler *httpHandler) serve(ctx *fasthttp.RequestCtx) {
 		}
 	}()
 
-	/* Pass flow to handler; note that handler should be responsible for actually cancelling
+	/* Pass flow to handler; note that handler should be responsible for actually canceling
 	its own work based on request context cancellation */
 	status := func() int {
 		dir, action := path.Split(string(ctx.Request.URI().Path()))
