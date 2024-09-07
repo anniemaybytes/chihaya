@@ -23,7 +23,7 @@ import (
 	"os"
 	"time"
 
-	"chihaya/collectors"
+	"chihaya/collector"
 	"chihaya/config"
 	cdb "chihaya/database/types"
 	"chihaya/util"
@@ -106,7 +106,7 @@ func (db *Database) serialize() {
 	}
 
 	elapsedTime := time.Since(start)
-	collectors.UpdateSerializationTime(elapsedTime)
+	collector.UpdateSerializationTime(elapsedTime)
 	slog.Info("done serializing", "elapsed", elapsedTime)
 }
 

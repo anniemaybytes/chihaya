@@ -59,6 +59,10 @@ func (db *Database) QueueTorrent(torrent *cdb.Torrent, deltaSnatch uint8) {
 }
 
 func (db *Database) QueueUser(user *cdb.User, rawDeltaUp, rawDeltaDown, deltaUp, deltaDown int64) {
+	if deltaUp == 0 && rawDeltaUp == 0 && deltaDown == 0 && rawDeltaDown == 0 {
+		return // Do not consume channel for empty actions
+	}
+
 	uq := db.bufferPool.Take()
 
 	uq.WriteString("(")

@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"chihaya/collectors"
+	"chihaya/collector"
 	"chihaya/config"
 	cdb "chihaya/database/types"
 	"chihaya/util"
@@ -117,7 +117,7 @@ func (db *Database) loadUsers() {
 	db.Users.Store(&newUsers)
 
 	elapsedTime := time.Since(startTime)
-	collectors.UpdateReloadTime("users", elapsedTime)
+	collector.UpdateReloadTime("users", elapsedTime)
 	slog.Info("reload from database", "source", "users", "rows", len(newUsers), "elapsed", elapsedTime)
 }
 
@@ -154,7 +154,7 @@ func (db *Database) loadHitAndRuns() {
 	db.HitAndRuns.Store(&newHnr)
 
 	elapsedTime := time.Since(startTime)
-	collectors.UpdateReloadTime("hit_and_runs", elapsedTime)
+	collector.UpdateReloadTime("hit_and_runs", elapsedTime)
 	slog.Info("reload from database", "source", "hit_and_runs", "rows", len(newHnr), "elapsed", elapsedTime)
 }
 
@@ -166,7 +166,7 @@ func (db *Database) loadTorrents() {
 
 	rows := db.query(db.loadTorrentsStmt)
 	if rows == nil {
-		slog.Error("failed to reload from database", "torrents", "hit_and_runs")
+		slog.Error("failed to reload from database", "source", "hit_and_runs")
 		return
 	}
 
@@ -238,7 +238,7 @@ func (db *Database) loadTorrents() {
 	db.Torrents.Store(&newTorrents)
 
 	elapsedTime := time.Since(startTime)
-	collectors.UpdateReloadTime("torrents", elapsedTime)
+	collector.UpdateReloadTime("torrents", elapsedTime)
 	slog.Info("reload from database", "source", "torrents", "rows", len(newTorrents), "elapsed", elapsedTime)
 }
 
@@ -249,7 +249,7 @@ func (db *Database) loadGroupsFreeleech() {
 
 	rows := db.query(db.loadTorrentGroupFreeleechStmt)
 	if rows == nil {
-		slog.Error("failed to reload from database", "torrents_group_freeleech", "hit_and_runs")
+		slog.Error("failed to reload from database", "source", "torrents_group_freeleech")
 		return
 	}
 
@@ -284,7 +284,7 @@ func (db *Database) loadGroupsFreeleech() {
 	db.TorrentGroupFreeleech.Store(&newTorrentGroupFreeleech)
 
 	elapsedTime := time.Since(startTime)
-	collectors.UpdateReloadTime("groups_freeleech", elapsedTime)
+	collector.UpdateReloadTime("groups_freeleech", elapsedTime)
 	slog.Info("reload from database", "source", "torrents_group_freeleech",
 		"rows", len(newTorrentGroupFreeleech), "elapsed", elapsedTime)
 }
@@ -343,6 +343,6 @@ func (db *Database) loadClients() {
 	db.Clients.Store(&newClients)
 
 	elapsedTime := time.Since(startTime)
-	collectors.UpdateReloadTime("clients", elapsedTime)
+	collector.UpdateReloadTime("clients", elapsedTime)
 	slog.Info("reload from database", "source", "approved_clients", "rows", len(newClients), "elapsed", elapsedTime)
 }

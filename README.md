@@ -44,8 +44,8 @@ Build process outputs several binary files. Each binary has its own flags, use
 - `cc` - utility for manipulation of cache data
 - `bencode` - utility for encoding and decoding between JSON and Bencode
 
-Chihaya does not support keep-alive or TLS and is designed to be used behind reverse proxy (such as `nginx`) that can
-provide all of these features.
+Chihaya is designed to be used behind reverse proxy (such as `nginx`) that can provide TLS termination as well as other
+features such as rate limiting.
 
 Usage of compression (such as `gzip`) is dicouraged as responses are usually quite small (especially when `compact` 
 is requested), resulting in unnecessary overhead for zero gain.
@@ -53,101 +53,195 @@ is requested), resulting in unnecessary overhead for zero gain.
 Configuration
 -------------
 
-Configuration is done in `config.json`, which you'll need to create with the following format:
+Configuration is done in `config.json`, which you'll need to create with the following schema:
 
 ```json
 {
-  "database": {
-    "dsn": "chihaya:@tcp(127.0.0.1:3306)/chihaya",
-    "deadlock_pause": 1,
-    "deadlock_retries": 5
-  },
+  "$id": "config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
 
-  "channels": {
-    "torrent": 5000,
-    "user": 5000,
-    "transfer_history": 5000,
-    "transfer_ips": 5000,
-    "snatch": 25
-  },
-
-  "intervals": {
-    "announce": 1800,
-    "min_announce": 900,
-    "peer_inactivity": 3900,
-    "announce_drift": 300,
-    "scrape": 900,
-
-    "database_reload": 45,
-    "database_serialize": 68,
-    "purge_inactive_peers": 120,
-
-    "flush": 3
-  },
-
-  "http": {
-    "addr": ":34000",
-    "admin_token": "",
-    "proxy_header": "",
-    "timeout": {
-      "read": 300,
-      "write": 500,
-      "idle": 30
+  "type": "object",
+  "properties": {
+    "database": {
+      "type": "object",
+      "properties": {
+        "dsn": {
+          "description": "Data Source Name at which to find database",
+          "type": "string",
+          "default": "chihaya:@tcp(127.0.0.1:3306)/chihaya"
+        },
+        "deadlock_pause": {
+          "description": "Time in seconds to wait between retries on deadlock, ramps up linearly with each attempt from this value",
+          "type": "integer",
+          "default": 1
+        },
+        "deadlock_retries": {
+          "description": "How many times should we retry on deadlock",
+          "type": "integer",
+          "default": 5
+        }
+      }
+    },
+    "channels": {
+      "description": "Configures maximum size for various data channels",
+      "type": "object",
+      "properties": {
+        "torrents": {
+          "type": "integer",
+          "default": 5000
+        },
+        "users": {
+          "type": "integer",
+          "default": 5000
+        },
+        "transfer_history": {
+          "type": "integer",
+          "default": 5000
+        },
+        "transfer_ips": {
+          "type": "integer",
+          "default": 5000
+        },
+        "snatches": {
+          "type": "integer",
+          "default": 25
+        }
+      }
+    },
+    "intervals": {
+      "type": "object",
+      "properties": {
+        "announce": {
+          "description": "Base value of interval given to clients in announce response (in seconds)",
+          "type": "integer",
+          "default": 1800
+        },
+        "min_announce": {
+          "description": "Value of min_interval given to clients in announce response (in seconds)",
+          "type": "integer",
+          "default": 900
+        },
+        "announce_drift": {
+          "description": "Maximum drift (in seconds) to be applied over base announce interval to help in spreading load",
+          "type": "integer",
+          "default": 300
+        },
+        "peer_inactivity": {
+          "description": "Maximum time (in seconds) after which peer will be considered inactive; should be at least double the interval (incl. drift)",
+          "type": "integer",
+          "default": 4200
+        },
+        "scrape": {
+          "description": "Value of min_request_interval given to clients in scrape response (in seconds); not all clients respect it",
+          "type": "integer",
+          "default": 900
+        },
+        "database_reload": {
+          "description": "Time (in seconds) between fresh user and torrent data is reloaded from database",
+          "type": "integer",
+          "default": 45
+        },
+        "database_serialize": {
+          "description": "Time (in seconds) between serializations of in-memory peer data to cache file",
+          "type": "integer",
+          "default": 68
+        },
+        "purge_inactive_peers": {
+          "description": "Time (in seconds) between thread is executed to scan and purge inactive peers from memory and database",
+          "type": "integer",
+          "default": 120
+        },
+        "flush": {
+          "description": "Time (in seconds) to delay next flush if data channel was consumed in less than 50% on previous flush",
+          "type": "integer",
+          "default": 3
+        }
+      }
+    },
+    "http": {
+      "type": "object",
+      "properties": {
+        "addr": {
+          "description": "Address on which FastHTTP server will listen for requests",
+          "type": "string",
+          "default": ":34000"
+        },
+        "proxy_header": {
+          "description": "Name of header which will be used to replace IP address of connection when running behind reverse proxy",
+          "type": "string",
+          "default": ""
+        },
+        "timeout": {
+          "description": "Configures timeout values for FastHTTP",
+          "type": "object",
+          "properties": {
+            "read": {
+              "description": "Time (in milliseconds) to fully read request content from socket",
+              "type": "integer",
+              "default": 300
+            },
+            "write": {
+              "description": "Time (in milliseconds) to perform single write operation on socket",
+              "type": "integer",
+              "default": 300
+            },
+            "idle": {
+              "description": "Time (in seconds) to keep connection open for Keep-Alive requests",
+              "type": "integer",
+              "default": 300
+            }
+          }
+        }
+      }
+    },
+    "announce": {
+      "type": "object",
+      "properties": {
+        "strict_port": {
+          "description": "Whether to reject announces when client reports it is listening for peer connections on ports below 1024",
+          "type": "boolean",
+          "default": false
+        },
+        "numwant": {
+          "description": "Number of peers given to client in announce response, unless client explicitly requests other value",
+          "type": "integer",
+          "default": 25
+        },
+        "max_numwant": {
+          "description": "Maximum number of peers tracker will ever give in single announce response, even if client asks for more",
+          "type": "integer",
+          "default": 50
+        }
+      }
+    },
+    "record_announces": {
+      "description": "Whether to enable recording of successful announces (for debugging or analysis purposes); might negatively impact performance",
+      "type": "boolean",
+      "default": false
+    },
+    "enable_scrape": {
+      "description": "Whether to enable BEP-48 extension",
+      "type": "boolean",
+      "default": true
+    },
+    "enable_metrics": {
+      "description": "Whether to enable Prometheus metrics endpoint",
+      "type": "boolean",
+      "default": false
+    },
+    "log_flushes": {
+      "description": "Whether to log details about database flushes to standard output",
+      "type": "boolean",
+      "default": true
     }
-  },
-  
-  "announce": {
-    "strict_port": false,
-    "numwant": 25,
-    "max_numwant": 50
-  },
-  
-  "record": false,
-  "scrape": true,
-  "log_flushes": true
+  }
 }
 ```
-
-- `database`
-    - `dsn` - data source name at which to find database
-    - `deadlock_pause` - time in seconds to wait between retries on deadlock, ramps up linearly with each attempt from this value
-    - `deadlock_retries` - how many times should we retry on deadlock
-- `channels` - channel holds raw data for injection to SQL statement on flush
-    - `torrent` - maximum size of channel holding changes to `torrents` table
-    - `user` - maximum size of channel holding changes to `users_main` table
-    - `transfer_history` - maximum size of channel holding changes to `transfer_history`
-    - `transfer_ips` - maximum size of channel holding changes to `transfer_ips`
-    - `snatch`: maximum size of channels holding snatches for `transfer_history`
-- `intervals` - all values are in seconds
-    - `announce` - default announce `interval` given to clients
-    - `min_announce` - minimum `min_interval` between announces that clients should respect
-    - `peer_inactivity` - time after which peer is considered dead, recommended to be `(min_announce * 2) + (announce_drift * 2)`
-    - `announce_drift` - maximum announce drift to incorporate in default `interval` sent to client
-    - `scrape` - default scrape `interval` given to clients
-    - `database_reload` - time between reloads of user and torrent data from database
-    - `database_serialize` - time between database serializations to cache
-    - `purge_inactive_peers` - time between peers older than `peer_inactivity` are flushed from database and memory
-    - `flush` - time between database flushes when channel is used in less than 50%
-- `http` - HTTP server configuration
-    - `addr` - address on which we should listen for requests
-    - `admin_token` - administrative token used in `Authorization` header to access advanced prometheus statistics
-    - `proxy_header` - header name to look for user's real IP address, for example `X-Real-Ip`
-    - `timeout`
-      - `read` - timeout in _milliseconds_ for reading request
-      - `write` - timeout in _milliseconds_ for writing response (per write operation)
-      - `idle` - how long (in _seconds_) to keep connection open for keep-alive requests
-- `announce`
-    - `strict_port` - if enabled then announces where client advertises port outside range `1024-65535` will be failed
-    - `numwant` - Default number of peers sent on announce if otherwise not explicitly specified by client
-    - `max_numwant` - Maximum number of peers that tracker will send per single announce, even if client requests more
-- `record` - enables or disables JSON recorder of announces
-- `scrape` - enables or disables `/scrape` endpoint which allows clients to get peers count without sending announce
-- `log_flushes` - whether to log all database flushes performed
 
 Recorder
 -------------
 
-If `record` is true, chihaya will save all successful announce events to a file under 
+Chihaya supports saving all successful announce events to a file under 
 `events` directory. The files will have a format of `events_YYYY-MM-DDTHH.csv` and are
 split hourly for easier analysis.
 
@@ -160,5 +254,5 @@ Example data from fixtures can be consulted for additional help.
 Flowcharts
 -------------
 
-#### IP resolve
-![IP resolve flowchart](.gitea/images/flowcharts/ip.png)
+#### IP resolution
+![IP resolution flowchart](.gitea/images/flowcharts/ip.png)

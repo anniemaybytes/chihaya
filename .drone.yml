@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.59.1-alpine
+        image: golangci/golangci-lint:v1.60.1-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all --timeout 3m0s -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.59.1-alpine
+        image: golangci/golangci-lint:v1.60.1-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -30,7 +30,7 @@ type: docker
 
 services:
     -   name: mariadb
-        image: mariadb:11.4
+        image: mariadb:11.5
         pull: always
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: yes
@@ -46,11 +46,12 @@ steps:
             PLUGIN_HOST: mariadb
             PLUGIN_PORT: 3306
     -   name: test
-        image: golang:1.22-alpine
+        image: golang:1.23-alpine
         pull: always
         environment:
             CGO_ENABLED: 0
             GO111MODULE: on
+            GOMAXPROCS: 2
             DB_DSN: "drone:w33lkn0wn@(mariadb)/chihaya_test?multiStatements=true"
         commands:
             - apk add mariadb-client
@@ -58,7 +59,7 @@ steps:
             - go get -v -t -d ./...
             - go test ./... -v -pgo=off -buildvcs=false -coverprofile=coverage.out
     -   name: coverage
-        image: golang:1.22-alpine
+        image: golang:1.23-alpine
         commands:
             - go tool cover -func=coverage.out
 

@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"chihaya/collectors"
+	"chihaya/collector"
 	"chihaya/config"
 	"chihaya/database"
 	"chihaya/util"
@@ -37,9 +37,7 @@ import (
 type httpHandler struct {
 	startTime time.Time
 
-	normalRegisterer prometheus.Registerer
-	normalCollector  *collectors.NormalCollector
-	adminCollector   *collectors.AdminCollector
+	collector *collector.Collector
 
 	bufferPool *util.BufferPool
 
@@ -78,7 +76,7 @@ func (handler *httpHandler) serve(ctx *fasthttp.RequestCtx) {
 		if err := recover(); err != nil {
 			slog.Error("recovered from panicking request handler", "err", err, "url", ctx.URI())
 
-			collectors.IncrementErroredRequests()
+			collector.IncrementErroredRequests()
 
 			if len(ctx.Response.Header.ContentType()) == 0 {
 				buf.Reset()
@@ -90,52 +88,39 @@ func (handler *httpHandler) serve(ctx *fasthttp.RequestCtx) {
 	/* Pass flow to handler; note that handler should be responsible for actually canceling
 	its own work based on request context cancellation */
 	status := func() int {
-		dir, action := path.Split(string(ctx.Request.URI().Path()))
-		if action == "" {
-			return fasthttp.StatusNotFound
-		}
+		dir, file := path.Split(string(ctx.URI().Path()))
 
-		/*
-		 * ===================================================
-		 * Handle public endpoints (/:action)
-		 * ===================================================
-		 */
-
-		passkey := path.Dir(dir)[1:]
-		if passkey == "" {
-			switch action {
+		switch dir {
+		case "/":
+			switch file {
 			case "alive":
 				return alive(ctx, handler.db, buf)
+			case "metrics":
+				if enabled, _ := config.GetBool("enable_metrics", false); !enabled {
+					return fasthttp.StatusNotFound
+				}
+
+				return metrics(ctx, handler.db, buf)
+			}
+		default:
+			user := isPasskeyValid(path.Base(dir), handler.db)
+			if user == nil {
+				failure("Your passkey is invalid", buf, 1*time.Hour)
+				return fasthttp.StatusOK
 			}
 
-			return fasthttp.StatusNotFound
-		}
+			ctx.SetUserValue("user", user) // Pass user in request's context
 
-		/*
-		 * ===================================================
-		 * Handle private endpoints (/:passkey/:action)
-		 * ===================================================
-		 */
+			switch file {
+			case "announce":
+				return announce(ctx, user, handler.db, buf)
+			case "scrape":
+				if enabled, _ := config.GetBool("enable_scrape", true); !enabled {
+					return fasthttp.StatusNotFound
+				}
 
-		user := isPasskeyValid(passkey, handler.db)
-		if user == nil {
-			failure("Your passkey is invalid", buf, 1*time.Hour)
-			return fasthttp.StatusOK
-		}
-
-		ctx.SetUserValue("user", user) // Pass user in request's context
-
-		switch action {
-		case "announce":
-			return announce(ctx, user, handler.db, buf)
-		case "scrape":
-			if enabled, _ := config.GetBool("scrape", true); !enabled {
-				return fasthttp.StatusNotFound
+				return scrape(ctx, user, handler.db, buf)
 			}
-
-			return scrape(ctx, user, handler.db, buf)
-		case "metrics":
-			return metrics(ctx, user, handler.db, buf)
 		}
 
 		return fasthttp.StatusNotFound
@@ -219,14 +204,9 @@ func Start() {
 	// Initialize database
 	handler.db.Init()
 
-	// Register default prometheus collector
-	handler.normalRegisterer = prometheus.NewRegistry()
-	handler.normalCollector = collectors.NewNormalCollector()
-	handler.normalRegisterer.MustRegister(handler.normalCollector)
-
-	// Register additional metrics for DefaultGatherer
-	handler.adminCollector = collectors.NewAdminCollector()
-	prometheus.MustRegister(handler.adminCollector)
+	// Register prometheus collector
+	handler.collector = collector.NewCollector()
+	prometheus.MustRegister(handler.collector)
 
 	// Start TCP listener
 	var err error

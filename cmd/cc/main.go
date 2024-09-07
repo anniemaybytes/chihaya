@@ -170,7 +170,7 @@ func main() {
 				// Replace IP
 				binary.BigEndian.PutUint32(s.Addr[:], util.UnsafeUint32())
 				// Replace Port with valid random port
-				binary.BigEndian.PutUint16(s.Addr[4:], uint16(util.UnsafeRand(1024, math.MaxUint16-1)))
+				binary.BigEndian.PutUint16(s.Addr[4:], uint16(util.UnsafeIntn(math.MaxUint16-1025)+1024))
 
 				// Replaces userID in map key
 				newSeeders[cdb.NewPeerKey(s.UserID, s.ID)] = s
@@ -185,7 +185,7 @@ func main() {
 				// Replace IP
 				binary.BigEndian.PutUint32(s.Addr[:], util.UnsafeUint32())
 				// Replace Port with valid random port
-				binary.BigEndian.PutUint16(s.Addr[4:], uint16(util.UnsafeRand(1024, math.MaxUint16-1)))
+				binary.BigEndian.PutUint16(s.Addr[4:], uint16(util.UnsafeIntn(math.MaxUint16-1025)+1024))
 
 				// Replaces userID in map key
 				newLeechers[cdb.NewPeerKey(s.UserID, s.ID)] = s

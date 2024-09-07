@@ -18,21 +18,8 @@
 package util
 
 import (
-	"math/rand"
 	"testing"
 )
-
-func TestUnsafeRand(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		minInt := rand.Intn(1000)
-		maxInt := rand.Intn(1000) + minInt
-		randomInt := UnsafeRand(minInt, maxInt)
-
-		if randomInt < minInt || randomInt > maxInt {
-			t.Fatalf("Integer %d is outside specified range (%d - %d)", randomInt, minInt, maxInt)
-		}
-	}
-}
 
 func TestUnsafeIntn(t *testing.T) {
 	for i := 1; i < 2000; i++ {

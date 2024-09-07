@@ -86,7 +86,7 @@ func initialize() {
 }
 
 func Record(tid, uid uint32, addr cdb.PeerAddress, event string, up, down, left uint64) {
-	if enabled, _ := config.GetBool("record", enabled); !enabled {
+	if enabled, _ := config.GetBool("record_announces", enabled); !enabled {
 		return
 	}
 

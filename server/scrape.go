@@ -41,8 +41,8 @@ func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf
 		panic(err)
 	}
 
-	scrapeData := make(map[string]interface{})
-	fileData := make(map[cdb.TorrentHash]interface{})
+	response := make(map[string]interface{})
+	filesList := make(map[cdb.TorrentHash]interface{})
 
 	dbTorrents := *db.Torrents.Load()
 
@@ -51,29 +51,27 @@ func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf
 			torrent, exists := dbTorrents[infoHash]
 			if exists {
 				if !isDisabledDownload(db, user, torrent) {
-					ret := make(map[string]interface{})
-					ret["complete"] = torrent.SeedersLength.Load()
-					ret["downloaded"] = torrent.Snatched.Load()
-					ret["incomplete"] = torrent.LeechersLength.Load()
+					fileMap := make(map[string]interface{})
+					fileMap["complete"] = torrent.SeedersLength.Load()
+					fileMap["downloaded"] = torrent.Snatched.Load()
+					fileMap["incomplete"] = torrent.LeechersLength.Load()
 
-					fileData[infoHash] = ret
+					filesList[infoHash] = fileMap
 				}
 			}
 		}
 	} else {
-		scrapeData["failure reason"] = "Scrape without info_hash is not supported"
+		failure("Unsupported request - must provide at least one info_hash", buf, 0)
+		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	scrapeData["files"] = fileData
-	scrapeData["flags"] = map[string]interface{}{
+	response["files"] = filesList
+	response["flags"] = map[string]interface{}{
 		"min_request_interval": scrapeInterval,
 	}
-	// the following are for compatibility with clients that don't implement scrape flags
-	scrapeData["interval"] = scrapeInterval
-	scrapeData["min interval"] = scrapeInterval
 
 	encoder := bencode.NewEncoder(buf)
-	if err = encoder.Encode(scrapeData); err != nil {
+	if err = encoder.Encode(response); err != nil {
 		panic(err)
 	}
 

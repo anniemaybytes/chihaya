@@ -30,8 +30,10 @@ import (
 func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 	data := make(map[string]interface{})
 	data["failure reason"] = err
-	data["interval"] = interval / time.Second     // Assuming in seconds
-	data["min interval"] = interval / time.Second // Assuming in seconds
+
+	if interval > 0 {
+		data["interval"] = interval / time.Second // Assuming in seconds
+	}
 
 	buf.Reset()
 
@@ -41,7 +43,7 @@ func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 	}
 }
 
-func clientApproved(peerID string, db *database.Database) (uint16, bool) {
+func isClientApproved(peerID string, db *database.Database) (uint16, bool) {
 	var (
 		widLen, i int
 		matched   bool

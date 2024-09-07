@@ -387,6 +387,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 	for len(db.userChannel) > 0 {
 		time.Sleep(time.Second)
 	}
+
 	time.Sleep(200 * time.Millisecond)
 
 	row = db.conn.QueryRow("SELECT Uploaded, Downloaded, rawup, rawdl "+
@@ -489,6 +490,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 	for len(db.transferHistoryChannel) > 0 {
 		time.Sleep(time.Second)
 	}
+
 	time.Sleep(200 * time.Millisecond)
 
 	row = db.conn.QueryRow("SELECT uploaded, downloaded, activetime, seedtime, active, snatched "+
@@ -588,6 +590,7 @@ func TestRecordAndFlushTransferHistory(t *testing.T) {
 	for len(db.transferHistoryChannel) > 0 {
 		time.Sleep(time.Second)
 	}
+
 	time.Sleep(200 * time.Millisecond)
 
 	row = db.conn.QueryRow("SELECT seeding, starttime, last_announce, remaining "+
@@ -641,6 +644,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 	for len(db.transferIpsChannel) > 0 {
 		time.Sleep(time.Second)
 	}
+
 	time.Sleep(200 * time.Millisecond)
 
 	row = db.conn.QueryRow("SELECT uploaded, downloaded "+
@@ -715,6 +719,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 	for len(db.transferIpsChannel) > 0 {
 		time.Sleep(time.Second)
 	}
+
 	time.Sleep(200 * time.Millisecond)
 
 	gotPeer = &cdb.Peer{
@@ -760,6 +765,7 @@ func TestRecordAndFlushSnatch(t *testing.T) {
 	for len(db.snatchChannel) > 0 {
 		time.Sleep(time.Second)
 	}
+
 	time.Sleep(200 * time.Millisecond)
 
 	row := db.conn.QueryRow("SELECT snatched_time "+
@@ -806,6 +812,7 @@ func TestRecordAndFlushTorrents(t *testing.T) {
 	for len(db.torrentChannel) > 0 {
 		time.Sleep(time.Second)
 	}
+
 	time.Sleep(200 * time.Millisecond)
 
 	var (

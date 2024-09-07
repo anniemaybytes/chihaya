@@ -59,13 +59,6 @@ func UnsafeUint64() uint64 {
 	return randomSource.Uint64()
 }
 
-func UnsafeRand(min int, max int) int {
-	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
-	defer randomSourcePool.Put(randomSource)
-
-	return randomSource.Intn(max-min+1) + min
-}
-
 func UnsafeReadRand(p []byte) (n int, err error) {
 	randomSource := randomSourcePool.Get().(*unsafeRandom.Rand)
 	defer randomSourcePool.Put(randomSource)

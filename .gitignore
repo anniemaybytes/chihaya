@@ -3,7 +3,7 @@
 *.a
 *.so
 
-# Folders
+# Directories
 _obj
 _test
 
@@ -20,9 +20,7 @@ _cgo_export.*
 _testmain.go
 
 # Build artifacts
-/bencode
-/cc
-/chihaya
+/bin
 *.exe
 *.out
 

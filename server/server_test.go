@@ -28,7 +28,7 @@ func TestFailure(t *testing.T) {
 
 	failure("error message", buf, time.Second*5)
 
-	testData := []byte("d14:failure reason13:error message8:intervali5e12:min intervali5ee")
+	testData := []byte("d14:failure reason13:error message8:intervali5ee")
 	if !bytes.Equal(buf.Bytes(), testData) {
 		t.Fatalf("Expected %s, got %s", testData, buf.Bytes())
 	}

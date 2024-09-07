@@ -19,11 +19,9 @@ package server
 
 import (
 	"bytes"
-	cdb "chihaya/database/types"
 	"time"
 
-	"chihaya/collectors"
-	"chihaya/config"
+	"chihaya/collector"
 	"chihaya/database"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,45 +29,28 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-var bearerPrefix = []byte("Bearer ")
-
-func metrics(ctx *fasthttp.RequestCtx, _ *cdb.User, db *database.Database, buf *bytes.Buffer) int {
+func metrics(_ *fasthttp.RequestCtx, db *database.Database, buf *bytes.Buffer) int {
 	dbUsers := *db.Users.Load()
 	dbTorrents := *db.Torrents.Load()
 
 	peers := 0
-
 	for _, t := range dbTorrents {
 		peers += int(t.LeechersLength.Load()) + int(t.SeedersLength.Load())
 	}
 
-	collectors.UpdateUptime(time.Since(handler.startTime).Seconds())
-	collectors.UpdateUsers(len(dbUsers))
-	collectors.UpdateTorrents(len(dbTorrents))
-	collectors.UpdateClients(len(*db.Clients.Load()))
-	collectors.UpdateHitAndRuns(len(*db.HitAndRuns.Load()))
-	collectors.UpdatePeers(peers)
-	collectors.UpdateRequests(handler.requests.Load())
-	collectors.UpdateThroughput(handler.throughput)
+	collector.UpdateUptime(time.Since(handler.startTime).Seconds())
+	collector.UpdateUsers(len(dbUsers))
+	collector.UpdateTorrents(len(dbTorrents))
+	collector.UpdateClients(len(*db.Clients.Load()))
+	collector.UpdateHitAndRuns(len(*db.HitAndRuns.Load()))
+	collector.UpdatePeers(peers)
+	collector.UpdateRequests(handler.requests.Load())
+	collector.UpdateThroughput(handler.throughput)
 
-	mfs, _ := handler.normalRegisterer.(prometheus.Gatherer).Gather()
+	mfs, _ := prometheus.DefaultGatherer.Gather()
 	for _, mf := range mfs {
 		if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
 			panic(err)
-		}
-	}
-
-	authString := ctx.Request.Header.PeekBytes([]byte("Authorization"))
-	if len(authString) > len(bearerPrefix) && bytes.Equal(authString[:len(bearerPrefix)], bearerPrefix) {
-		adminToken, exists := config.Section("http").Get("admin_token", "")
-		if exists && bytes.Equal(authString[len(bearerPrefix):], []byte(adminToken)) {
-			mfs, _ := prometheus.DefaultGatherer.Gather()
-
-			for _, mf := range mfs {
-				if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
-					panic(err)
-				}
-			}
 		}
 	}
 

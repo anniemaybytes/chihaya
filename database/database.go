@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"chihaya/collectors"
+	"chihaya/collector"
 	"chihaya/config"
 	cdb "chihaya/database/types"
 	"chihaya/util"
@@ -194,11 +194,11 @@ func Open() *sql.DB {
 	maxDeadlockRetries, _ = databaseConfig.GetInt("deadlock_retries", 5)
 
 	channelsConfig := config.Section("channels")
-	torrentFlushBufferSize, _ = channelsConfig.GetInt("torrent", 5000)
-	userFlushBufferSize, _ = channelsConfig.GetInt("user", 5000)
+	torrentFlushBufferSize, _ = channelsConfig.GetInt("torrents", 5000)
+	userFlushBufferSize, _ = channelsConfig.GetInt("users", 5000)
 	transferHistoryFlushBufferSize, _ = channelsConfig.GetInt("transfer_history", 5000)
 	transferIpsFlushBufferSize, _ = channelsConfig.GetInt("transfer_ips", 5000)
-	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatch", 25)
+	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatches", 25)
 
 	// DSN Format: username:password@protocol(address)/dbname?param=value
 	// First try to load the DSN from environment. Useful for tests.
@@ -260,17 +260,17 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 					slog.Warn("dedlock found", "wait", wait.String(), "try", tries, "max", maxDeadlockRetries)
 
 					if tries == 1 {
-						collectors.IncrementDeadlockCount()
+						collector.IncrementDeadlockCount()
 					}
 
-					collectors.IncrementDeadlockTime(wait)
+					collector.IncrementDeadlockTime(wait)
 					time.Sleep(wait)
 
 					continue
 				}
 
 				slog.Error("sql error found", "err", merr.Number, "msg", merr.Message)
-				collectors.IncrementSQLErrorCount()
+				collector.IncrementSQLErrorCount()
 			} else {
 				panic(err)
 			}
@@ -280,7 +280,7 @@ func perform(exec func() (interface{}, error)) (result interface{}) {
 	}
 
 	slog.Error("deadlock retries exceeded", "tries", tries)
-	collectors.IncrementDeadlockAborted()
+	collector.IncrementDeadlockAborted()
 
 	return
 }

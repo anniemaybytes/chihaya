@@ -15,7 +15,7 @@
  * along with Chihaya.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package collectors
+package collector
 
 import (
 	"log/slog"
@@ -26,16 +26,27 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type AdminCollector struct {
+type Collector struct {
+	uptimeMetric     *prometheus.Desc
+	usersMetric      *prometheus.Desc
+	torrentsMetric   *prometheus.Desc
+	clientsMetric    *prometheus.Desc
+	hitAndRunsMetric *prometheus.Desc
+	peersMetric      *prometheus.Desc
+	requestsMetric   *prometheus.Desc
+	throughputMetric *prometheus.Desc
+
 	deadlockTimeMetric    *prometheus.Desc
 	deadlockCountMetric   *prometheus.Desc
 	deadlockAbortedMetric *prometheus.Desc
 	erroredRequestsMetric *prometheus.Desc
 	sqlErrorCountMetric   *prometheus.Desc
 
-	serializationTimeSummary *prometheus.Histogram
-	reloadTimeSummary        *prometheus.HistogramVec
-	flushTimeSummary         *prometheus.HistogramVec
+	reloadTimeSummary *prometheus.HistogramVec
+	flushTimeSummary  *prometheus.HistogramVec
+
+	purgePeersTimeHistogram    *prometheus.Histogram
+	serializationTimeHistogram *prometheus.Histogram
 
 	torrentFlushBufferHistogram         *prometheus.Histogram
 	userFlushBufferHistogram            *prometheus.Histogram
@@ -45,6 +56,15 @@ type AdminCollector struct {
 }
 
 var (
+	users      int
+	torrents   int
+	clients    int
+	hitAndRuns int
+	peers      int
+	uptime     float64
+	requests   uint64
+	throughput int
+
 	torrentFlushBufferSize         int
 	userFlushBufferSize            int
 	transferHistoryFlushBufferSize int
@@ -65,9 +85,14 @@ var (
 	}, []string{"type"})
 	flushTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "chihaya_flush_seconds",
-		Help:    "Histogram of the time taken to flush data from channels to database",
+		Help:    "Histogram of the time taken to flush data from individual channels to database",
 		Buckets: []float64{.01, .025, .05, .1, .25, .5, 1, 1.5, 2, 5},
 	}, []string{"type"})
+	purgePeersTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "chihaya_purge_inactive_peers_seconds",
+		Help:    "Histogram of the time taken to purge inactive peers from memory",
+		Buckets: []float64{.01, .05, .1, .15, .25, .35, .5, .75, 1, 1.25, 1.5, 1.75, 2.5, 5},
+	})
 
 	torrentFlushBufferLength         prometheus.Histogram
 	userFlushBufferLength            prometheus.Histogram
@@ -84,41 +109,58 @@ var (
 
 func init() {
 	channelsConfig := config.Section("channels")
-	torrentFlushBufferSize, _ = channelsConfig.GetInt("torrent", 5000)
-	userFlushBufferSize, _ = channelsConfig.GetInt("user", 5000)
+	torrentFlushBufferSize, _ = channelsConfig.GetInt("torrents", 5000)
+	userFlushBufferSize, _ = channelsConfig.GetInt("users", 5000)
 	transferHistoryFlushBufferSize, _ = channelsConfig.GetInt("transfer_history", 5000)
 	transferIpsFlushBufferSize, _ = channelsConfig.GetInt("transfer_ips", 5000)
-	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatch", 25)
+	snatchFlushBufferSize, _ = channelsConfig.GetInt("snatches", 25)
 
 	torrentFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "chihaya_torrents_channel_len",
-		Help:    "Histogram representing channel length for torrents during flush",
+		Help:    "Histogram representing torrents channel length during flush",
 		Buckets: prometheus.LinearBuckets(0, float64(torrentFlushBufferSize)*0.05, 20),
 	})
 	userFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "chihaya_users_channel_len",
-		Help:    "Histogram representing channel length for users during flush",
+		Help:    "Histogram representing users channel length during flush",
 		Buckets: prometheus.LinearBuckets(0, float64(userFlushBufferSize)*0.05, 20),
 	})
 	transferHistoryFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "chihaya_transfer_history_channel_len",
-		Help:    "Histogram representing channel length for transfer history during flush",
+		Help:    "Histogram representing transfer_history channel length during flush",
 		Buckets: prometheus.LinearBuckets(0, float64(transferHistoryFlushBufferSize)*0.05, 20),
 	})
 	transferIpsFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "chihaya_transfer_ips_channel_len",
-		Help:    "Histogram representing channel length for transfer ips during flush",
+		Help:    "Histogram representing transfer_ips channel length during flush",
 		Buckets: prometheus.LinearBuckets(0, float64(transferIpsFlushBufferSize)*0.05, 20),
 	})
 	snatchFlushBufferLength = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "chihaya_snatches_channel_len",
-		Help:    "Histogram representing channel length for snatches during flush",
+		Help:    "Histogram representing snatches channel length during flush",
 		Buckets: prometheus.LinearBuckets(0, float64(snatchFlushBufferSize)*0.05, 20),
 	})
 }
 
-func NewAdminCollector() *AdminCollector {
-	return &AdminCollector{
+func NewCollector() *Collector {
+	return &Collector{
+		uptimeMetric: prometheus.NewDesc("chihaya_uptime",
+			"System uptime in seconds", nil, nil),
+		usersMetric: prometheus.NewDesc("chihaya_users",
+			"Number of active users in database", nil, nil),
+		torrentsMetric: prometheus.NewDesc("chihaya_torrents",
+			"Number of torrents currently being tracked", nil, nil),
+		clientsMetric: prometheus.NewDesc("chihaya_clients",
+			"Number of approved clients", nil, nil),
+		hitAndRunsMetric: prometheus.NewDesc("chihaya_hnrs",
+			"Number of active hit and runs registered", nil, nil),
+		peersMetric: prometheus.NewDesc("chihaya_peers",
+			"Number of peers currently being tracked", nil, nil),
+		requestsMetric: prometheus.NewDesc("chihaya_requests",
+			"Number of requests received", nil, nil),
+		throughputMetric: prometheus.NewDesc("chihaya_throughput",
+			"Current throughput in requests per minute", nil, nil),
+
 		deadlockCountMetric: prometheus.NewDesc("chihaya_deadlock_count",
 			"Number of unique database deadlocks encountered", nil, nil),
 		deadlockAbortedMetric: prometheus.NewDesc("chihaya_deadlock_aborted_count",
@@ -130,28 +172,39 @@ func NewAdminCollector() *AdminCollector {
 		sqlErrorCountMetric: prometheus.NewDesc("chihaya_sql_errors_count",
 			"Number of SQL errors", nil, nil),
 
+		reloadTimeSummary: reloadTime,
+		flushTimeSummary:  flushTime,
+
+		purgePeersTimeHistogram:    &purgePeersTime,
+		serializationTimeHistogram: &serializationTime,
+
 		torrentFlushBufferHistogram:         &torrentFlushBufferLength,
 		userFlushBufferHistogram:            &userFlushBufferLength,
 		transferHistoryFlushBufferHistogram: &transferHistoryFlushBufferLength,
 		transferIpsFlushBufferHistogram:     &transferIpsFlushBufferLength,
 		snatchFlushBufferHistogram:          &snatchFlushBufferLength,
-
-		serializationTimeSummary: &serializationTime,
-		reloadTimeSummary:        reloadTime,
-		flushTimeSummary:         flushTime,
 	}
 }
 
-func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
+func (collector *Collector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- collector.uptimeMetric
+	ch <- collector.usersMetric
+	ch <- collector.torrentsMetric
+	ch <- collector.clientsMetric
+	ch <- collector.hitAndRunsMetric
+	ch <- collector.peersMetric
+	ch <- collector.requestsMetric
+	ch <- collector.throughputMetric
 	ch <- collector.deadlockCountMetric
 	ch <- collector.deadlockAbortedMetric
 	ch <- collector.deadlockTimeMetric
 	ch <- collector.erroredRequestsMetric
 	ch <- collector.sqlErrorCountMetric
 
-	serializationTime.Describe(ch)
 	reloadTime.Describe(ch)
 	flushTime.Describe(ch)
+	purgePeersTime.Describe(ch)
+	serializationTime.Describe(ch)
 
 	torrentFlushBufferLength.Describe(ch)
 	userFlushBufferLength.Describe(ch)
@@ -160,22 +213,63 @@ func (collector *AdminCollector) Describe(ch chan<- *prometheus.Desc) {
 	snatchFlushBufferLength.Describe(ch)
 }
 
-func (collector *AdminCollector) Collect(ch chan<- prometheus.Metric) {
+func (collector *Collector) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(collector.uptimeMetric, prometheus.CounterValue, uptime)
+	ch <- prometheus.MustNewConstMetric(collector.usersMetric, prometheus.GaugeValue, float64(users))
+	ch <- prometheus.MustNewConstMetric(collector.torrentsMetric, prometheus.GaugeValue, float64(torrents))
+	ch <- prometheus.MustNewConstMetric(collector.clientsMetric, prometheus.GaugeValue, float64(clients))
+	ch <- prometheus.MustNewConstMetric(collector.hitAndRunsMetric, prometheus.GaugeValue, float64(hitAndRuns))
+	ch <- prometheus.MustNewConstMetric(collector.peersMetric, prometheus.GaugeValue, float64(peers))
+	ch <- prometheus.MustNewConstMetric(collector.requestsMetric, prometheus.CounterValue, float64(requests))
+	ch <- prometheus.MustNewConstMetric(collector.throughputMetric, prometheus.GaugeValue, float64(throughput))
 	ch <- prometheus.MustNewConstMetric(collector.deadlockCountMetric, prometheus.CounterValue, float64(deadlockCount))
 	ch <- prometheus.MustNewConstMetric(collector.deadlockAbortedMetric, prometheus.CounterValue, float64(deadlockAborted))
 	ch <- prometheus.MustNewConstMetric(collector.deadlockTimeMetric, prometheus.CounterValue, deadlockTime.Seconds())
 	ch <- prometheus.MustNewConstMetric(collector.erroredRequestsMetric, prometheus.CounterValue, float64(erroredRequests))
 	ch <- prometheus.MustNewConstMetric(collector.sqlErrorCountMetric, prometheus.CounterValue, float64(sqlErrorCount))
 
-	serializationTime.Collect(ch)
 	reloadTime.Collect(ch)
 	flushTime.Collect(ch)
+	purgePeersTime.Collect(ch)
+	serializationTime.Collect(ch)
 
 	torrentFlushBufferLength.Collect(ch)
 	userFlushBufferLength.Collect(ch)
 	transferHistoryFlushBufferLength.Collect(ch)
 	transferIpsFlushBufferLength.Collect(ch)
 	snatchFlushBufferLength.Collect(ch)
+}
+
+func UpdateUptime(seconds float64) {
+	uptime = seconds
+}
+
+func UpdateUsers(count int) {
+	users = count
+}
+
+func UpdatePeers(count int) {
+	peers = count
+}
+
+func UpdateTorrents(count int) {
+	torrents = count
+}
+
+func UpdateClients(count int) {
+	clients = count
+}
+
+func UpdateHitAndRuns(count int) {
+	hitAndRuns = count
+}
+
+func UpdateRequests(count uint64) {
+	requests = count
+}
+
+func UpdateThroughput(rpm int) {
+	throughput = rpm
 }
 
 func IncrementDeadlockCount() {
@@ -202,16 +296,20 @@ func UpdateSerializationTime(time time.Duration) {
 	serializationTime.Observe(time.Seconds())
 }
 
-func UpdateFlushTime(flushType string, time time.Duration) {
-	flushTime.WithLabelValues(flushType).Observe(time.Seconds())
+func UpdateReloadTime(source string, time time.Duration) {
+	reloadTime.WithLabelValues(source).Observe(time.Seconds())
 }
 
-func UpdateReloadTime(reloadType string, time time.Duration) {
-	reloadTime.WithLabelValues(reloadType).Observe(time.Seconds())
+func UpdatePurgeInactivePeersTime(time time.Duration) {
+	purgePeersTime.Observe(time.Seconds())
 }
 
-func UpdateChannelsLen(channelType string, length int) {
-	switch channelType {
+func UpdateChannelFlushTime(channel string, time time.Duration) {
+	flushTime.WithLabelValues(channel).Observe(time.Seconds())
+}
+
+func UpdateChannelFlushLen(channel string, length int) {
+	switch channel {
 	case "torrents":
 		torrentFlushBufferLength.Observe(float64(length))
 	case "users":
@@ -223,6 +321,6 @@ func UpdateChannelsLen(channelType string, length int) {
 	case "snatches":
 		snatchFlushBufferLength.Observe(float64(length))
 	default:
-		slog.Error("trying to update channel length for unknown type", "channelType", channelType)
+		slog.Error("trying to update channel length for unknown type", "channel", channel)
 	}
 }

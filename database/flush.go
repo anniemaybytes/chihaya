@@ -23,7 +23,7 @@ import (
 	"log/slog"
 	"time"
 
-	"chihaya/collectors"
+	"chihaya/collector"
 	"chihaya/config"
 	cdb "chihaya/database/types"
 	"chihaya/util"
@@ -143,8 +143,8 @@ func (db *Database) flushTorrents() {
 			db.exec(&query)
 
 			if !db.terminate.Load() {
-				collectors.UpdateFlushTime("torrents", time.Since(startTime))
-				collectors.UpdateChannelsLen("torrents", count)
+				collector.UpdateChannelFlushTime("torrents", time.Since(startTime))
+				collector.UpdateChannelFlushLen("torrents", count)
 			}
 
 			if length < (torrentFlushBufferSize >> 1) {
@@ -199,8 +199,8 @@ func (db *Database) flushUsers() {
 			db.exec(&query)
 
 			if !db.terminate.Load() {
-				collectors.UpdateFlushTime("users", time.Since(startTime))
-				collectors.UpdateChannelsLen("users", count)
+				collector.UpdateChannelFlushTime("users", time.Since(startTime))
+				collector.UpdateChannelFlushLen("users", count)
 			}
 
 			if length < (userFlushBufferSize >> 1) {
@@ -264,8 +264,8 @@ func (db *Database) flushTransferHistory() {
 				db.exec(&query)
 
 				if !db.terminate.Load() {
-					collectors.UpdateFlushTime("transfer_history", time.Since(startTime))
-					collectors.UpdateChannelsLen("transfer_history", count)
+					collector.UpdateChannelFlushTime("transfer_history", time.Since(startTime))
+					collector.UpdateChannelFlushLen("transfer_history", count)
 				}
 
 				return length, nil
@@ -329,8 +329,8 @@ func (db *Database) flushTransferIps() {
 			db.exec(&query)
 
 			if !db.terminate.Load() {
-				collectors.UpdateFlushTime("transfer_ips", time.Since(startTime))
-				collectors.UpdateChannelsLen("transfer_ips", count)
+				collector.UpdateChannelFlushTime("transfer_ips", time.Since(startTime))
+				collector.UpdateChannelFlushLen("transfer_ips", count)
 			}
 
 			if length < (transferIpsFlushBufferSize >> 1) {
@@ -384,8 +384,8 @@ func (db *Database) flushSnatches() {
 			db.exec(&query)
 
 			if !db.terminate.Load() {
-				collectors.UpdateFlushTime("snatches", time.Since(startTime))
-				collectors.UpdateChannelsLen("snatches", count)
+				collector.UpdateChannelFlushTime("snatches", time.Since(startTime))
+				collector.UpdateChannelFlushLen("snatches", count)
 			}
 
 			if length < (snatchFlushBufferSize >> 1) {
@@ -454,7 +454,7 @@ func (db *Database) purgeInactivePeers() {
 		}
 
 		elapsedTime := time.Since(startTime)
-		collectors.UpdateFlushTime("purging_inactive_peers", elapsedTime)
+		collector.UpdatePurgeInactivePeersTime(elapsedTime)
 		slog.Info("purged inactive peers from memory", "count", count, "elapsed", elapsedTime)
 
 		// Set peers as inactive in the database

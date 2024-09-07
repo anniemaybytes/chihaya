@@ -56,7 +56,7 @@ func init() {
 
 	announceInterval, _ = intervalsConfig.GetInt("announce", 1800)
 	minAnnounceInterval, _ = intervalsConfig.GetInt("min_announce", 900)
-	peerInactivityInterval, _ = intervalsConfig.GetInt("peer_inactivity", 3900)
+	peerInactivityInterval, _ = intervalsConfig.GetInt("peer_inactivity", 4200)
 	maxAccounceDrift, _ = intervalsConfig.GetInt("announce_drift", 300)
 
 	strictPort, _ = announceConfig.GetBool("strict_port", false)
@@ -139,8 +139,8 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	if strictPort && qp.Params.Port < 1024 || qp.Params.Port > 65535 {
-		failure(fmt.Sprintf("Malformed request - port outside of acceptable range (port: %d)", qp.Params.Port),
+	if strictPort && qp.Params.Port < 1024 {
+		failure(fmt.Sprintf("Unacceptable request - port must be outside of well-known range (port: %d)", qp.Params.Port),
 			buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
@@ -202,7 +202,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	clientID, matched := clientApproved(qp.Params.PeerID, db)
+	clientID, matched := isClientApproved(qp.Params.PeerID, db)
 	if !matched {
 		failure(fmt.Sprintf("Your client is not approved (peer_id: %s)", qp.Params.PeerID), buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
@@ -228,7 +228,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		boolean type so there is no risk of data loss. */
 		go db.UnPrune(torrent)
 	} else if torrentStatus != 0 {
-		failure(fmt.Sprintf("This torrent does not exist (torrentStatus: %d, left: %d)", torrentStatus, qp.Params.Left),
+		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrentStatus, qp.Params.Left),
 			buf, 15*time.Minute)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
@@ -433,13 +433,12 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	response["complete"] = seedCount
 	response["incomplete"] = leechCount
 	response["downloaded"] = snatchCount
-	response["min interval"] = minAnnounceInterval
 
 	/* We ask clients to announce each interval seconds. In order to spread the load on tracker,
 	we will vary the interval given to client by random number of seconds between 0 and value
 	specified in config */
-	announceDrift := util.UnsafeRand(0, maxAccounceDrift)
-	response["interval"] = announceInterval + announceDrift
+	response["interval"] = announceInterval + util.UnsafeIntn(maxAccounceDrift)
+	response["min interval"] = minAnnounceInterval
 
 	if qp.Params.NumWant > 0 && active {
 		compact := !qp.Exists.Compact || !qp.Params.Compact
