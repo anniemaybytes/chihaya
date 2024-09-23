@@ -31,7 +31,7 @@ import (
 var (
 	enabled     = false // overrides default, for testing purposes only
 	initialized = false
-	header      = "UserID,TorrentID,Addr,Event,Uploaded,Downloaded,Left"
+	header      = "TorrentID,UserID,Addr,Event,Uploaded,Downloaded,Left"
 	channel     chan []byte
 )
 

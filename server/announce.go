@@ -245,11 +245,8 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 
 		now = time.Now().Unix()
 
-		newPeer = false
 		seeding = false
 		active  = true
-
-		completed = qp.Params.Event == "completed"
 	)
 
 	if qp.Params.Left > 0 {
@@ -260,17 +257,31 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 
 		peer, exists = torrent.Leechers[peerKey]
 		if !exists {
-			newPeer = true
-			peer = &cdb.Peer{}
+			peer = &cdb.Peer{
+				ID:           peerKey.PeerID(),
+				UserID:       user.ID.Load(),
+				TorrentID:    torrent.ID.Load(),
+				StartTime:    now,
+				LastAnnounce: now,
+				Uploaded:     qp.Params.Uploaded,
+				Downloaded:   qp.Params.Downloaded,
+			}
 
 			torrent.Leechers[peerKey] = peer
 			torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
 		}
-	} else if completed {
+	} else if qp.Params.Event == "completed" {
 		peer, exists = torrent.Leechers[peerKey]
 		if !exists {
-			newPeer = true
-			peer = &cdb.Peer{}
+			peer = &cdb.Peer{
+				ID:           peerKey.PeerID(),
+				UserID:       user.ID.Load(),
+				TorrentID:    torrent.ID.Load(),
+				StartTime:    now,
+				LastAnnounce: now,
+				Uploaded:     qp.Params.Uploaded,
+				Downloaded:   qp.Params.Downloaded,
+			}
 
 			torrent.Seeders[peerKey] = peer
 			torrent.SeedersLength.Store(uint32(len(torrent.Seeders)))
@@ -289,8 +300,15 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		if !exists {
 			peer, exists = torrent.Leechers[peerKey]
 			if !exists {
-				newPeer = true
-				peer = &cdb.Peer{}
+				peer = &cdb.Peer{
+					ID:           peerKey.PeerID(),
+					UserID:       user.ID.Load(),
+					TorrentID:    torrent.ID.Load(),
+					StartTime:    now,
+					LastAnnounce: now,
+					Uploaded:     qp.Params.Uploaded,
+					Downloaded:   qp.Params.Downloaded,
+				}
 
 				torrent.Seeders[peerKey] = peer
 				torrent.SeedersLength.Store(uint32(len(torrent.Seeders)))
@@ -309,29 +327,21 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		seeding = true
 	}
 
-	// Update peer info/stats
-	if newPeer {
-		peer.ID = peerKey.PeerID()
-		peer.UserID = user.ID.Load()
-		peer.TorrentID = torrent.ID.Load()
-		peer.StartTime = now
-		peer.LastAnnounce = now
-		peer.Uploaded = qp.Params.Uploaded
-		peer.Downloaded = qp.Params.Downloaded
-	}
-
+	// Update peer info
 	peer.Addr = cdb.NewPeerAddressFromIPPort(ipBytes, qp.Params.Port)
 	peer.ClientID = clientID
 
-	// If a user restarts a torrent, their delta may be negative, attenuating this to 0 should be fine for stats purposes
-	rawDeltaUpload := int64(qp.Params.Uploaded) - int64(peer.Uploaded)
+	// Update peer state
+	peer.Seeding = seeding
+
+	rawDeltaUpload := int64(qp.Params.Uploaded) - int64(peer.Uploaded) // fixme: possible interger overflow here
 	if rawDeltaUpload < 0 {
-		rawDeltaUpload = 0
+		rawDeltaUpload = 0 // attenuate negative deltas to 0
 	}
 
-	rawDeltaDownload := int64(qp.Params.Downloaded) - int64(peer.Downloaded)
+	rawDeltaDownload := int64(qp.Params.Downloaded) - int64(peer.Downloaded) // fixme: possible interger overflow here
 	if rawDeltaDownload < 0 {
-		rawDeltaDownload = 0
+		rawDeltaDownload = 0 // attenuate negative deltas to 0
 	}
 
 	var (
@@ -361,10 +371,10 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			math.Abs(math.Float64frombits(torrent.UpMultiplier.Load())),
 	)
 
+	// Update peer stats
 	peer.Uploaded = qp.Params.Uploaded
 	peer.Downloaded = qp.Params.Downloaded
 	peer.Left = qp.Params.Left
-	peer.Seeding = seeding
 
 	deltaTime := now - peer.LastAnnounce
 	if deltaTime > int64(peerInactivityInterval) {
@@ -380,6 +390,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		deltaSeedTime = 0
 	}
 
+	// Update peer timings
 	peer.LastAnnounce = now
 
 	/* Update torrent last_action only if announced action is seeding.
@@ -403,7 +414,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		}
 
 		active = false
-	} else if completed {
+	} else if qp.Params.Event == "completed" {
 		deltaSnatch = 1
 
 		db.QueueSnatch(peer, now) // Non-blocking
@@ -429,10 +440,11 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	leechCount := int(torrent.LeechersLength.Load())
 	snatchCount := uint16(torrent.Snatched.Load())
 
-	response := make(map[string]interface{})
-	response["complete"] = seedCount
-	response["incomplete"] = leechCount
-	response["downloaded"] = snatchCount
+	response := map[string]interface{}{
+		"complete":   seedCount,
+		"incomplete": leechCount,
+		"downloaded": snatchCount,
+	}
 
 	/* We ask clients to announce each interval seconds. In order to spread the load on tracker,
 	we will vary the interval given to client by random number of seconds between 0 and value
@@ -441,14 +453,12 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	response["min interval"] = minAnnounceInterval
 
 	if qp.Params.NumWant > 0 && active {
-		compact := !qp.Exists.Compact || !qp.Params.Compact
-		noPeerID := qp.Exists.NoPeerID && qp.Params.NoPeerID
-
 		var peerCount int
+
 		if seeding {
 			peerCount = min(int(qp.Params.NumWant), leechCount)
 		} else {
-			peerCount = min(int(qp.Params.NumWant), leechCount+seedCount-1)
+			peerCount = min(int(qp.Params.NumWant), seedCount+leechCount)
 		}
 
 		peersToSend := make([]*cdb.Peer, 0, peerCount)
@@ -503,7 +513,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			}
 		}
 
-		if compact {
+		if !qp.Exists.Compact || !qp.Params.Compact {
 			peerBuff := make([]byte, 0, len(peersToSend)*cdb.PeerAddressSize)
 
 			for _, other := range peersToSend {
@@ -515,10 +525,12 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			peerList := make([]map[string]interface{}, len(peersToSend))
 
 			for i, other := range peersToSend {
-				peerMap := make(map[string]interface{})
-				peerMap["ip"] = other.Addr.IPString()
-				peerMap["port"] = other.Addr.Port()
-				if !noPeerID { //nolint:wsl
+				peerMap := map[string]interface{}{
+					"ip":   other.Addr.IPString(),
+					"port": other.Addr.Port(),
+				}
+
+				if qp.Exists.NoPeerID && !qp.Params.NoPeerID {
 					peerMap["peer id"] = other.ID[:]
 				}
 

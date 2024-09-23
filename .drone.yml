@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.60.1-alpine
+        image: golangci/golangci-lint:v1.61.0-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all --timeout 3m0s -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.60.1-alpine
+        image: golangci/golangci-lint:v1.61.0-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]

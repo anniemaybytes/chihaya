@@ -380,7 +380,8 @@ func (db *Database) flushSnatches() {
 
 			startTime := time.Now()
 
-			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = VALUE(snatched_time)")
+			query.WriteString("\nON DUPLICATE KEY UPDATE snatched_time = " +
+				"IF(snatched_time = 0, VALUE(snatched_time), snatched_time)")
 			db.exec(&query)
 
 			if !db.terminate.Load() {

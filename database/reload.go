@@ -166,7 +166,7 @@ func (db *Database) loadTorrents() {
 
 	rows := db.query(db.loadTorrentsStmt)
 	if rows == nil {
-		slog.Error("failed to reload from database", "source", "hit_and_runs")
+		slog.Error("failed to reload from database", "source", "torrents")
 		return
 	}
 

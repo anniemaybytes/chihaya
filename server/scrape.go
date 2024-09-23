@@ -41,12 +41,11 @@ func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf
 		panic(err)
 	}
 
-	response := make(map[string]interface{})
 	filesList := make(map[cdb.TorrentHash]interface{})
 
-	dbTorrents := *db.Torrents.Load()
-
 	if len(qp.Params.InfoHashes) > 0 {
+		dbTorrents := *db.Torrents.Load()
+
 		for _, infoHash := range qp.Params.InfoHashes {
 			torrent, exists := dbTorrents[infoHash]
 			if exists {
@@ -65,9 +64,11 @@ func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
-	response["files"] = filesList
-	response["flags"] = map[string]interface{}{
-		"min_request_interval": scrapeInterval,
+	response := map[string]interface{}{
+		"files": filesList,
+		"flags": map[string]interface{}{
+			"min_request_interval": scrapeInterval,
+		},
 	}
 
 	encoder := bencode.NewEncoder(buf)

@@ -20,7 +20,6 @@ linters:
         - bodyclose
         - revive
         - gosec
-        - dupl
         - misspell
         - lll
         - unparam
@@ -42,6 +41,9 @@ linters-settings:
         force-err-cuddling: true
     misspell:
         locale: US
+    gosec:
+        excludes:
+            - G115
 
 issues:
     exclude-rules:

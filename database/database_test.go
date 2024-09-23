@@ -400,7 +400,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 
 	if initDownload+deltaDownload != download {
 		t.Fatal(fixtureFailure(
-			"Delta download incorrectly updated in the database for user tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw",
+			fmt.Sprintf("Delta download incorrectly updated in the database for user %v", testUser.ID.Load()),
 			deltaDownload,
 			download-initDownload,
 		))
@@ -408,7 +408,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 
 	if initUpload+deltaUpload != upload {
 		t.Fatal(fixtureFailure(
-			"Delta upload incorrectly updated in the database for user tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw",
+			fmt.Sprintf("Delta upload incorrectly updated in the database for user %v", testUser.ID.Load()),
 			deltaUpload,
 			upload-initUpload,
 		))
@@ -416,7 +416,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 
 	if initRawDownload+deltaRawDownload != rawDownload {
 		t.Fatal(fixtureFailure(
-			"Delta raw download incorrectly updated in the database for user tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw",
+			fmt.Sprintf("Delta raw download incorrectly updated in the database for user %v", testUser.ID.Load()),
 			deltaRawDownload,
 			rawDownload-initRawDownload,
 		))
@@ -424,7 +424,7 @@ func TestRecordAndFlushUsers(t *testing.T) {
 
 	if initRawUpload+deltaRawUpload != rawUpload {
 		t.Fatal(fixtureFailure(
-			"Delta raw upload incorrectly updated in the database for user tbHfQDQ9xDaQdsNv5CZBtHPfk7KGzaCw",
+			fmt.Sprintf("Delta raw upload incorrectly updated in the database for user %v", testUser.ID.Load()),
 			deltaRawUpload,
 			rawUpload-initRawUpload,
 		))
@@ -754,13 +754,11 @@ func TestRecordAndFlushSnatch(t *testing.T) {
 	}
 
 	var (
-		snatchTime int64
-		currTime   int64
+		snatchTime = time.Now()
+		recordTime int64
 	)
 
-	currTime = time.Now().Unix()
-
-	db.QueueSnatch(testPeer, currTime)
+	db.QueueSnatch(testPeer, snatchTime.Unix())
 
 	for len(db.snatchChannel) > 0 {
 		time.Sleep(time.Second)
@@ -771,15 +769,36 @@ func TestRecordAndFlushSnatch(t *testing.T) {
 	row := db.conn.QueryRow("SELECT snatched_time "+
 		"FROM transfer_history WHERE uid = ? AND fid = ?", testPeer.UserID, testPeer.TorrentID)
 
-	err := row.Scan(&snatchTime)
+	err := row.Scan(&recordTime)
 	if err != nil {
 		panic(err)
 	}
 
-	if snatchTime != currTime {
+	if recordTime != snatchTime.Unix() {
 		t.Fatal(fixtureFailure(
-			fmt.Sprintf("Snatches incorrectly updated in the database for torrentId %v", 1),
-			currTime,
+			fmt.Sprintf("Snatch time incorrectly updated in the database for torrent %v", 1),
+			recordTime,
+			snatchTime))
+	}
+
+	db.QueueSnatch(testPeer, snatchTime.Add(time.Second*1337).Unix())
+
+	for len(db.snatchChannel) > 0 {
+		time.Sleep(time.Second)
+	}
+
+	row = db.conn.QueryRow("SELECT snatched_time "+
+		"FROM transfer_history WHERE uid = ? AND fid = ?", testPeer.UserID, testPeer.TorrentID)
+
+	err = row.Scan(&recordTime)
+	if err != nil {
+		panic(err)
+	}
+
+	if recordTime != snatchTime.Unix() {
+		t.Fatal(fixtureFailure(
+			fmt.Sprintf("Snatch time was incorrectly updated in the database for torrent %v", 1),
+			recordTime,
 			snatchTime))
 	}
 }
