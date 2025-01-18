@@ -5,12 +5,12 @@ type: docker
 
 steps:
     -   name: gofmt
-        image: golangci/golangci-lint:v1.62.0-alpine
+        image: golangci/golangci-lint:v1.63.4-alpine
         commands:
             - golangci-lint run --color always --no-config --disable-all --timeout 3m0s -E gofmt
         depends_on: [ clone ]
     -   name: linter
-        image: golangci/golangci-lint:v1.62.0-alpine
+        image: golangci/golangci-lint:v1.63.4-alpine
         commands:
             - golangci-lint run --color always
         depends_on: [ clone ]
@@ -30,7 +30,7 @@ type: docker
 
 services:
     -   name: mariadb
-        image: mariadb:11.5
+        image: mariadb:11.4
         pull: always
         environment:
             MYSQL_RANDOM_ROOT_PASSWORD: yes
