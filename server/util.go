@@ -19,28 +19,48 @@ package server
 
 import (
 	"bytes"
+	"errors"
+	"net"
+	"strings"
 	"time"
 
 	"chihaya/database"
 	cdb "chihaya/database/types"
+	"chihaya/util"
 
-	"github.com/zeebo/bencode"
+	"github.com/valyala/fasthttp"
 )
 
+var (
+	cidrs       []*net.IPNet
+	errNetParse = errors.New("failed to parse address")
+)
+
+func init() {
+	maxCidrBlocks := []string{
+		"127.0.0.1/8",    // localhost
+		"10.0.0.0/8",     // RFC1918
+		"172.16.0.0/12",  // RFC1918
+		"192.168.0.0/16", // RFC1918
+		"169.254.0.0/16", // RFC3927 link-local
+		"100.64.0.0/10",  // RFC6598
+		"::1/128",        // localhost
+		"fc00::/7",       // RFC4193
+		"fe80::/10",      // RFC5156 link-scoped
+	}
+
+	cidrs = make([]*net.IPNet, len(maxCidrBlocks))
+
+	for i, maxCidrBlock := range maxCidrBlocks {
+		_, cidr, _ := net.ParseCIDR(maxCidrBlock)
+		cidrs[i] = cidr
+	}
+}
+
 func failure(err string, buf *bytes.Buffer, interval time.Duration) {
-	data := make(map[string]interface{})
-	data["failure reason"] = err
-
-	if interval > 0 {
-		data["interval"] = interval / time.Second // Assuming in seconds
-	}
-
+	// Reset buffer to prevent reuse of any written bytes
 	buf.Reset()
-
-	encoder := bencode.NewEncoder(buf)
-	if errz := encoder.Encode(data); errz != nil {
-		panic(errz)
-	}
+	util.BencodeFailure(buf, err, interval)
 }
 
 func isClientApproved(peerID string, db *database.Database) (uint16, bool) {
@@ -93,4 +113,48 @@ func hasHitAndRun(db *database.Database, userID, torrentID uint32) bool {
 func isDisabledDownload(db *database.Database, user *cdb.User, torrent *cdb.Torrent) bool {
 	// Only disable download if the torrent doesn't have a HnR against it
 	return user.DisableDownload.Load() && !hasHitAndRun(db, user.ID.Load(), torrent.ID.Load())
+}
+
+func isPrivateIPAddress(address string) (bool, error) {
+	ipAddress := net.ParseIP(address)
+	if ipAddress == nil { // Invalid IP provided, fail
+		return false, errNetParse
+	}
+
+	for i := range cidrs {
+		if cidrs[i].Contains(ipAddress) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func getIPAddressFromRequest(ctx *fasthttp.RequestCtx) (string, error) {
+	xRealIP := string(ctx.Request.Header.Peek("X-Real-Ip"))
+	xForwardedFor := string(ctx.Request.Header.Peek("X-Forwarded-For"))
+	socketAddr := ctx.RemoteAddr().String()
+
+	// Try to use value from X-Real-Ip header if exists
+	if len(xRealIP) > 0 {
+		return xRealIP, nil
+	}
+
+	// Check list of IPs in X-Forwarded-For and try to return the first public address
+	for _, remoteIP := range strings.Split(xForwardedFor, ",") {
+		remoteIP = strings.TrimSpace(remoteIP)
+
+		isPrivate, err := isPrivateIPAddress(remoteIP)
+		if err == nil && !isPrivate {
+			return remoteIP, nil
+		}
+	}
+
+	// Use socket address
+	remoteIP, _, err := net.SplitHostPort(socketAddr)
+	if err != nil {
+		return "", err
+	}
+
+	return remoteIP, nil
 }

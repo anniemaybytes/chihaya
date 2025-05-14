@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v12.0.0
+### Added
+- New metric `chihaya_purge_inactive_peers_seconds`
+
+### Fixed
+- Preserve original snatched time in case of multiple snatches
+- Various typos
+- Do not substract 1 from peer count when leeching
+
+### Changed
+- Bump minimum Go version to 1.24
+- Avoid loading torrents in scrape if no info hashes were provided
+- Do not send "min interval" on failure
+- Replace usage of `UnsafeRand` with `UnsafeIntn`
+- Update failure messages in few places
+- Do not consume users channel for empty actions
+
+### Removed
+- Support for old-style BEP7 multi-homed connections in form of `&ipv4=` and `&ipv6=` query string params
+- Support for "interval" and "min interval" in scrape as no known client supports reading these
+- Public-facing metrics and custom metrics authorization (`/metrics` endpoint protection is now responsibility of operator)
+- Custom error handling on `/alive` endpoint
+
 ## v11.0.0
 ### Fixed
 - Fix panic when attempting to shutdown chihaya before main server loop has started

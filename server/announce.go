@@ -23,7 +23,6 @@ import (
 	"log/slog"
 	"math"
 	"net"
-	"strings"
 	"time"
 
 	"chihaya/config"
@@ -34,7 +33,6 @@ import (
 	"chihaya/util"
 
 	"github.com/valyala/fasthttp"
-	"github.com/zeebo/bencode"
 )
 
 var (
@@ -46,8 +44,6 @@ var (
 	maxNumWant             int
 
 	strictPort bool
-
-	privateIPBlocks []*net.IPNet
 )
 
 func init() {
@@ -62,51 +58,6 @@ func init() {
 	strictPort, _ = announceConfig.GetBool("strict_port", false)
 	defaultNumWant, _ = announceConfig.GetInt("numwant", 25)
 	maxNumWant, _ = announceConfig.GetInt("max_numwant", 50)
-
-	for _, cidr := range []string{
-		"10.0.0.0/8",     // RFC1918
-		"172.16.0.0/12",  // RFC1918
-		"192.168.0.0/16", // RFC1918
-		"169.254.0.0/16", // RFC3927 link-local
-		"100.64.0.0/10",  // RFC6598
-	} {
-		_, block, err := net.ParseCIDR(cidr)
-		if err != nil {
-			slog.Error("failed to parse cidr", "cidr", cidr, "err", err)
-		} else {
-			privateIPBlocks = append(privateIPBlocks, block)
-		}
-	}
-}
-
-func getPublicIPV4(ipAddr string, exists bool) (string, bool) {
-	if !exists { // Already does not exist, fail
-		return ipAddr, exists
-	}
-
-	ip := net.ParseIP(ipAddr)
-	if ip == nil { // Invalid IP provided, fail
-		return ipAddr, false
-	}
-
-	if ip.To4() == nil { // IPv6 provided, fail
-		return ipAddr, false
-	}
-
-	private := false
-
-	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-		private = true
-	} else {
-		for _, block := range privateIPBlocks {
-			if block.Contains(ip) {
-				private = true
-				break
-			}
-		}
-	}
-
-	return ipAddr, !private
 }
 
 //nolint:gocyclo // can't really by simplified other than by splitting into chunks
@@ -160,40 +111,22 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
+	// Pick IP address - either explicitly provided in params (BEP-3 compatible) or fallback to request
 	ipAddr := func() string {
-		ipV4, existsV4 := getPublicIPV4(qp.Params.IPv4, qp.Exists.IPv4) // First try to get IPv4 address if client sent it
-		ip, exists := getPublicIPV4(qp.Params.IP, qp.Exists.IP)         // ... then try to get public IP if sent by client
-
-		// Fail if ip and ipv4 are not same, and both are provided
-		if (existsV4 && exists) && (ip != ipV4) {
-			return ""
+		requestAddr, err := getIPAddressFromRequest(ctx)
+		if err != nil {
+			panic(err)
 		}
 
-		if existsV4 {
-			return ipV4
+		if !qp.Exists.IP {
+			return requestAddr // There was no IP provided in QueryParams
 		}
 
-		if exists {
-			return ip
+		if isPrivate, _ := isPrivateIPAddress(qp.Params.IP); isPrivate {
+			return requestAddr // IP provided in QueryParams was private
 		}
 
-		// Check for proxied IP header
-		if proxyHeader, exists := config.Section("http").Get("proxy_header", ""); exists {
-			if ips := ctx.Request.Header.PeekAll(proxyHeader); len(ips) > 0 {
-				return string(ips[0])
-			}
-		}
-
-		// Check for IP in socket
-		remoteAddrString := ctx.RemoteAddr().String()
-		portIndex := strings.LastIndex(remoteAddrString, ":")
-
-		if portIndex != -1 {
-			return remoteAddrString[0:portIndex]
-		}
-
-		// Everything else failed
-		return ""
+		return qp.Params.IP // Might be invalid at this point, but we'll fail later when parsing
 	}()
 
 	ipBytes := net.ParseIP(ipAddr).To4()
@@ -440,17 +373,12 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	leechCount := int(torrent.LeechersLength.Load())
 	snatchCount := uint16(torrent.Snatched.Load())
 
-	response := map[string]interface{}{
-		"complete":   seedCount,
-		"incomplete": leechCount,
-		"downloaded": snatchCount,
-	}
-
 	/* We ask clients to announce each interval seconds. In order to spread the load on tracker,
 	we will vary the interval given to client by random number of seconds between 0 and value
 	specified in config */
-	response["interval"] = announceInterval + util.UnsafeIntn(maxAccounceDrift)
-	response["min interval"] = minAnnounceInterval
+	interval := announceInterval + util.UnsafeIntn(maxAccounceDrift)
+
+	util.BencodeAnnounceHeader(buf, int64(seedCount), int64(leechCount), int64(snatchCount), interval, minAnnounceInterval)
 
 	if qp.Params.NumWant > 0 && active {
 		var peerCount int
@@ -513,38 +441,13 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			}
 		}
 
-		if !qp.Exists.Compact || !qp.Params.Compact {
-			peerBuff := make([]byte, 0, len(peersToSend)*cdb.PeerAddressSize)
-
-			for _, other := range peersToSend {
-				peerBuff = append(peerBuff, other.Addr[:]...)
-			}
-
-			response["peers"] = peerBuff
-		} else {
-			peerList := make([]map[string]interface{}, len(peersToSend))
-
-			for i, other := range peersToSend {
-				peerMap := map[string]interface{}{
-					"ip":   other.Addr.IPString(),
-					"port": other.Addr.Port(),
-				}
-
-				if qp.Exists.NoPeerID && !qp.Params.NoPeerID {
-					peerMap["peer id"] = other.ID[:]
-				}
-
-				peerList[i] = peerMap
-			}
-
-			response["peers"] = peerList
-		}
+		util.BencodeAnnouncePeersIP4(buf, peersToSend,
+			/* is compact */ !qp.Exists.Compact || qp.Params.Compact,
+			/* send peerID */ qp.Exists.NoPeerID && !qp.Params.NoPeerID,
+		)
 	}
 
-	encoder := bencode.NewEncoder(buf)
-	if err := encoder.Encode(response); err != nil {
-		panic(err)
-	}
+	util.BencodeAnnounceFooter(buf)
 
 	return fasthttp.StatusOK
 }

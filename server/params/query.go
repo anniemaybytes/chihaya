@@ -57,7 +57,6 @@ type QueryParam struct {
 		NumWant bool
 
 		PeerID bool
-		IPv4   bool
 		IP     bool
 		Event  bool
 
@@ -78,7 +77,6 @@ var portKey = []byte("port")
 var numWant = []byte("numwant")
 
 var peerIDKey = []byte("peer_id")
-var ipv4Key = []byte("ipv4")
 var ipKey = []byte("ip")
 var eventKey = []byte("event")
 
@@ -146,9 +144,6 @@ func ParseQuery(queryArgs *fasthttp.Args) (qp QueryParam, err error) {
 		case bytes.Equal(key, peerIDKey):
 			qp.Params.PeerID = string(value)
 			qp.Exists.PeerID = true
-		case bytes.Equal(key, ipv4Key):
-			qp.Params.IPv4 = string(value)
-			qp.Exists.IPv4 = true
 		case bytes.Equal(key, ipKey):
 			qp.Params.IP = string(value)
 			qp.Exists.IP = true

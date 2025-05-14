@@ -23,9 +23,9 @@ import (
 	"chihaya/database"
 	cdb "chihaya/database/types"
 	"chihaya/server/params"
+	"chihaya/util"
 
 	"github.com/valyala/fasthttp"
-	"github.com/zeebo/bencode"
 )
 
 var scrapeInterval int
@@ -41,40 +41,32 @@ func scrape(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, buf
 		panic(err)
 	}
 
-	filesList := make(map[cdb.TorrentHash]interface{})
-
 	if len(qp.Params.InfoHashes) > 0 {
+		util.BencodeScrapeHeader(buf)
+
+		// pre-sort keys
+		util.BencodeSortTorrentHashKeys(qp.Params.InfoHashes)
+
 		dbTorrents := *db.Torrents.Load()
 
 		for _, infoHash := range qp.Params.InfoHashes {
-			torrent, exists := dbTorrents[infoHash]
-			if exists {
+			if torrent, exists := dbTorrents[infoHash]; exists {
 				if !isDisabledDownload(db, user, torrent) {
-					fileMap := make(map[string]interface{})
-					fileMap["complete"] = torrent.SeedersLength.Load()
-					fileMap["downloaded"] = torrent.Snatched.Load()
-					fileMap["incomplete"] = torrent.LeechersLength.Load()
-
-					filesList[infoHash] = fileMap
+					util.BencodeScrapeTorrent(buf, infoHash,
+						int64(torrent.SeedersLength.Load()),
+						int64(torrent.Snatched.Load()),
+						int64(torrent.LeechersLength.Load()),
+					)
 				}
 			}
 		}
-	} else {
-		failure("Unsupported request - must provide at least one info_hash", buf, 0)
-		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
+
+		util.BencodeScrapeFooter(buf, scrapeInterval)
+
+		return fasthttp.StatusOK
 	}
 
-	response := map[string]interface{}{
-		"files": filesList,
-		"flags": map[string]interface{}{
-			"min_request_interval": scrapeInterval,
-		},
-	}
+	failure("Unsupported request - must provide at least one info_hash", buf, 0)
 
-	encoder := bencode.NewEncoder(buf)
-	if err = encoder.Encode(response); err != nil {
-		panic(err)
-	}
-
-	return fasthttp.StatusOK
+	return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 }

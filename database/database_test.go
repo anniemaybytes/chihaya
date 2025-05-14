@@ -26,15 +26,15 @@ import (
 	"testing"
 	"time"
 
+	testfixtures "chihaya/database/fixtures"
 	cdb "chihaya/database/types"
 
-	"github.com/go-testfixtures/testfixtures/v3"
 	"github.com/google/go-cmp/cmp"
 )
 
 var (
 	db       *Database
-	fixtures *testfixtures.Loader
+	fixtures *testfixtures.Context
 )
 
 func TestMain(m *testing.M) {
@@ -45,12 +45,7 @@ func TestMain(m *testing.M) {
 
 	db.Init()
 
-	fixtures, err = testfixtures.New(
-		testfixtures.Database(db.conn),
-		testfixtures.Dialect("mariadb"),
-		testfixtures.Directory("fixtures"),
-		testfixtures.DangerousSkipTestDatabaseCheck(),
-	)
+	fixtures, err = testfixtures.NewFolder(db.conn, "fixtures")
 	if err != nil {
 		panic(err)
 	}

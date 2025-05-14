@@ -1,7 +1,7 @@
 - ID: 1
   GroupID: 1
   TorrentType: anime
-  info_hash: RAW=_binary 0x72EF20EDDCB5438F73B6D88D78C4DFC1667B8938
+  info_hash: RAW=72EF20EDDCB5438F73B6D88D78C4DFC1667B8938
   Leechers: 0
   Seeders: 0
   last_action: 1585955952
@@ -13,7 +13,7 @@
 - ID: 2
   GroupID: 1
   TorrentType: music
-  info_hash: RAW=_binary 0x16A82DDD57E18CB15E22F2E1C4EADE2EBB83B19B
+  info_hash: RAW=16A82DDD57E18CB15E22F2E1C4EADE2EBB83B19B
   Leechers: 0
   Seeders: 0
   last_action: 1415463675
@@ -25,7 +25,7 @@
 - ID: 3
   GroupID: 2
   TorrentType: anime
-  info_hash: RAW=_binary 0x59FC5431B11C761C94CD3EB90825EA6E6DC8A5F1
+  info_hash: RAW=59FC5431B11C761C94CD3EB90825EA6E6DC8A5F1
   Leechers: 0
   Seeders: 0
   last_action: 1609032541

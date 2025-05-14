@@ -4,7 +4,7 @@ chihaya (kuroneko)
 Installation
 -------------
 
-chihaya requires Go >= 1.21 and MariaDB >= 10.3.3
+chihaya requires Go >= 1.24 and MariaDB >= 10.3.3
 
 ```sh
 go get
@@ -166,11 +166,6 @@ Configuration is done in `config.json`, which you'll need to create with the fol
           "type": "string",
           "default": ":34000"
         },
-        "proxy_header": {
-          "description": "Name of header which will be used to replace IP address of connection when running behind reverse proxy",
-          "type": "string",
-          "default": ""
-        },
         "timeout": {
           "description": "Configures timeout values for FastHTTP",
           "type": "object",
@@ -250,9 +245,3 @@ Database scheme
 Supported database scheme can be located in `database/schema.sql`.
 
 Example data from fixtures can be consulted for additional help.
-
-Flowcharts
--------------
-
-#### IP resolution
-![IP resolution flowchart](.gitea/images/flowcharts/ip.png)

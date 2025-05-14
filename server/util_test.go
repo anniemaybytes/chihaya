@@ -33,3 +33,43 @@ func TestFailure(t *testing.T) {
 		t.Fatalf("Expected %s, got %s", testData, buf.Bytes())
 	}
 }
+
+func TestIsPrivateIpAddress(t *testing.T) {
+	privateIps := []string{
+		"127.0.0.2",
+		"10.10.10.1",
+		"172.18.0.254",
+		"192.168.0.125",
+		"169.254.69.2",
+		"::1",
+		"fc00:badd:f00d::1",
+		"fe80:dead:beef::1",
+	}
+
+	for _, ipAddr := range privateIps {
+		isPrivate, err := isPrivateIPAddress(ipAddr)
+		if err != nil {
+			t.Fatalf("Got error for IP %s: %v", ipAddr, err)
+		}
+
+		if !isPrivate {
+			t.Fatalf("Private IP %s was reported as public", ipAddr)
+		}
+	}
+
+	publicIps := []string{
+		"45.128.19.54",
+		"2606:4700:4700::1111",
+	}
+
+	for _, ipAddr := range publicIps {
+		isPrivate, err := isPrivateIPAddress(ipAddr)
+		if err != nil {
+			t.Fatalf("Got error for IP %s: %v", ipAddr, err)
+		}
+
+		if isPrivate {
+			t.Fatalf("Public IP %s was reported as private", ipAddr)
+		}
+	}
+}

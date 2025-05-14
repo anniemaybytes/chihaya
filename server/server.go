@@ -129,7 +129,7 @@ func (handler *httpHandler) serve(ctx *fasthttp.RequestCtx) {
 	ctx.Response.Header.SetContentLength(buf.Len())
 	ctx.Response.Header.SetContentTypeBytes([]byte("text/plain"))
 	ctx.Response.SetStatusCode(status)
-	_, _ = ctx.Write(buf.Bytes())
+	_, _ = buf.WriteTo(ctx)
 }
 
 func (handler *httpHandler) error(ctx *fasthttp.RequestCtx, err error) {

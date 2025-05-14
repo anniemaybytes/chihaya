@@ -81,11 +81,10 @@ func TestParseQuery(t *testing.T) {
 func TestBrokenParseQuery(t *testing.T) {
 	var brokenQueryParsed QueryParam
 	brokenQueryParsed.Params.Event, brokenQueryParsed.Exists.Event = "started", true
-	brokenQueryParsed.Params.IPv4, brokenQueryParsed.Exists.IPv4 = "", true
 	brokenQueryParsed.Params.IP, brokenQueryParsed.Exists.IP = "", true
 
 	args := fasthttp.Args{}
-	args.Parse("event=started&ipv4=&ip=")
+	args.Parse("event=started&ip=")
 
 	qp, err := ParseQuery(&args)
 	if err != nil {
