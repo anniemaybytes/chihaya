@@ -408,7 +408,7 @@ func MustTorrentTypeFromString(torrentType string) uint64 {
 
 func TorrentTypeFromString(torrentType string) (t uint64, err error) {
 	if len(torrentType) > 8 {
-		return 0, err
+		return 0, ErrTorrentTypeTooLong
 	}
 
 	var buf [8]byte
