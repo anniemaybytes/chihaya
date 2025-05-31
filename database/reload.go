@@ -117,8 +117,12 @@ func (db *Database) loadUsers() {
 	db.Users.Store(&newUsers)
 
 	elapsedTime := time.Since(startTime)
+	lenUsers := len(newUsers)
+
 	collector.UpdateReloadTime("users", elapsedTime)
-	slog.Info("reload from database", "source", "users", "rows", len(newUsers), "elapsed", elapsedTime)
+	collector.UpdateUsers(lenUsers)
+
+	slog.Info("reload from database", "source", "users", "rows", lenUsers, "elapsed", elapsedTime)
 }
 
 func (db *Database) loadHitAndRuns() {
@@ -154,8 +158,12 @@ func (db *Database) loadHitAndRuns() {
 	db.HitAndRuns.Store(&newHnr)
 
 	elapsedTime := time.Since(startTime)
+	lenHnr := len(newHnr)
+
 	collector.UpdateReloadTime("hit_and_runs", elapsedTime)
-	slog.Info("reload from database", "source", "hit_and_runs", "rows", len(newHnr), "elapsed", elapsedTime)
+	collector.UpdateHitAndRuns(lenHnr)
+
+	slog.Info("reload from database", "source", "hit_and_runs", "rows", lenHnr, "elapsed", elapsedTime)
 }
 
 func (db *Database) loadTorrents() {
@@ -238,8 +246,12 @@ func (db *Database) loadTorrents() {
 	db.Torrents.Store(&newTorrents)
 
 	elapsedTime := time.Since(startTime)
+	lenTorrents := len(newTorrents)
+
 	collector.UpdateReloadTime("torrents", elapsedTime)
-	slog.Info("reload from database", "source", "torrents", "rows", len(newTorrents), "elapsed", elapsedTime)
+	collector.UpdateTorrents(lenTorrents)
+
+	slog.Info("reload from database", "source", "torrents", "rows", lenTorrents, "elapsed", elapsedTime)
 }
 
 func (db *Database) loadGroupsFreeleech() {
@@ -284,9 +296,12 @@ func (db *Database) loadGroupsFreeleech() {
 	db.TorrentGroupFreeleech.Store(&newTorrentGroupFreeleech)
 
 	elapsedTime := time.Since(startTime)
+	lenTorrentGroupFreeleech := len(newTorrentGroupFreeleech)
+
 	collector.UpdateReloadTime("groups_freeleech", elapsedTime)
+
 	slog.Info("reload from database", "source", "torrents_group_freeleech",
-		"rows", len(newTorrentGroupFreeleech), "elapsed", elapsedTime)
+		"rows", lenTorrentGroupFreeleech, "elapsed", elapsedTime)
 }
 
 func (db *Database) loadConfig() {
@@ -343,6 +358,10 @@ func (db *Database) loadClients() {
 	db.Clients.Store(&newClients)
 
 	elapsedTime := time.Since(startTime)
+	lenClients := len(newClients)
+
 	collector.UpdateReloadTime("clients", elapsedTime)
-	slog.Info("reload from database", "source", "approved_clients", "rows", len(newClients), "elapsed", elapsedTime)
+	collector.UpdateClients(lenClients)
+
+	slog.Info("reload from database", "source", "approved_clients", "rows", lenClients, "elapsed", elapsedTime)
 }

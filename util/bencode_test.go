@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math"
-	"net"
+	"net/netip"
 	"slices"
 	"testing"
 	"time"
@@ -15,9 +15,9 @@ import (
 )
 
 var testPeers = []*cdb.Peer{
-	{Addr: cdb.NewPeerAddressFromIPPort(net.ParseIP("127.0.0.1"), 12345), ID: cdb.PeerID{1, 2, 3, 4}},
-	{Addr: cdb.NewPeerAddressFromIPPort(net.ParseIP("8.8.8.8"), math.MaxInt16), ID: cdb.PeerID{5, 6, 7, 8}},
-	{Addr: cdb.NewPeerAddressFromIPPort(net.ParseIP("1.1.10.10"), 22), ID: cdb.PeerID{0, 1, 2, 3, 4, 5}},
+	{Addr: cdb.NewPeerAddressFromAddrPort(netip.MustParseAddr("127.0.0.1"), 12345), ID: cdb.PeerID{1, 2, 3, 4}},
+	{Addr: cdb.NewPeerAddressFromAddrPort(netip.MustParseAddr("8.8.8.8"), math.MaxInt16), ID: cdb.PeerID{5, 6, 7, 8}},
+	{Addr: cdb.NewPeerAddressFromAddrPort(netip.MustParseAddr("1.1.10.10"), 22), ID: cdb.PeerID{0, 1, 2, 3, 4, 5}},
 }
 
 var testTorrents map[cdb.TorrentHash]*cdb.Torrent

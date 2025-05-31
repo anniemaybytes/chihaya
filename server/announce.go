@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"net"
+	"net/netip"
 	"time"
 
 	"chihaya/config"
@@ -112,26 +112,23 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	}
 
 	// Pick IP address - either explicitly provided in params (BEP-3 compatible) or fallback to request
-	ipAddr := func() string {
-		requestAddr, err := getIPAddressFromRequest(ctx)
-		if err != nil {
-			panic(err)
-		}
+	ipAddr := func() netip.Addr {
+		requestAddr := getIPAddressFromRequest(ctx)
 
 		if !qp.Exists.IP {
 			return requestAddr // There was no IP provided in QueryParams
 		}
 
-		if isPrivate, _ := isPrivateIPAddress(qp.Params.IP); isPrivate {
+		customAddr, _ := netip.ParseAddr(qp.Params.IP)
+		if isPrivateIPAddress(customAddr) {
 			return requestAddr // IP provided in QueryParams was private
 		}
 
-		return qp.Params.IP // Might be invalid at this point, but we'll fail later when parsing
-	}()
+		return customAddr
+	}().Unmap()
 
-	ipBytes := net.ParseIP(ipAddr).To4()
-	if nil == ipBytes {
-		failure(fmt.Sprintf("Failed to parse IP address (ip: %s)", ipAddr), buf, 1*time.Hour)
+	if !ipAddr.Is4() {
+		failure(fmt.Sprintf("Invalid IPv4 address (ip: %s)", ipAddr.String()), buf, 1*time.Hour)
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
@@ -261,7 +258,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	}
 
 	// Update peer info
-	peer.Addr = cdb.NewPeerAddressFromIPPort(ipBytes, qp.Params.Port)
+	peer.Addr = cdb.NewPeerAddressFromAddrPort(ipAddr, qp.Params.Port)
 	peer.ClientID = clientID
 
 	// Update peer state
@@ -355,7 +352,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 
 	persistAddr := peer.Addr // This is done here so that we don't have to keep two instances of Addr for each Peer
 	if user.TrackerHide.Load() {
-		persistAddr = cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, qp.Params.Port)
+		persistAddr = cdb.NewPeerAddressFromAddrPort(netip.AddrFrom4([4]byte{127, 0, 0, 1}), qp.Params.Port)
 	}
 
 	// Underlying queue operations are non-blocking by spawning new goroutine if channel is already full
@@ -364,9 +361,8 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	db.QueueUser(user, rawDeltaUpload, rawDeltaDownload, deltaUpload, deltaDownload)
 	db.QueueTransferIP(peer, persistAddr, rawDeltaUpload, rawDeltaDownload)
 
-	// Record must be done in separate goroutine for now; todo: rewrite this so it doesn't tank performance
-	go record.Record(peer.TorrentID, user.ID.Load(), peer.Addr, qp.Params.Event, qp.Params.Uploaded,
-		qp.Params.Downloaded, qp.Params.Left)
+	record.Record(peer.TorrentID, user.ID.Load(), peer.Addr, qp.Params.Event, qp.Params.Uploaded, qp.Params.Downloaded,
+		qp.Params.Left)
 
 	// Generate response
 	seedCount := int(torrent.SeedersLength.Load())

@@ -323,7 +323,7 @@ func (db *Database) flushTransferIps() {
 
 			startTime := time.Now()
 
-			// todo: port should be part of PK
+			// TODO: port should be part of PK
 			query.WriteString("\nON DUPLICATE KEY UPDATE port = VALUE(port), downloaded = downloaded + VALUE(downloaded), " +
 				"uploaded = uploaded + VALUE(uploaded), last_announce = VALUE(last_announce)")
 			db.exec(&query)

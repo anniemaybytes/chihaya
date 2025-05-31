@@ -19,7 +19,7 @@ package record
 
 import (
 	"bufio"
-	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 func TestRecord(t *testing.T) {
 	var (
 		values  []record
-		outputs = []string{header}
+		outputs []string
 	)
 
 	for i := 0; i < 10; i++ {
@@ -92,7 +92,7 @@ func TestRecord(t *testing.T) {
 		Record(
 			entry.tid,
 			entry.uid,
-			cdb.NewPeerAddressFromIPPort(net.ParseIP(entry.ip).To4(), entry.port),
+			cdb.NewPeerAddressFromAddrPort(netip.MustParseAddr(entry.ip), entry.port),
 			entry.event,
 			entry.up,
 			entry.down,
@@ -117,18 +117,29 @@ func TestRecord(t *testing.T) {
 		recordLines = append(recordLines, scanner.Text())
 	}
 
-	if err := scanner.Err(); err != nil {
+	if err = scanner.Err(); err != nil {
 		t.Fatalf("Faced error in reading: %s", err)
 	}
 
-	if len(outputs) != len(recordLines) {
-		t.Fatalf("The number of records do not match with what is expected! (expected %d, got %d)",
-			len(outputs), len(recordLines))
+	if len(outputs)+1 != len(recordLines) {
+		t.Fatalf("The number of lines in record log do not match with what is expected! (expected %d, got %d)",
+			len(outputs)+1, len(recordLines))
 	}
 
-	for index, recordLine := range recordLines { // noinspection GoNilness
-		if outputs[index] != recordLine {
-			t.Fatalf("Expected %s but got %s in record!", outputs[index], recordLine)
+	if recordLines[0] != header {
+		t.Fatalf("Incorrect header in record log (expected %q, got %+q)", header, recordLines[0])
+	}
+
+	for _, recordLine := range recordLines[1:] {
+		for i := range outputs {
+			if outputs[i] == recordLine {
+				outputs = append(outputs[:i], outputs[i+1:]...)
+				break
+			}
 		}
+	}
+
+	for _, output := range outputs {
+		t.Fatalf("Expected to find line %q in record log (got %+q)", output, recordLines[1:])
 	}
 }

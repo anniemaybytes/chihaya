@@ -19,6 +19,7 @@ package server
 
 import (
 	"bytes"
+	"net/netip"
 	"testing"
 	"time"
 )
@@ -36,23 +37,19 @@ func TestFailure(t *testing.T) {
 
 func TestIsPrivateIpAddress(t *testing.T) {
 	privateIps := []string{
+		"0.0.0.0",
 		"127.0.0.2",
 		"10.10.10.1",
 		"172.18.0.254",
 		"192.168.0.125",
 		"169.254.69.2",
+		"::",
 		"::1",
-		"fc00:badd:f00d::1",
 		"fe80:dead:beef::1",
 	}
 
 	for _, ipAddr := range privateIps {
-		isPrivate, err := isPrivateIPAddress(ipAddr)
-		if err != nil {
-			t.Fatalf("Got error for IP %s: %v", ipAddr, err)
-		}
-
-		if !isPrivate {
+		if !isPrivateIPAddress(netip.MustParseAddr(ipAddr)) {
 			t.Fatalf("Private IP %s was reported as public", ipAddr)
 		}
 	}
@@ -63,12 +60,7 @@ func TestIsPrivateIpAddress(t *testing.T) {
 	}
 
 	for _, ipAddr := range publicIps {
-		isPrivate, err := isPrivateIPAddress(ipAddr)
-		if err != nil {
-			t.Fatalf("Got error for IP %s: %v", ipAddr, err)
-		}
-
-		if isPrivate {
+		if isPrivateIPAddress(netip.MustParseAddr(ipAddr)) {
 			t.Fatalf("Public IP %s was reported as private", ipAddr)
 		}
 	}

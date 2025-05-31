@@ -24,7 +24,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"net"
+	"net/netip"
 	"strconv"
 )
 
@@ -138,27 +138,26 @@ func (id *PeerID) UnmarshalText(b []byte) error {
 	return nil
 }
 
-const PeerAddressSize = net.IPv4len + 2
+const PeerAddressSize = 4 + 2
 
 type PeerAddress [PeerAddressSize]byte
 
-func NewPeerAddressFromIPPort(ip net.IP, port uint16) PeerAddress {
-	ip = ip.To4()
-	if ip == nil {
+func NewPeerAddressFromAddrPort(addr netip.Addr, port uint16) PeerAddress {
+	if !addr.Is4() {
 		panic("ip address is not IPv4")
 	}
 
 	var a PeerAddress
 
-	copy(a[:], ip)
-	binary.BigEndian.PutUint16(a[net.IPv4len:], port)
+	copy(a[:], addr.AsSlice())
+	binary.BigEndian.PutUint16(a[4:], port)
 
 	return a
 }
 
 //goland:noinspection GoMixedReceiverTypes
-func (a PeerAddress) IP() net.IP {
-	return a[:net.IPv4len]
+func (a PeerAddress) IP() [4]byte {
+	return [4]byte(a[:4])
 }
 
 //goland:noinspection GoMixedReceiverTypes
@@ -168,16 +167,26 @@ func (a PeerAddress) IPNumeric() uint32 {
 
 //goland:noinspection GoMixedReceiverTypes
 func (a PeerAddress) IPString() string {
-	return a.IP().String()
+	ip := a.IP()
+
+	// static allocation
+	var digits [4]byte
+
+	buf := make([]byte, 0, len("255.255.255.255"))
+	buf = append(buf, strconv.AppendUint(digits[:0], uint64(ip[0]), 10)...)
+	buf = append(buf, '.')
+	buf = append(buf, strconv.AppendUint(digits[:0], uint64(ip[1]), 10)...)
+	buf = append(buf, '.')
+	buf = append(buf, strconv.AppendUint(digits[:0], uint64(ip[2]), 10)...)
+	buf = append(buf, '.')
+	buf = append(buf, strconv.AppendUint(digits[:0], uint64(ip[3]), 10)...)
+
+	return string(buf)
 }
 
 //goland:noinspection GoMixedReceiverTypes
 func (a PeerAddress) IPStringLen() (size int) {
 	ip := a.IP()
-
-	if len(ip) != net.IPv4len {
-		panic("wrong peer address size")
-	}
 
 	for _, n := range ip {
 		if n >= 100 {
@@ -196,10 +205,6 @@ func (a PeerAddress) IPStringLen() (size int) {
 func (a PeerAddress) AppendIPString(buf *bytes.Buffer) {
 	ip := a.IP()
 
-	if len(ip) != net.IPv4len {
-		panic("wrong peer address size")
-	}
-
 	// static allocation
 	var digits [4]byte
 
@@ -214,13 +219,13 @@ func (a PeerAddress) AppendIPString(buf *bytes.Buffer) {
 
 //goland:noinspection GoMixedReceiverTypes
 func (a PeerAddress) Port() uint16 {
-	return binary.BigEndian.Uint16(a[net.IPv4len:])
+	return binary.BigEndian.Uint16(a[4:])
 }
 
 //goland:noinspection GoMixedReceiverTypes
 func (a PeerAddress) MarshalText() ([]byte, error) {
-	buf := make([]byte, 0, 15+1+5)
-	buf = append(buf, a.IP().String()...)
+	buf := make([]byte, 0, len("255.255.255.255:65535"))
+	buf = append(buf, a.IPString()...)
 	buf = append(buf, ':')
 	buf = strconv.AppendUint(buf, uint64(a.Port()), 10)
 
@@ -236,12 +241,16 @@ func (a *PeerAddress) UnmarshalText(b []byte) error {
 		return errInvalidPeerAddress
 	}
 
-	ip := net.ParseIP(string(b[:i]))
-	if ip.To4() == nil {
+	ip, err := netip.ParseAddr(string(b[:i]))
+	if err != nil {
 		return errInvalidPeerAddress
 	}
 
-	copy(a[:], ip.To4())
+	if !ip.Is4() {
+		return errInvalidPeerAddress
+	}
+
+	copy(a[:], ip.AsSlice())
 
 	port, err := strconv.ParseUint(string(b[i+1:]), 10, 16)
 	if err != nil {

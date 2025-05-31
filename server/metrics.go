@@ -19,40 +19,25 @@ package server
 
 import (
 	"bytes"
-	"time"
 
 	"chihaya/collector"
 	"chihaya/database"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/expfmt"
+	vm "github.com/VictoriaMetrics/metrics"
 	"github.com/valyala/fasthttp"
 )
 
 func metrics(_ *fasthttp.RequestCtx, db *database.Database, buf *bytes.Buffer) int {
-	dbUsers := *db.Users.Load()
-	dbTorrents := *db.Torrents.Load()
-
-	peers := 0
-	for _, t := range dbTorrents {
-		peers += int(t.LeechersLength.Load()) + int(t.SeedersLength.Load())
-	}
-
-	collector.UpdateUptime(time.Since(handler.startTime).Seconds())
-	collector.UpdateUsers(len(dbUsers))
-	collector.UpdateTorrents(len(dbTorrents))
-	collector.UpdateClients(len(*db.Clients.Load()))
-	collector.UpdateHitAndRuns(len(*db.HitAndRuns.Load()))
-	collector.UpdatePeers(peers)
-	collector.UpdateRequests(handler.requests.Load())
-	collector.UpdateThroughput(handler.throughput)
-
-	mfs, _ := prometheus.DefaultGatherer.Gather()
-	for _, mf := range mfs {
-		if _, err := expfmt.MetricFamilyToText(buf, mf); err != nil {
-			panic(err)
+	collector.UpdateUptime(handler.startTime)
+	collector.UpdatePeers(func() (c int) {
+		for _, t := range *db.Torrents.Load() {
+			c += int(t.LeechersLength.Load()) + int(t.SeedersLength.Load())
 		}
-	}
+
+		return
+	}())
+
+	vm.WritePrometheus(buf, true)
 
 	return fasthttp.StatusOK
 }

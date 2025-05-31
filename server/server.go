@@ -30,21 +30,17 @@ import (
 	"chihaya/database"
 	"chihaya/util"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/valyala/fasthttp"
 )
 
 type httpHandler struct {
 	startTime time.Time
 
-	collector *collector.Collector
-
 	bufferPool *util.BufferPool
 
 	db *database.Database
 
-	requests   atomic.Uint64
-	throughput int
+	requests atomic.Uint64
 
 	waitGroup sync.WaitGroup
 	terminate bool
@@ -62,6 +58,7 @@ func (handler *httpHandler) serve(ctx *fasthttp.RequestCtx) {
 
 	// Count new request (done before everything else so that failed/timeout numbers match)
 	handler.requests.Add(1)
+	collector.IncrementRequests()
 
 	// Mark request as being handled, so that server won't shutdown before we're done with it
 	handler.waitGroup.Add(1)
@@ -183,30 +180,27 @@ func Start() {
 
 	// Start new goroutine to calculate throughput
 	go func() {
-		lastTime := time.Now()
-		lastRequests := handler.requests.Load()
+		prevTime := time.Now()
+		prevRequests := handler.requests.Load()
 
 		for !handler.terminate {
 			time.Sleep(time.Minute)
 
-			now := time.Now()
-			duration := now.Sub(lastTime)
-			requests := handler.requests.Load()
+			duration := time.Since(prevTime)
+			deltaRequests := handler.requests.Load() - prevRequests
 
-			handler.throughput = int(float64(requests-lastRequests)/duration.Seconds()*60 + 0.5)
-			slog.Info("current throughput", "rpm", handler.throughput)
+			throughput := int(float64(deltaRequests)/duration.Seconds()*60 + 0.5)
+			collector.UpdateThroughput(throughput)
 
-			lastTime = now
-			lastRequests = requests
+			prevTime = time.Now()
+			prevRequests = handler.requests.Load()
+
+			slog.Info("current throughput", "rpm", throughput, "duration", duration, "delta", deltaRequests)
 		}
 	}()
 
 	// Initialize database
 	handler.db.Init()
-
-	// Register prometheus collector
-	handler.collector = collector.NewCollector()
-	prometheus.MustRegister(handler.collector)
 
 	// Start TCP listener
 	var err error

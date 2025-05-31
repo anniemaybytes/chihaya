@@ -19,9 +19,8 @@ package server
 
 import (
 	"bytes"
-	"errors"
 	"net"
-	"strings"
+	"net/netip"
 	"time"
 
 	"chihaya/database"
@@ -30,32 +29,6 @@ import (
 
 	"github.com/valyala/fasthttp"
 )
-
-var (
-	cidrs       []*net.IPNet
-	errNetParse = errors.New("failed to parse address")
-)
-
-func init() {
-	maxCidrBlocks := []string{
-		"127.0.0.1/8",    // localhost
-		"10.0.0.0/8",     // RFC1918
-		"172.16.0.0/12",  // RFC1918
-		"192.168.0.0/16", // RFC1918
-		"169.254.0.0/16", // RFC3927 link-local
-		"100.64.0.0/10",  // RFC6598
-		"::1/128",        // localhost
-		"fc00::/7",       // RFC4193
-		"fe80::/10",      // RFC5156 link-scoped
-	}
-
-	cidrs = make([]*net.IPNet, len(maxCidrBlocks))
-
-	for i, maxCidrBlock := range maxCidrBlocks {
-		_, cidr, _ := net.ParseCIDR(maxCidrBlock)
-		cidrs[i] = cidr
-	}
-}
 
 func failure(err string, buf *bytes.Buffer, interval time.Duration) {
 	// Reset buffer to prevent reuse of any written bytes
@@ -115,46 +88,33 @@ func isDisabledDownload(db *database.Database, user *cdb.User, torrent *cdb.Torr
 	return user.DisableDownload.Load() && !hasHitAndRun(db, user.ID.Load(), torrent.ID.Load())
 }
 
-func isPrivateIPAddress(address string) (bool, error) {
-	ipAddress := net.ParseIP(address)
-	if ipAddress == nil { // Invalid IP provided, fail
-		return false, errNetParse
-	}
-
-	for i := range cidrs {
-		if cidrs[i].Contains(ipAddress) {
-			return true, nil
-		}
-	}
-
-	return false, nil
+func isPrivateIPAddress(address netip.Addr) bool {
+	return !address.IsGlobalUnicast() || address.IsPrivate()
 }
 
-func getIPAddressFromRequest(ctx *fasthttp.RequestCtx) (string, error) {
-	xRealIP := string(ctx.Request.Header.Peek("X-Real-Ip"))
-	xForwardedFor := string(ctx.Request.Header.Peek("X-Forwarded-For"))
-	socketAddr := ctx.RemoteAddr().String()
+func getIPAddressFromRequest(ctx *fasthttp.RequestCtx) netip.Addr {
+	xRealIP := ctx.Request.Header.Peek("X-Real-Ip")
+	xForwardedFor := ctx.Request.Header.Peek("X-Forwarded-For")
 
 	// Try to use value from X-Real-Ip header if exists
 	if len(xRealIP) > 0 {
-		return xRealIP, nil
+		return netip.MustParseAddr(string(xRealIP))
 	}
 
 	// Check list of IPs in X-Forwarded-For and try to return the first public address
-	for _, remoteIP := range strings.Split(xForwardedFor, ",") {
-		remoteIP = strings.TrimSpace(remoteIP)
-
-		isPrivate, err := isPrivateIPAddress(remoteIP)
-		if err == nil && !isPrivate {
-			return remoteIP, nil
+	for _, remoteBytes := range bytes.Split(xForwardedFor, []byte(",")) {
+		if remoteIP, err := netip.ParseAddr(string(bytes.TrimSpace(remoteBytes))); err != nil {
+			if !isPrivateIPAddress(remoteIP) {
+				return remoteIP
+			}
 		}
 	}
 
-	// Use socket address
-	remoteIP, _, err := net.SplitHostPort(socketAddr)
-	if err != nil {
-		return "", err
+	// Try to use socket address directly
+	if addr, ok := ctx.RemoteAddr().(*net.TCPAddr); ok {
+		return addr.AddrPort().Addr()
 	}
 
-	return remoteIP, nil
+	// Parse address from context (fallback)
+	return netip.MustParseAddrPort(ctx.RemoteAddr().String()).Addr()
 }

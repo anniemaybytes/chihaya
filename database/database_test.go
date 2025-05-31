@@ -20,7 +20,7 @@ package database
 import (
 	"fmt"
 	"math"
-	"net"
+	"net/netip"
 	"os"
 	"reflect"
 	"testing"
@@ -608,7 +608,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:       0,
 		TorrentID:    0,
 		ClientID:     1,
-		Addr:         cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, 63448),
+		Addr:         cdb.NewPeerAddressFromAddrPort(netip.AddrFrom4([4]byte{127, 0, 0, 1}), 63448),
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
@@ -672,7 +672,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 		ClientID:  testPeer.ClientID,
-		Addr:      cdb.NewPeerAddressFromIPPort(testPeer.Addr.IP(), 0),
+		Addr:      cdb.NewPeerAddressFromAddrPort(netip.AddrFrom4(testPeer.Addr.IP()), 0),
 		StartTime: testPeer.StartTime,
 	}
 
@@ -689,7 +689,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		panic(err)
 	}
 
-	gotPeer.Addr = cdb.NewPeerAddressFromIPPort(gotPeer.Addr.IP(), port)
+	gotPeer.Addr = cdb.NewPeerAddressFromAddrPort(netip.AddrFrom4(gotPeer.Addr.IP()), port)
 
 	if !reflect.DeepEqual(testPeer, gotPeer) {
 		t.Fatal(fixtureFailure("Existing peer incorrectly updated in the database", testPeer, gotPeer))
@@ -704,7 +704,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:       1,
 		TorrentID:    2,
 		ClientID:     2,
-		Addr:         cdb.NewPeerAddressFromIPPort(net.IP{127, 0, 0, 1}, 63448),
+		Addr:         cdb.NewPeerAddressFromAddrPort(netip.AddrFrom4([4]byte{127, 0, 0, 1}), 63448),
 		StartTime:    time.Now().Unix(),
 		LastAnnounce: time.Now().Unix(),
 	}
@@ -721,7 +721,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		UserID:    testPeer.UserID,
 		TorrentID: testPeer.TorrentID,
 		ClientID:  testPeer.ClientID,
-		Addr:      cdb.NewPeerAddressFromIPPort(testPeer.Addr.IP(), 0),
+		Addr:      cdb.NewPeerAddressFromAddrPort(netip.AddrFrom4(testPeer.Addr.IP()), 0),
 	}
 
 	row = db.conn.QueryRow("SELECT port, starttime, last_announce "+
@@ -733,7 +733,7 @@ func TestRecordAndFlushTransferIP(t *testing.T) {
 		panic(err)
 	}
 
-	gotPeer.Addr = cdb.NewPeerAddressFromIPPort(gotPeer.Addr.IP(), port)
+	gotPeer.Addr = cdb.NewPeerAddressFromAddrPort(netip.AddrFrom4(gotPeer.Addr.IP()), port)
 
 	if !reflect.DeepEqual(testPeer, gotPeer) {
 		t.Fatal(fixtureFailure("New peer is incorrectly inserted in the database", testPeer, gotPeer))

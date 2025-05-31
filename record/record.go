@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"chihaya/config"
@@ -29,17 +30,16 @@ import (
 )
 
 var (
-	enabled     = false // overrides default, for testing purposes only
-	initialized = false
-	header      = "TorrentID,UserID,Addr,Event,Uploaded,Downloaded,Left"
-	channel     chan []byte
+	enabled = false // overrides default, for testing purposes only
+	header  = "TorrentID,UserID,Addr,Event,Uploaded,Downloaded,Left"
+	channel chan []byte
 )
 
 func filename(t time.Time) string {
 	return "events/events_" + t.Format("2006-01-02T15") + ".csv"
 }
 
-func initialize() {
+var initialize = sync.OnceFunc(func() {
 	if err := os.Mkdir("events", 0755); err != nil && !os.IsExist(err) {
 		panic(err)
 	}
@@ -81,40 +81,39 @@ func initialize() {
 			}
 		}
 	}()
-
-	initialized = true
-}
+})
 
 func Record(tid, uid uint32, addr cdb.PeerAddress, event string, up, down, left uint64) {
 	if enabled, _ := config.GetBool("record_announces", enabled); !enabled {
 		return
 	}
 
-	if !initialized {
-		initialize()
-	}
-
 	if up == 0 && down == 0 {
 		return
 	}
 
-	b := make([]byte, 0, 64)
-	buf := bytes.NewBuffer(b)
+	// TODO: rewrite this so it doesn't tank performance
+	go func() {
+		initialize()
 
-	buf.WriteString(strconv.FormatUint(uint64(tid), 10))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatUint(uint64(uid), 10))
-	buf.WriteString(",")
-	buf.WriteString(addr.IPString() + ":" + strconv.FormatUint(uint64(addr.Port()), 10))
-	buf.WriteString(",")
-	buf.WriteString(event)
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatUint(up, 10))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatUint(down, 10))
-	buf.WriteString(",")
-	buf.WriteString(strconv.FormatUint(left, 10))
-	buf.WriteByte('\n')
+		b := make([]byte, 0, 64)
+		buf := bytes.NewBuffer(b)
 
-	channel <- buf.Bytes()
+		buf.WriteString(strconv.FormatUint(uint64(tid), 10))
+		buf.WriteString(",")
+		buf.WriteString(strconv.FormatUint(uint64(uid), 10))
+		buf.WriteString(",")
+		buf.WriteString(addr.IPString() + ":" + strconv.FormatUint(uint64(addr.Port()), 10))
+		buf.WriteString(",")
+		buf.WriteString(event)
+		buf.WriteString(",")
+		buf.WriteString(strconv.FormatUint(up, 10))
+		buf.WriteString(",")
+		buf.WriteString(strconv.FormatUint(down, 10))
+		buf.WriteString(",")
+		buf.WriteString(strconv.FormatUint(left, 10))
+		buf.WriteByte('\n')
+
+		channel <- buf.Bytes()
+	}()
 }
