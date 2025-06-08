@@ -3,6 +3,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v13.0.0
+### Fixed
+- Race condition when initializing `Record` for first time
+- `TorrentTypeFromString` not returning `ErrTorrentTypeTooLong`
+
+### Changed
+- Use VictoriaMetrics' `metrics` package instead of Prometheus' `client_golang`
+- Use VictoriaMetrics' intelligent histograms (`vmrange`) instead of static buckets (`le`) to increase metrics resolution 
+and avoid bucket incompatibility when changing channel lengths
+- Consolidate per-channel length metrics into singular labeled metric
+- Use `netip.Addr` instead of `net.IP` wherever possible to avoid type confusion with `[]byte` slice
+- Do not spawn Goroutine for `Record` from inside announce handler; delegate this to callee (avoid empty goroutine being
+spawned when `record_announces` is disabled)
+
 ## v12.0.0
 ### Added
 - New metric `chihaya_purge_inactive_peers_seconds`
