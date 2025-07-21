@@ -3,18 +3,18 @@ module chihaya
 go 1.24
 
 require (
-	github.com/VictoriaMetrics/metrics v1.37.0
-	github.com/go-sql-driver/mysql v1.9.2
+	github.com/VictoriaMetrics/metrics v1.38.0
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/goccy/go-yaml v1.18.0
 	github.com/google/go-cmp v0.7.0
 	github.com/jinzhu/copier v0.4.0
-	github.com/valyala/fasthttp v1.62.0
+	github.com/valyala/fasthttp v1.63.0
 	github.com/zeebo/bencode v1.0.0
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/andybalholm/brotli v1.1.1 // indirect
+	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect

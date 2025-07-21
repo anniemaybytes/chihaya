@@ -88,11 +88,7 @@ var compactKey = []byte("compact")
 var noPeerIDKey = []byte("no_peer_id")
 
 func ParseQuery(queryArgs *fasthttp.Args) (qp QueryParam, err error) {
-	queryArgs.VisitAll(func(key, value []byte) {
-		if err != nil {
-			return
-		}
-
+	for key, value := range queryArgs.All() {
 		key = bytes.ToLower(key)
 
 		switch true {
@@ -165,7 +161,7 @@ func ParseQuery(queryArgs *fasthttp.Args) (qp QueryParam, err error) {
 			qp.Params.NoPeerID = bytes.Equal(value, []byte{'1'})
 			qp.Exists.NoPeerID = true
 		}
-	})
+	}
 
 	return qp, err
 }
