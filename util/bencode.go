@@ -2,7 +2,6 @@ package util
 
 import (
 	"bytes"
-	"encoding/hex"
 	"slices"
 	"strconv"
 	"time"
@@ -64,11 +63,7 @@ func BencodeScrapeHeader(buf *bytes.Buffer) {
 }
 
 func BencodeScrapeTorrent(buf *bytes.Buffer, infoHash cdb.TorrentHash, complete, downloaded, incomplete int64) {
-	// Convert to hex inline
-	var hashBuf [cdb.TorrentHashSize * 2]byte
-
-	hex.Encode(hashBuf[:], infoHash[:])
-	bencodeWriteString(buf, hashBuf[:])
+	bencodeWriteString(buf, string(infoHash[:]))
 
 	buf.WriteByte('d')
 

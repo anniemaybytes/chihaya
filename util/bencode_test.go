@@ -2,7 +2,6 @@ package util
 
 import (
 	"bytes"
-	"encoding/hex"
 	"math"
 	"net/netip"
 	"slices"
@@ -133,7 +132,7 @@ func marshalerBencodeScrape(buf *bytes.Buffer,
 		torrent := torrents[k]
 
 		// bug: upstream bencode library doesn't sort keys properly otherwise!
-		kk := hex.EncodeToString(k[:])
+		kk := string(k[:])
 
 		files[kk] = map[string]any{
 			"complete":   torrent.SeedersLength.Load(),
