@@ -20,9 +20,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/zeebo/bencode"
 	"os"
 	"runtime"
+
+	"github.com/zeebo/bencode"
 )
 
 // provided at compile-time

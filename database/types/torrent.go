@@ -80,6 +80,7 @@ func (h *TorrentHash) Value() (driver.Value, error) {
 //goland:noinspection GoMixedReceiverTypes
 func (h TorrentHash) MarshalJSON() ([]byte, error) {
 	var buf [TorrentHashSize*2 + 2]byte
+
 	buf[0] = '"'
 	buf[TorrentHashSize*2+1] = '"'
 	hex.Encode(buf[1:], h[:])

@@ -47,6 +47,7 @@ func TestMain(m *testing.M) {
 
 func TestParseQuery(t *testing.T) {
 	var queryParsed QueryParam
+
 	queryParsed.Params.Event, queryParsed.Exists.Event = "completed", true
 	queryParsed.Params.Port, queryParsed.Exists.Port = 25362, true
 	queryParsed.Params.PeerID, queryParsed.Exists.PeerID = "-CH010-VnpZR7uz31I1A", true
@@ -80,6 +81,7 @@ func TestParseQuery(t *testing.T) {
 
 func TestBrokenParseQuery(t *testing.T) {
 	var brokenQueryParsed QueryParam
+
 	brokenQueryParsed.Params.Event, brokenQueryParsed.Exists.Event = "started", true
 	brokenQueryParsed.Params.IP, brokenQueryParsed.Exists.IP = "", true
 

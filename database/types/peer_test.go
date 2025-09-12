@@ -46,7 +46,7 @@ func testPeerAddressIPNumeric(t *testing.T) {
 	a := 151653243
 	b := NewPeerAddressFromAddrPort(netip.AddrFrom4([4]byte{9, 10, 11, 123}), 24512).IPNumeric()
 
-	if 151653243 != b {
+	if b != 151653243 {
 		t.Fatalf("Expected numeric IP %d, got %d", a, b)
 	}
 }

@@ -1,0 +1,44 @@
+name: testing
+
+on:
+    pull_request:
+        branches:
+            - master
+        types: [ opened, synchronize, reopened ]
+
+env:
+    CGO_ENABLED: 0
+    GO111MODULE: on
+    GOMAXPROCS: 2
+
+jobs:
+    suite:
+        runs-on: ubuntu-24.04
+        services:
+            mariadb:
+                image: mariadb:11.4
+                env:
+                    MYSQL_RANDOM_ROOT_PASSWORD: yes
+                    MYSQL_DATABASE: chihaya_test
+                    MYSQL_USER: drone
+                    MYSQL_PASSWORD: w33lkn0wn
+                    MYSQL_INITDB_SKIP_TZINFO: yes
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+            -   name: Set up Go
+                uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+                with:
+                    go-version-file: ./go.mod
+            -   name: Prepare database schema
+                env:
+                    DEBIAN_FRONTEND: noninteractive
+                run: |
+                    apt-get update && apt-get -qq -y install mariadb-client
+                    mariadb -udrone -pw33lkn0wn -hmariadb chihaya_test < database/schema.sql
+            -   name: Run tests
+                env:
+                    DB_DSN: 'drone:w33lkn0wn@(mariadb)/chihaya_test?multiStatements=true'
+                run: go test ./... -v -pgo=off -buildvcs=false -coverprofile=./coverage.out
+            -   name: Get coverage
+                run: go tool cover -func=coverage.out

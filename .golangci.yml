@@ -1,54 +1,72 @@
+version: '2'
 run:
-    concurrency: 0
-    timeout: 5m
     allow-parallel-runners: true
-
 linters:
-    disable-all: true
+    default: none
     enable:
-        - govet
-        - errcheck
-        - staticcheck
-        - unused
-        - gosimple
-        - ineffassign
-        - typecheck
-        - whitespace
-        - wsl
-        - goconst
-        - unconvert
         - bodyclose
-        - revive
-        - gosec
-        - misspell
-        - lll
-        - unparam
         - dogsled
-        - prealloc
-        - nolintlint
         - err113
+        - errcheck
+        - goconst
         - gocyclo
+        - gosec
+        - govet
         - importas
+        - ineffassign
+        - lll
         - makezero
+        - misspell
+        - nolintlint
+        - prealloc
         - predeclared
-
-linters-settings:
-    nolintlint:
-        require-explanation: false
-        require-specific: true
-    wsl:
-        strict-append: false
-        force-err-cuddling: true
-    misspell:
-        locale: US
-    gosec:
-        excludes:
-            - G115
-
-issues:
-    exclude-rules:
-        - path: (.+)_test\.go
-          linters:
-              - gosec
-              - goconst
-              - unparam
+        - revive
+        - staticcheck
+        - unconvert
+        - unparam
+        - unused
+        - whitespace
+        - wsl_v5
+    settings:
+        gosec:
+            excludes:
+                - G115
+        misspell:
+            locale: US
+        nolintlint:
+            require-explanation: false
+            require-specific: true
+        wsl_v5:
+            allow-first-in-block: true
+            allow-whole-block: true
+            branch-max-lines: 2
+        revive:
+            rules:
+                - name: var-naming
+                  disabled: true
+    exclusions:
+        generated: lax
+        presets:
+            - comments
+            - common-false-positives
+            - legacy
+            - std-error-handling
+        rules:
+            -   linters:
+                    - goconst
+                    - gosec
+                    - unparam
+                path: (.+)_test\.go
+        paths:
+            - third_party$
+            - builtin$
+            - examples$
+formatters:
+    enable:
+        - gofmt
+    exclusions:
+        generated: lax
+        paths:
+            - third_party$
+            - builtin$
+            - examples$

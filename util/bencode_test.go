@@ -33,6 +33,7 @@ func init() {
 		t.LeechersLength.Store(UnsafeUint32())
 
 		var tKey cdb.TorrentHash
+
 		_, _ = UnsafeReadRand(tKey[:])
 		testTorrents[tKey] = t
 	}

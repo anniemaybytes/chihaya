@@ -93,6 +93,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	if strictPort && qp.Params.Port < 1024 {
 		failure(fmt.Sprintf("Unacceptable request - port must be outside of well-known range (port: %d)", qp.Params.Port),
 			buf, 1*time.Hour)
+
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
@@ -160,6 +161,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 	} else if torrentStatus != 0 {
 		failure(fmt.Sprintf("This torrent does not exist (status: %d, left: %d)", torrentStatus, qp.Params.Left),
 			buf, 15*time.Minute)
+
 		return fasthttp.StatusOK // Required by torrent clients to interpret failure response
 	}
 
@@ -331,7 +333,8 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 
 	var deltaSnatch uint8
 
-	if qp.Params.Event == "stopped" {
+	switch qp.Params.Event {
+	case "stopped":
 		/* We can remove the peer from the list and still have their stats be recorded,
 		since we still have a reference to their object. After flushing, all references
 		should be gone, allowing the peer to be GC'd. */
@@ -342,9 +345,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			delete(torrent.Leechers, peerKey)
 			torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
 		}
-
-		active = false
-	} else if qp.Params.Event == "completed" {
+	case "completed":
 		deltaSnatch = 1
 
 		db.QueueSnatch(peer, now) // Non-blocking

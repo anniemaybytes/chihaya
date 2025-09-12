@@ -275,7 +275,6 @@ func (db *Database) flushTransferHistory() {
 
 			return length, nil
 		}()
-
 		if err != nil {
 			break
 		} else if length < (transferHistoryFlushBufferSize >> 1) {
