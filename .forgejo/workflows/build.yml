@@ -1,12 +1,13 @@
-name: publish
+name: build
 
 on:
-    push:
+    pull_request:
         branches:
             - master
-    release:
-        types:
-            - published
+        paths:
+            - Makefile
+            - Dockerfile
+        types: [ opened, synchronize, reopened ]
 
 env:
     REGISTRY: ${{ vars.DOCKER_REGISTRY }}
@@ -21,12 +22,6 @@ jobs:
                 with:
                     fetch-depth: 0
                     fetch-tags: true
-            -   name: Login to registry
-                uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
-                with:
-                    registry: ${{ env.REGISTRY }}
-                    username: ${{ secrets.DOCKER_USERNAME }}
-                    password: ${{ secrets.DOCKER_PASSWORD }}
             -   name: Set up Docker Buildx
                 uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
             -   name: Gather metadata
@@ -34,10 +29,10 @@ jobs:
                 uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5
                 with:
                     images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            -   name: Build and publish container
+            -   name: Build container
                 uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
                 with:
                     context: .
-                    push: true
+                    push: false
                     tags: ${{ steps.meta.outputs.tags }}
                     labels: ${{ steps.meta.outputs.labels }}

@@ -33,9 +33,7 @@ jobs:
             -   name: Prepare database schema
                 env:
                     DEBIAN_FRONTEND: noninteractive
-                run: |
-                    apt-get update && apt-get -qq -y install mariadb-client
-                    mariadb -udrone -pw33lkn0wn -hmariadb chihaya_test < database/schema.sql
+                run: mysql -udrone -pw33lkn0wn -hmariadb chihaya_test < database/schema.sql
             -   name: Run tests
                 env:
                     DB_DSN: 'drone:w33lkn0wn@(mariadb)/chihaya_test?multiStatements=true'

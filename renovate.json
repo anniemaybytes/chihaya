@@ -2,7 +2,8 @@
   "extends": [
     "config:best-practices",
     "docker:disableMajor",
-    "security:openssf-scorecard"
+    "security:openssf-scorecard",
+    ":automergeDigest"
   ],
   "ignorePresets": [
     "mergeConfidence:all-badges",
