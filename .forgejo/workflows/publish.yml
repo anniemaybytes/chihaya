@@ -4,6 +4,13 @@ on:
     push:
         branches:
             - master
+    pull_request:
+        branches:
+            - master
+        paths:
+            - Dockerfile
+            - .forgejo/workflows/publish.yml
+        types: [ opened, synchronize, reopened ]
     release:
         types:
             - published
@@ -13,15 +20,13 @@ env:
     IMAGE_NAME: ${{ forge.repository }}
 
 jobs:
-    build:
+    docker:
         runs-on: ubuntu-24.04
         steps:
             -   name: Checkout
                 uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-                with:
-                    fetch-depth: 0
-                    fetch-tags: true
             -   name: Login to registry
+                if: forge.event_name != 'pull_request'
                 uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
                 with:
                     registry: ${{ env.REGISTRY }}
@@ -34,10 +39,15 @@ jobs:
                 uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5
                 with:
                     images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            -   name: Build and publish container
+                    tags: |
+                        type=ref,event=branch
+                        type=ref,event=pr
+                        type=semver,pattern={{version}}
+                        type=semver,pattern={{major}}.{{minor}}
+            -   name: Build and publish
                 uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
                 with:
                     context: .
-                    push: true
+                    push: ${{ forge.event_name != 'pull_request' }}
                     tags: ${{ steps.meta.outputs.tags }}
                     labels: ${{ steps.meta.outputs.labels }}
