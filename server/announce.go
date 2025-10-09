@@ -345,6 +345,8 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 			delete(torrent.Leechers, peerKey)
 			torrent.LeechersLength.Store(uint32(len(torrent.Leechers)))
 		}
+
+		active = false
 	case "completed":
 		deltaSnatch = 1
 

@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## v13.0.3
+### Fixed
+- Peers sending `stopped` event not being updated in database as inactive
+
 ## v13.0.2
 ### Changed
 - Rebuilt with Go 1.25 (minimum required is now 1.24.6) to address CVE-2025-47907
