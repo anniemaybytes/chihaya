@@ -401,7 +401,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 					break
 				}
 
-				if leech.UserID == peer.UserID {
+				if leech.UserID == peer.UserID || leech.Addr.Port() < 1024 {
 					continue
 				}
 
@@ -417,7 +417,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 					break
 				}
 
-				if seed.UserID == peer.UserID {
+				if seed.UserID == peer.UserID || seed.Addr.Port() < 1024 {
 					continue
 				}
 
@@ -432,7 +432,7 @@ func announce(ctx *fasthttp.RequestCtx, user *cdb.User, db *database.Database, b
 					break
 				}
 
-				if leech.UserID == peer.UserID {
+				if leech.UserID == peer.UserID || leech.Addr.Port() < 1024 {
 					continue
 				}
 
